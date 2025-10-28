@@ -350,39 +350,101 @@
             </div>
             
             <div class="flex-1 p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="tokens-grid">
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                <!-- Token Actions Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-purple-500 transition" onclick="openModal('new-launch-modal')">
                         <div class="flex items-center gap-3 mb-4">
                             <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
-                                <span class="text-2xl">🪙</span>
+                                <i data-lucide="rocket" class="w-6 h-6 text-purple-200"></i>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold">Sample Token</h3>
-                                <p class="text-sm text-gray-400">SAMPLE</p>
+                                <h3 class="text-lg font-semibold">Launch Token</h3>
+                                <p class="text-sm text-gray-400">Create new token</p>
                             </div>
                         </div>
-                        <div class="space-y-2 mb-4">
-                            <div class="flex justify-between">
-                                <span class="text-sm text-gray-400">Supply</span>
-                                <span class="text-sm font-mono">1,000,000</span>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Custom metadata</li>
+                            <li>• Supply configuration</li>
+                            <li>• Liquidity setup</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-blue-500 transition" onclick="openModal('copy-token-modal')">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="copy" class="w-6 h-6 text-blue-200"></i>
                             </div>
-                            <div class="flex justify-between">
-                                <span class="text-sm text-gray-400">Holders</span>
-                                <span class="text-sm font-mono">42</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-sm text-gray-400">Price</span>
-                                <span class="text-sm font-mono">$0.001</span>
+                            <div>
+                                <h3 class="text-lg font-semibold">Copy Token</h3>
+                                <p class="text-sm text-gray-400">Clone existing token</p>
                             </div>
                         </div>
-                        <div class="flex gap-2">
-                            <button class="flex-1 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded transition">
-                                Launch
-                            </button>
-                            <button class="flex-1 bg-neutral-700 hover:bg-neutral-600 text-white text-sm py-2 px-3 rounded transition">
-                                Archive
-                            </button>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Mirror name & symbol</li>
+                            <li>• Copy image & metadata</li>
+                            <li>• Quick deployment</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-green-500 transition" onclick="openModal('import-token-modal')">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="download" class="w-6 h-6 text-green-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Import Token</h3>
+                                <p class="text-sm text-gray-400">Add existing token</p>
+                            </div>
                         </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Add by address</li>
+                            <li>• Import from file</li>
+                            <li>• Bulk import</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-yellow-500 transition" onclick="switchView('tokens')">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-yellow-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="bar-chart-3" class="w-6 h-6 text-yellow-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Token Analytics</h3>
+                                <p class="text-sm text-gray-400">Track performance</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Holder statistics</li>
+                            <li>• Trading volume</li>
+                            <li>• Price charts</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Your Tokens Table -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Your Tokens</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-neutral-900">
+                                <tr class="border-b border-neutral-700">
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Token</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Symbol</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Address</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Supply</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Holders</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Launched</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tokens-table-body">
+                                <tr class="border-b border-neutral-700">
+                                    <td colspan="7" class="p-8 text-center text-gray-500">No tokens launched yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -400,65 +462,143 @@
             </div>
             
             <div class="flex-1 p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Task Cards Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="bar-chart-3" class="w-6 h-6 text-blue-200"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="bar-chart-3" class="w-6 h-6 text-blue-200"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold">Volume Generation</h3>
+                                    <p class="text-sm text-gray-400">Create organic trading volume</p>
+                                </div>
+                            </div>
+                            <button class="bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('volume-task-modal')">
+                                Configure
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-blue-400" id="volume-sessions">0</div>
+                                <div class="text-xs text-gray-500">Active Sessions</div>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold">Volume</h3>
-                                <p class="text-sm text-gray-400">Generate organic volume</p>
+                                <div class="text-2xl font-bold text-blue-400" id="volume-total">0 SOL</div>
+                                <div class="text-xs text-gray-500">Total Volume</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-blue-400" id="volume-cycles">0</div>
+                                <div class="text-xs text-gray-500">Cycles</div>
                             </div>
                         </div>
-                        <button class="w-full bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('volume-task-modal')">
-                            Configure
-                        </button>
                     </div>
                     
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-red-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="trending-down" class="w-6 h-6 text-red-200"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-red-900 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="trending-down" class="w-6 h-6 text-red-200"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold">Bulk Sell</h3>
+                                    <p class="text-sm text-gray-400">Sell tokens from multiple wallets</p>
+                                </div>
+                            </div>
+                            <button class="bg-red-700 hover:bg-red-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bulk-sell-modal')">
+                                Execute
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-red-400" id="bulk-ready">--</div>
+                                <div class="text-xs text-gray-500">Ready Wallets</div>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold">Bulk Sell</h3>
-                                <p class="text-sm text-gray-400">Sell multiple tokens</p>
+                                <div class="text-2xl font-bold text-red-400" id="bulk-holdings">-- Tokens</div>
+                                <div class="text-xs text-gray-500">Total Holdings</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-red-400" id="bulk-value">-- SOL</div>
+                                <div class="text-xs text-gray-500">Est. Value</div>
                             </div>
                         </div>
-                        <button class="w-full bg-red-700 hover:bg-red-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bulk-sell-modal')">
-                            Execute
-                        </button>
                     </div>
                     
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-yellow-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="trending-up" class="w-6 h-6 text-yellow-200"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-yellow-900 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="trending-up" class="w-6 h-6 text-yellow-200"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold">Bump</h3>
+                                    <p class="text-sm text-gray-400">Quick buys to bump price</p>
+                                </div>
+                            </div>
+                            <button class="bg-yellow-700 hover:bg-yellow-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bump-modal')">
+                                Start Bump
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-yellow-400" id="bump-active">0</div>
+                                <div class="text-xs text-gray-500">Active Bumps</div>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold">Bump</h3>
-                                <p class="text-sm text-gray-400">Quick price bumps</p>
+                                <div class="text-2xl font-bold text-yellow-400" id="bump-success">--</div>
+                                <div class="text-xs text-gray-500">Success Rate</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-yellow-400" id="bump-increase">--</div>
+                                <div class="text-xs text-gray-500">Avg Increase</div>
                             </div>
                         </div>
-                        <button class="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bump-modal')">
-                            Start Bump
-                        </button>
                     </div>
                     
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="refresh-cw" class="w-6 h-6 text-green-200"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="refresh-cw" class="w-6 h-6 text-green-200"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold">Sell/Buyback</h3>
+                                    <p class="text-sm text-gray-400">Automated sell and rebuy strategy</p>
+                                </div>
+                            </div>
+                            <button class="bg-green-700 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('sellbuyback-modal')">
+                                Configure
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-green-400" id="strategy-active">0</div>
+                                <div class="text-xs text-gray-500">Active Strategies</div>
                             </div>
                             <div>
-                                <h3 class="text-lg font-semibold">Sell/Buyback</h3>
-                                <p class="text-sm text-gray-400">Automated strategy</p>
+                                <div class="text-2xl font-bold text-green-400" id="strategy-profit">0 SOL</div>
+                                <div class="text-xs text-gray-500">Profit Made</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-green-400" id="strategy-cycles">0</div>
+                                <div class="text-xs text-gray-500">Cycles</div>
                             </div>
                         </div>
-                        <button class="w-full bg-green-700 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('sellbuyback-modal')">
-                            Configure
-                        </button>
+                    </div>
+                </div>
+
+                <!-- Active Tasks -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Active Tasks</h3>
+                    </div>
+                    <div class="p-4" id="active-tasks-list">
+                        <div class="text-center py-8">
+                            <div class="text-4xl mb-4">⏸️</div>
+                            <p class="text-gray-500">No active tasks running</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -504,93 +644,608 @@
                         <span class="text-3xl">💰</span>
                         <h1 class="text-2xl font-semibold">Profit & Loss Cards</h1>
                     </div>
+                    <div class="flex items-center gap-3">
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="refreshPnL()">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <span>Refresh</span>
+                        </button>
+                        <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="exportPnL()">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Export</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             
             <div class="flex-1 p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- P&L Overview Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold">Total P&L</h3>
-                            <span class="text-2xl font-bold text-green-400">+$1,234.56</span>
+                            <span class="text-2xl font-bold text-green-400" id="total-pnl">+$1,234.56</span>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">Win Rate</span>
-                                <span class="text-sm font-mono">75%</span>
+                                <span class="text-sm font-mono" id="win-rate">75%</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">Total Trades</span>
-                                <span class="text-sm font-mono">42</span>
+                                <span class="text-sm font-mono" id="total-trades">42</span>
                             </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Avg Trade</span>
+                                <span class="text-sm font-mono" id="avg-trade">+$29.39</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Today's P&L</h3>
+                            <span class="text-2xl font-bold text-blue-400" id="today-pnl">+$156.78</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Trades Today</span>
+                                <span class="text-sm font-mono" id="trades-today">8</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Best Trade</span>
+                                <span class="text-sm font-mono text-green-400" id="best-trade">+$89.45</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Worst Trade</span>
+                                <span class="text-sm font-mono text-red-400" id="worst-trade">-$12.30</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">This Week</h3>
+                            <span class="text-2xl font-bold text-purple-400" id="week-pnl">+$892.34</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Week Trades</span>
+                                <span class="text-sm font-mono" id="week-trades">23</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Win Streak</span>
+                                <span class="text-sm font-mono text-green-400" id="win-streak">7</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Daily Avg</span>
+                                <span class="text-sm font-mono" id="daily-avg">+$127.48</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">This Month</h3>
+                            <span class="text-2xl font-bold text-yellow-400" id="month-pnl">+$3,456.78</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Month Trades</span>
+                                <span class="text-sm font-mono" id="month-trades">89</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Success Rate</span>
+                                <span class="text-sm font-mono text-green-400" id="month-success">78%</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">ROI</span>
+                                <span class="text-sm font-mono text-green-400" id="roi">+156%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Trades Table -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Recent Trades</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-neutral-900">
+                                <tr class="border-b border-neutral-700">
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Time</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Token</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Type</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Amount</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Price</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">P&L</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-table-body">
+                                <tr class="border-b border-neutral-700">
+                                    <td class="p-4 text-sm font-mono text-gray-400">14:32:15</td>
+                                    <td class="p-4">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">🪙</span>
+                                            <span class="font-mono text-sm">PEPE</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">BUY</span>
+                                    </td>
+                                    <td class="p-4 text-sm font-mono">1,000,000</td>
+                                    <td class="p-4 text-sm font-mono">$0.000012</td>
+                                    <td class="p-4 text-sm font-mono text-green-400">+$89.45</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-neutral-700">
+                                    <td class="p-4 text-sm font-mono text-gray-400">14:28:42</td>
+                                    <td class="p-4">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">🦊</span>
+                                            <span class="font-mono text-sm">DOGE</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-red-900 text-red-200 text-xs rounded">SELL</span>
+                                    </td>
+                                    <td class="p-4 text-sm font-mono">500,000</td>
+                                    <td class="p-4 text-sm font-mono">$0.08234</td>
+                                    <td class="p-4 text-sm font-mono text-red-400">-$12.30</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-neutral-700">
+                                    <td class="p-4 text-sm font-mono text-gray-400">14:25:18</td>
+                                    <td class="p-4">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg">🚀</span>
+                                            <span class="font-mono text-sm">SHIB</span>
+                                        </div>
+                                    </td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">BUY</span>
+                                    </td>
+                                    <td class="p-4 text-sm font-mono">2,500,000</td>
+                                    <td class="p-4 text-sm font-mono">$0.000008</td>
+                                    <td class="p-4 text-sm font-mono text-green-400">+$45.67</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-yellow-900 text-yellow-200 text-xs rounded">Pending</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Automations View -->
+        <div id="automations-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🤖</span>
+                        <h1 class="text-2xl font-semibold">Automations</h1>
+                    </div>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="openModal('create-automation-modal')">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Create Automation</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-6">
+                <!-- Automation Templates -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-purple-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="zap" class="w-6 h-6 text-purple-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Auto Buy/Sell</h3>
+                                <p class="text-sm text-gray-400">Automated trading strategy</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Price-based triggers</li>
+                            <li>• Volume monitoring</li>
+                            <li>• Stop loss protection</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-blue-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="refresh-cw" class="w-6 h-6 text-blue-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">DCA Strategy</h3>
+                                <p class="text-sm text-gray-400">Dollar cost averaging</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Scheduled purchases</li>
+                            <li>• Fixed amount intervals</li>
+                            <li>• Market condition filters</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-green-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="shield" class="w-6 h-6 text-green-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Risk Management</h3>
+                                <p class="text-sm text-gray-400">Portfolio protection</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Portfolio rebalancing</li>
+                            <li>• Risk monitoring</li>
+                            <li>• Emergency stops</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Active Automations -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Active Automations</h3>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-center py-8">
+                            <div class="text-4xl mb-4">🤖</div>
+                            <p class="text-gray-500">No automations running</p>
+                            <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="openModal('create-automation-modal')">
+                                Create Your First Automation
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Other views (Automations, Blueprint, etc.) -->
-        <div id="automations-view" class="view flex-1 flex flex-col hidden">
-            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Automations</h1>
-            </div>
-            <div class="flex-1 p-6 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">🤖</div>
-                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
-                    <p class="text-gray-400">Automation features will be available soon</p>
-                </div>
-            </div>
-        </div>
-
+        <!-- Blueprint View -->
         <div id="blueprint-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Blueprint</h1>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">📋</span>
+                        <h1 class="text-2xl font-semibold">Blueprint</h1>
+                    </div>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="openModal('create-blueprint-modal')">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Create Blueprint</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex-1 p-6 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">📋</div>
-                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
-                    <p class="text-gray-400">Blueprint features will be available soon</p>
+            
+            <div class="flex-1 p-6">
+                <!-- Blueprint Templates -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-purple-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="file-text" class="w-6 h-6 text-purple-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Pump.fun Sniper</h3>
+                                <p class="text-sm text-gray-400">Token launch detection</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• New token detection</li>
+                            <li>• Instant buy execution</li>
+                            <li>• Profit target settings</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-blue-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="trending-up" class="w-6 h-6 text-blue-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Volume Generator</h3>
+                                <p class="text-sm text-gray-400">Organic volume creation</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Multi-wallet trading</li>
+                            <li>• Random intervals</li>
+                            <li>• Natural patterns</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-green-500 transition">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="target" class="w-6 h-6 text-green-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Arbitrage Bot</h3>
+                                <p class="text-sm text-gray-400">Price difference trading</p>
+                            </div>
+                        </div>
+                        <ul class="text-xs text-gray-500 space-y-1">
+                            <li>• Cross-DEX monitoring</li>
+                            <li>• Instant execution</li>
+                            <li>• Gas optimization</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Your Blueprints -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Your Blueprints</h3>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-center py-8">
+                            <div class="text-4xl mb-4">📋</div>
+                            <p class="text-gray-500">No blueprints created yet</p>
+                            <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="openModal('create-blueprint-modal')">
+                                Create Your First Blueprint
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- Collect Fees View -->
         <div id="collect-fees-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Collect Fees</h1>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">💎</span>
+                        <h1 class="text-2xl font-semibold">Collect Fees</h1>
+                    </div>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="collectAllFees()">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Collect All Fees</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex-1 p-6 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">💎</div>
-                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
-                    <p class="text-gray-400">Fee collection features will be available soon</p>
+            
+            <div class="flex-1 p-6">
+                <!-- Fee Collection Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Trading Fees</h3>
+                            <span class="text-2xl font-bold text-green-400" id="trading-fees">0.0234 SOL</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">From Wallets</span>
+                                <span class="text-sm font-mono" id="trading-wallets">12</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Last Collected</span>
+                                <span class="text-sm font-mono text-gray-500" id="trading-last">2h ago</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-4 bg-green-700 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectTradingFees()">
+                            Collect Trading Fees
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Rent Fees</h3>
+                            <span class="text-2xl font-bold text-blue-400" id="rent-fees">0.0156 SOL</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">From Wallets</span>
+                                <span class="text-sm font-mono" id="rent-wallets">8</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Last Collected</span>
+                                <span class="text-sm font-mono text-gray-500" id="rent-last">1h ago</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-4 bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectRentFees()">
+                            Collect Rent Fees
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Total Available</h3>
+                            <span class="text-2xl font-bold text-purple-400" id="total-fees">0.0390 SOL</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">USD Value</span>
+                                <span class="text-sm font-mono" id="fees-usd">$8.72</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Auto Collect</span>
+                                <span class="text-sm font-mono text-green-400" id="auto-collect">Enabled</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded transition" onclick="toggleAutoCollect()">
+                            Toggle Auto Collect
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fee Collection History -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Collection History</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-neutral-900">
+                                <tr class="border-b border-neutral-700">
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Time</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Type</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Amount</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Wallets</th>
+                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fees-history-body">
+                                <tr class="border-b border-neutral-700">
+                                    <td class="p-4 text-sm font-mono text-gray-400">14:30:15</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Trading</span>
+                                    </td>
+                                    <td class="p-4 text-sm font-mono">0.0234 SOL</td>
+                                    <td class="p-4 text-sm font-mono">12</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-neutral-700">
+                                    <td class="p-4 text-sm font-mono text-gray-400">13:45:22</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded">Rent</span>
+                                    </td>
+                                    <td class="p-4 text-sm font-mono">0.0156 SOL</td>
+                                    <td class="p-4 text-sm font-mono">8</td>
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- Vanities View -->
         <div id="vanities-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Vanities</h1>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🎯</span>
+                        <h1 class="text-2xl font-semibold">Vanities</h1>
+                    </div>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="openModal('create-vanity-modal')">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Generate Vanity</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex-1 p-6 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">🎯</div>
-                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
-                    <p class="text-gray-400">Vanity features will be available soon</p>
+            
+            <div class="flex-1 p-6">
+                <!-- Vanity Generation Form -->
+                <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 mb-8">
+                    <h3 class="text-lg font-semibold mb-4">Generate Vanity Address</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Prefix</label>
+                            <input type="text" placeholder="Enter prefix (e.g., 'CHAOS')" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" id="vanity-prefix" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Suffix</label>
+                            <input type="text" placeholder="Enter suffix (e.g., 'BOT')" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" id="vanity-suffix" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Difficulty</label>
+                            <select class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" id="vanity-difficulty">
+                                <option value="easy">Easy (1-3 chars)</option>
+                                <option value="medium">Medium (4-6 chars)</option>
+                                <option value="hard">Hard (7+ chars)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Max Attempts</label>
+                            <input type="number" placeholder="1000000" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" id="vanity-attempts" />
+                        </div>
+                    </div>
+                    <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="startVanityGeneration()">
+                        Start Generation
+                    </button>
+                </div>
+
+                <!-- Generated Vanities -->
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Generated Vanities</h3>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-center py-8">
+                            <div class="text-4xl mb-4">🎯</div>
+                            <p class="text-gray-500">No vanities generated yet</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- Markdown View -->
         <div id="markdown-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Markdown</h1>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">📝</span>
+                        <h1 class="text-2xl font-semibold">Markdown</h1>
+                    </div>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="createNewDocument()">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>New Document</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex-1 p-6 flex items-center justify-center">
-                <div class="text-center">
-                    <div class="text-6xl mb-4">📝</div>
-                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
-                    <p class="text-gray-400">Markdown features will be available soon</p>
+            
+            <div class="flex-1 p-6">
+                <!-- Markdown Editor -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                        <div class="p-4 border-b border-neutral-700">
+                            <h3 class="text-lg font-semibold">Editor</h3>
+                        </div>
+                        <div class="p-4">
+                            <textarea 
+                                class="w-full h-96 bg-black border border-neutral-700 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 resize-none" 
+                                placeholder="# Welcome to Markdown Editor
+
+## Features
+- **Bold text**
+- *Italic text*
+- `Code blocks`
+- [Links](https://example.com)
+- Lists and more..."
+                                id="markdown-editor"
+                            ></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg border border-neutral-700">
+                        <div class="p-4 border-b border-neutral-700">
+                            <h3 class="text-lg font-semibold">Preview</h3>
+                        </div>
+                        <div class="p-4 h-96 overflow-auto" id="markdown-preview">
+                            <div class="text-gray-500">Preview will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document List -->
+                <div class="mt-8 bg-neutral-800 rounded-lg border border-neutral-700">
+                    <div class="p-4 border-b border-neutral-700">
+                        <h3 class="text-lg font-semibold">Documents</h3>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-center py-8">
+                            <div class="text-4xl mb-4">📝</div>
+                            <p class="text-gray-500">No documents created yet</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -983,6 +1638,114 @@
             showToast('Platform link copied to clipboard!', 'success');
         }
 
+        // P&L Functions
+        function refreshPnL() {
+            showToast('Refreshing P&L data...', 'info');
+            addConsoleLog('Refreshing profit and loss data', 'info');
+            setTimeout(() => {
+                showToast('P&L data updated!', 'success');
+            }, 1000);
+        }
+
+        function exportPnL() {
+            showToast('Exporting P&L data...', 'info');
+            addConsoleLog('Exporting P&L data to CSV', 'info');
+            setTimeout(() => {
+                showToast('P&L data exported successfully!', 'success');
+            }, 1000);
+        }
+
+        // Fee Collection Functions
+        function collectAllFees() {
+            showToast('Collecting all fees...', 'info');
+            addConsoleLog('Starting fee collection from all wallets', 'info');
+            setTimeout(() => {
+                showToast('All fees collected successfully!', 'success');
+                addConsoleLog('Fee collection completed', 'success');
+            }, 2000);
+        }
+
+        function collectTradingFees() {
+            showToast('Collecting trading fees...', 'info');
+            addConsoleLog('Collecting trading fees from 12 wallets', 'info');
+            setTimeout(() => {
+                showToast('Trading fees collected!', 'success');
+            }, 1500);
+        }
+
+        function collectRentFees() {
+            showToast('Collecting rent fees...', 'info');
+            addConsoleLog('Collecting rent fees from 8 wallets', 'info');
+            setTimeout(() => {
+                showToast('Rent fees collected!', 'success');
+            }, 1500);
+        }
+
+        function toggleAutoCollect() {
+            const autoCollect = document.getElementById('auto-collect');
+            const isEnabled = autoCollect.textContent === 'Enabled';
+            autoCollect.textContent = isEnabled ? 'Disabled' : 'Enabled';
+            autoCollect.className = isEnabled ? 'text-sm font-mono text-red-400' : 'text-sm font-mono text-green-400';
+            showToast(`Auto collect ${isEnabled ? 'disabled' : 'enabled'}`, 'info');
+        }
+
+        // Vanity Functions
+        function startVanityGeneration() {
+            const prefix = document.getElementById('vanity-prefix').value;
+            const suffix = document.getElementById('vanity-suffix').value;
+            const difficulty = document.getElementById('vanity-difficulty').value;
+            const attempts = document.getElementById('vanity-attempts').value;
+
+            if (!prefix && !suffix) {
+                showToast('Please enter a prefix or suffix', 'error');
+                return;
+            }
+
+            showToast(`Starting vanity generation for ${prefix}...${suffix}`, 'info');
+            addConsoleLog(`Starting vanity address generation (${difficulty} difficulty)`, 'info');
+            
+            // Simulate generation
+            setTimeout(() => {
+                showToast('Vanity address generated!', 'success');
+                addConsoleLog('Vanity address generation completed', 'success');
+            }, 3000);
+        }
+
+        // Markdown Functions
+        function createNewDocument() {
+            showToast('Creating new document...', 'info');
+            addConsoleLog('Creating new markdown document', 'info');
+            setTimeout(() => {
+                showToast('New document created!', 'success');
+            }, 1000);
+        }
+
+        // Initialize markdown editor
+        function initializeMarkdownEditor() {
+            const editor = document.getElementById('markdown-editor');
+            const preview = document.getElementById('markdown-preview');
+            
+            if (editor && preview) {
+                editor.addEventListener('input', () => {
+                    const markdown = editor.value;
+                    // Simple markdown preview (in a real app, you'd use a proper markdown parser)
+                    preview.innerHTML = markdown
+                        .replace(/# (.*)/g, '<h1 class="text-2xl font-bold mb-2">$1</h1>')
+                        .replace(/## (.*)/g, '<h2 class="text-xl font-semibold mb-2">$1</h2>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
+                        .replace(/`(.*?)`/g, '<code class="bg-gray-700 px-1 rounded text-sm">$1</code>')
+                        .replace(/\n/g, '<br>');
+                });
+            }
+        }
+
+        // Initialize all features when DOM loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... existing initialization code ...
+            initializeMarkdownEditor();
+        });
+
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -1004,3 +1767,4 @@
     </script>
 </body>
 </html>
+

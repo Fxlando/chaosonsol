@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos Bot - FrogWifTools Style Trading Platform</title>
+    <link rel="stylesheet" href="frogwiftools-ui.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <div class="logo">
+                    <span class="logo-icon">🐸</span>
+                    <span class="logo-text">CHAOS BOT</span>
+                </div>
+                <div class="nav-tabs">
+                    <button class="nav-tab active" data-view="wallets">Wallets</button>
+                    <button class="nav-tab" data-view="tokens">Tokens</button>
+                    <button class="nav-tab" data-view="tasks">Tasks</button>
+                    <button class="nav-tab" data-view="automations">Automations</button>
+                    <button class="nav-tab" data-view="blueprint">Blueprint</button>
+                    <button class="nav-tab" data-view="collect-fees">Collect Fees</button>
+                    <button class="nav-tab" data-view="vanities">Vanities</button>
+                    <button class="nav-tab" data-view="settings">Settings</button>
+                    <button class="nav-tab" data-view="console">Console</button>
+                    <button class="nav-tab" data-view="pnl">Profit and Loss Cards</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Connected</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Wallets View -->
+            <div id="wallets-view" class="view active">
+                <div class="view-header">
+                    <h1>Wallets</h1>
+                    <div class="header-actions">
+                        <div class="search-box">
+                            <input type="text" placeholder="Search wallets..." id="wallet-search">
+                        </div>
+                        <div class="filter-toggle">
+                            <button class="filter-btn active" data-filter="all">All</button>
+                            <button class="filter-btn" data-filter="active">Active</button>
+                            <button class="filter-btn" data-filter="inactive">Inactive</button>
+                        </div>
+                        <button class="action-btn primary" id="generate-btn">Generate</button>
+                    </div>
+                </div>
+
+                <!-- Total Balance Display -->
+                <div class="balance-display">
+                    <div class="balance-info">
+                        <span class="balance-label">Total Balance:</span>
+                        <span class="balance-amount" id="total-balance">0.00 SOL</span>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Bar -->
+                <div class="bulk-actions-bar" id="bulk-actions" style="display: none;">
+                    <div class="bulk-info">
+                        <span id="selected-count">0</span> wallets selected
+                    </div>
+                    <div class="bulk-buttons">
+                        <button class="bulk-btn" id="fund-btn">Fund</button>
+                        <button class="bulk-btn" id="withdraw-btn">Withdraw</button>
+                        <button class="bulk-btn" id="tag-btn">Tag</button>
+                        <button class="bulk-btn" id="warm-btn">Warm</button>
+                        <button class="bulk-btn" id="redistribute-btn">Redistribute</button>
+                        <button class="bulk-btn" id="reclaim-btn">Reclaim Rent</button>
+                        <button class="bulk-btn" id="export-btn">Export</button>
+                        <button class="bulk-btn" id="activate-btn">Activate/Deactivate</button>
+                    </div>
+                </div>
+
+                <!-- Wallets Table -->
+                <div class="table-container">
+                    <table class="wallets-table">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-col">
+                                    <input type="checkbox" id="select-all">
+                                </th>
+                                <th class="sortable" data-sort="name">Name</th>
+                                <th>Tags</th>
+                                <th>Address</th>
+                                <th class="sortable" data-sort="tokens">Tokens</th>
+                                <th class="sortable" data-sort="rent">Rent</th>
+                                <th class="sortable" data-sort="balance">Balance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wallets-table-body">
+                            <tr>
+                                <td colspan="8" class="loading">Loading wallets...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tokens View -->
+            <div id="tokens-view" class="view">
+                <div class="view-header">
+                    <h1>Tokens</h1>
+                    <div class="header-actions">
+                        <button class="action-btn primary" id="new-launch-btn">New Launch</button>
+                        <button class="action-btn" id="copy-token-btn">Copy Token</button>
+                        <button class="action-btn" id="import-token-btn">Import Token</button>
+                    </div>
+                </div>
+
+                <div class="tokens-grid">
+                    <div class="token-card">
+                        <div class="token-header">
+                            <div class="token-icon">🪙</div>
+                            <div class="token-info">
+                                <h3>Token Name</h3>
+                                <p>SYMBOL</p>
+                            </div>
+                        </div>
+                        <div class="token-stats">
+                            <div class="stat">
+                                <span class="stat-label">Supply</span>
+                                <span class="stat-value">1,000,000</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Holders</span>
+                                <span class="stat-value">42</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Price</span>
+                                <span class="stat-value">$0.001</span>
+                            </div>
+                        </div>
+                        <div class="token-actions">
+                            <button class="token-btn">Launch</button>
+                            <button class="token-btn">Archive</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks View -->
+            <div id="tasks-view" class="view">
+                <div class="view-header">
+                    <h1>Tasks</h1>
+                </div>
+
+                <div class="tasks-grid">
+                    <div class="task-card">
+                        <div class="task-header">
+                            <h3>Volume</h3>
+                            <button class="task-btn">Configure</button>
+                        </div>
+                        <div class="task-description">
+                            Generate organic trading volume across multiple wallets
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <h3>Bulk Sell</h3>
+                            <button class="task-btn">Execute</button>
+                        </div>
+                        <div class="task-description">
+                            Sell tokens from multiple wallets simultaneously
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <h3>Bump</h3>
+                            <button class="task-btn">Start</button>
+                        </div>
+                        <div class="task-description">
+                            Quick buys to bump token price
+                        </div>
+                    </div>
+
+                    <div class="task-card">
+                        <div class="task-header">
+                            <h3>Sell/Buyback</h3>
+                            <button class="task-btn">Configure</button>
+                        </div>
+                        <div class="task-description">
+                            Automated sell and rebuy strategy
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Console View -->
+            <div id="console-view" class="view">
+                <div class="view-header">
+                    <h1>Console</h1>
+                    <div class="console-controls">
+                        <button class="console-btn" id="clear-console">Clear</button>
+                        <button class="console-btn" id="auto-scroll-toggle">Auto-scroll: ON</button>
+                    </div>
+                </div>
+                <div class="console-output" id="console-output">
+                    <div class="console-line">
+                        <span class="console-time">[00:00:00]</span>
+                        <span class="console-type info">INFO</span>
+                        <span class="console-message">System initialized - Ready for trading</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P&L View -->
+            <div id="pnl-view" class="view">
+                <div class="view-header">
+                    <h1>Profit and Loss Cards</h1>
+                </div>
+                <div class="pnl-grid">
+                    <div class="pnl-card">
+                        <div class="pnl-header">
+                            <h3>Total P&L</h3>
+                            <span class="pnl-value positive">+$1,234.56</span>
+                        </div>
+                        <div class="pnl-stats">
+                            <div class="pnl-stat">
+                                <span>Win Rate</span>
+                                <span>75%</span>
+                            </div>
+                            <div class="pnl-stat">
+                                <span>Total Trades</span>
+                                <span>42</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other views... -->
+            <div id="automations-view" class="view">
+                <div class="view-header">
+                    <h1>Automations</h1>
+                </div>
+                <div class="coming-soon">
+                    <h3>Coming Soon</h3>
+                    <p>Automation features will be available soon</p>
+                </div>
+            </div>
+
+            <div id="blueprint-view" class="view">
+                <div class="view-header">
+                    <h1>Blueprint</h1>
+                </div>
+                <div class="coming-soon">
+                    <h3>Coming Soon</h3>
+                    <p>Blueprint features will be available soon</p>
+                </div>
+            </div>
+
+            <div id="collect-fees-view" class="view">
+                <div class="view-header">
+                    <h1>Collect Fees</h1>
+                </div>
+                <div class="coming-soon">
+                    <h3>Coming Soon</h3>
+                    <p>Fee collection features will be available soon</p>
+                </div>
+            </div>
+
+            <div id="vanities-view" class="view">
+                <div class="view-header">
+                    <h1>Vanities</h1>
+                </div>
+                <div class="coming-soon">
+                    <h3>Coming Soon</h3>
+                    <p>Vanity features will be available soon</p>
+                </div>
+            </div>
+
+            <div id="settings-view" class="view">
+                <div class="view-header">
+                    <h1>Settings</h1>
+                </div>
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <h3>RPC Configuration</h3>
+                        <div class="setting-item">
+                            <label>RPC URL</label>
+                            <input type="text" value="https://rpc.ankr.com/solana/..." class="setting-input">
+                        </div>
+                    </div>
+                    <div class="setting-card">
+                        <h3>Default Settings</h3>
+                        <div class="setting-item">
+                            <label>Slippage</label>
+                            <input type="number" value="5" class="setting-input">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="generate-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate Wallets</h2>
+                <button class="modal-close" data-modal="generate-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Number of Wallets</label>
+                    <input type="number" id="generate-count" placeholder="Enter number..." class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="generate-modal">Cancel</button>
+                <button class="btn primary" id="execute-generate">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="fund-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Fund Wallets</h2>
+                <button class="modal-close" data-modal="fund-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Funding Mode</label>
+                    <div class="button-group">
+                        <button class="mode-btn active" data-mode="standard">Standard</button>
+                        <button class="mode-btn" data-mode="mixer">Mixer</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Funder Private Key</label>
+                    <input type="password" id="fund-key" placeholder="Enter private key..." class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>Amount per Wallet (SOL)</label>
+                    <input type="number" id="fund-amount" placeholder="0.1" step="0.001" class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="fund-modal">Cancel</button>
+                <button class="btn primary" id="execute-fund">Fund</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="frogwiftools-ui.js"></script>
+</body>
+</html>

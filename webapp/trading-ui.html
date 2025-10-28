@@ -272,20 +272,190 @@
                     </div>
                 </div>
 
-                <!-- Other views will be added here -->
+                <!-- Token Manager View -->
                 <div id="tokens-view" class="view">
-                    <div class="coming-soon">
-                        <div class="soon-icon">🪙</div>
-                        <h3>Token Manager</h3>
-                        <p>Launch, copy, and manage tokens</p>
+                    <div class="view-actions">
+                        <button class="action-btn primary" id="new-token-btn">🚀 Launch New Token</button>
+                        <button class="action-btn" id="import-token-btn">📥 Import Token</button>
+                    </div>
+
+                    <div class="token-actions-grid">
+                        <div class="action-card" onclick="openModal('launch-token-modal')">
+                            <div class="action-card-icon">🚀</div>
+                            <h3>Launch Token</h3>
+                            <p>Create and deploy a new token on Solana</p>
+                            <ul class="action-list">
+                                <li>Custom metadata</li>
+                                <li>Supply configuration</li>
+                                <li>Liquidity setup</li>
+                            </ul>
+                        </div>
+
+                        <div class="action-card" onclick="openModal('copy-token-modal')">
+                            <div class="action-card-icon">📋</div>
+                            <h3>Copy Token</h3>
+                            <p>Clone an existing token's metadata</p>
+                            <ul class="action-list">
+                                <li>Mirror name & symbol</li>
+                                <li>Copy image & metadata</li>
+                                <li>Quick deployment</li>
+                            </ul>
+                        </div>
+
+                        <div class="action-card">
+                            <div class="action-card-icon">🔍</div>
+                            <h3>Token Analytics</h3>
+                            <p>Track your launched tokens</p>
+                            <ul class="action-list">
+                                <li>Holder statistics</li>
+                                <li>Trading volume</li>
+                                <li>Price charts</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="tokens-list-section">
+                        <h2>Your Tokens</h2>
+                        <div class="table-container">
+                            <table class="wallet-table">
+                                <thead>
+                                    <tr>
+                                        <th>Token</th>
+                                        <th>Symbol</th>
+                                        <th>Address</th>
+                                        <th>Supply</th>
+                                        <th>Holders</th>
+                                        <th>Launched</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tokens-table-body">
+                                    <tr>
+                                        <td colspan="7" class="loading">No tokens launched yet</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Trading Tasks View -->
                 <div id="tasks-view" class="view">
-                    <div class="coming-soon">
-                        <div class="soon-icon">⚡</div>
-                        <h3>Trading Tasks</h3>
-                        <p>Volume, Bulk Sell, Bump, Sell/Buyback</p>
+                    <div class="tasks-grid">
+                        <!-- Volume Trading Card -->
+                        <div class="task-card">
+                            <div class="task-header">
+                                <div class="task-icon">📊</div>
+                                <div>
+                                    <h3>Volume Generation</h3>
+                                    <p>Create organic trading volume</p>
+                                </div>
+                                <button class="task-btn" onclick="openModal('volume-task-modal')">Configure</button>
+                            </div>
+                            <div class="task-stats">
+                                <div class="task-stat">
+                                    <span class="stat-label">Active Sessions</span>
+                                    <span class="stat-value" id="volume-task-sessions">0</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Total Volume</span>
+                                    <span class="stat-value" id="volume-task-total">0 SOL</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Cycles Completed</span>
+                                    <span class="stat-value" id="volume-task-cycles">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Sell Card -->
+                        <div class="task-card">
+                            <div class="task-header">
+                                <div class="task-icon">💸</div>
+                                <div>
+                                    <h3>Bulk Sell</h3>
+                                    <p>Sell tokens from multiple wallets</p>
+                                </div>
+                                <button class="task-btn" onclick="openModal('bulk-sell-modal')">Execute</button>
+                            </div>
+                            <div class="task-stats">
+                                <div class="task-stat">
+                                    <span class="stat-label">Ready Wallets</span>
+                                    <span class="stat-value">--</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Total Holdings</span>
+                                    <span class="stat-value">-- Tokens</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Est. Value</span>
+                                    <span class="stat-value">-- SOL</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bump Card -->
+                        <div class="task-card">
+                            <div class="task-header">
+                                <div class="task-icon">🚀</div>
+                                <div>
+                                    <h3>Bump</h3>
+                                    <p>Quick buys to bump price</p>
+                                </div>
+                                <button class="task-btn" onclick="openModal('bump-modal')">Start Bump</button>
+                            </div>
+                            <div class="task-stats">
+                                <div class="task-stat">
+                                    <span class="stat-label">Active Bumps</span>
+                                    <span class="stat-value">0</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Success Rate</span>
+                                    <span class="stat-value">--</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Avg Increase</span>
+                                    <span class="stat-value">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sell/Buyback Card -->
+                        <div class="task-card">
+                            <div class="task-header">
+                                <div class="task-icon">🔄</div>
+                                <div>
+                                    <h3>Sell/Buyback</h3>
+                                    <p>Automated sell and rebuy strategy</p>
+                                </div>
+                                <button class="task-btn" onclick="openModal('sellbuyback-modal')">Configure</button>
+                            </div>
+                            <div class="task-stats">
+                                <div class="task-stat">
+                                    <span class="stat-label">Active Strategies</span>
+                                    <span class="stat-value">0</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Profit Made</span>
+                                    <span class="stat-value">0 SOL</span>
+                                </div>
+                                <div class="task-stat">
+                                    <span class="stat-label">Cycles</span>
+                                    <span class="stat-value">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Tasks -->
+                    <div class="active-tasks-section">
+                        <h2>Active Tasks</h2>
+                        <div id="active-tasks-list" class="active-tasks-list">
+                            <div class="empty-state">
+                                <span class="empty-icon">⏸️</span>
+                                <p>No active tasks running</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos Bot - FrogWifTools Complete Trading Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
+        .bg-neutral-900 { background-color: #171717; }
+        .bg-neutral-800 { background-color: #262626; }
+        .bg-neutral-700 { background-color: #404040; }
+        .bg-purple-900 { background-color: #581c87; }
+        .bg-purple-800 { background-color: #6b21a8; }
+        .bg-purple-700 { background-color: #7c3aed; }
+        .text-purple-200 { color: #e9d5ff; }
+        .border-neutral-800 { border-color: #262626; }
+        .border-neutral-700 { border-color: #404040; }
+        .text-gray-200 { color: #e5e5e5; }
+        .text-gray-300 { color: #d4d4d4; }
+        .text-gray-400 { color: #a3a3a3; }
+        .text-gray-500 { color: #737373; }
+        .text-green-400 { color: #4ade80; }
+        .text-green-500 { color: #22c55e; }
+        .bg-green-500 { background-color: #22c55e; }
+        .bg-black { background-color: #000000; }
+        .bg-blue-900 { background-color: #1e3a8a; }
+        .text-blue-200 { color: #bfdbfe; }
+        .bg-yellow-900 { background-color: #713f12; }
+        .text-yellow-200 { color: #fef3c7; }
+        .bg-red-900 { background-color: #7f1d1d; }
+        .text-red-200 { color: #fecaca; }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #171717; }
+        ::-webkit-scrollbar-thumb { background: #404040; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #525252; }
+        
+        /* Animation for status dots */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .animate-pulse { animation: pulse 2s infinite; }
+        
+        /* Custom animations */
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+    </style>
+</head>
+<body class="flex h-screen bg-black text-gray-200 font-sans">
+    <!-- Sidebar -->
+    <div class="w-60 bg-neutral-900 border-r border-neutral-800 flex flex-col">
+        <div class="p-4 border-b border-neutral-800">
+            <div class="w-10 h-10 bg-neutral-800 rounded-lg flex items-center justify-center">
+                <div class="text-white text-xl">⚡</div>
+            </div>
+        </div>
+        
+        <nav class="flex-1 p-3">
+            <div class="space-y-1">
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="tokens">
+                    <i data-lucide="coins" class="w-4 h-4"></i>
+                    <span class="text-sm">Tokens</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white" data-view="wallets">
+                    <i data-lucide="wallet" class="w-4 h-4"></i>
+                    <span class="text-sm">Wallets</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="tasks">
+                    <i data-lucide="play-circle" class="w-4 h-4"></i>
+                    <span class="text-sm">Tasks</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="automations">
+                    <i data-lucide="zap" class="w-4 h-4"></i>
+                    <span class="text-sm">Automations</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="blueprint">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span class="text-sm">Blueprint</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="collect-fees">
+                    <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+                    <span class="text-sm">Collect Fees</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="vanities">
+                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    <span class="text-sm">Vanities</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="markdown">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span class="text-sm">Markdown</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="console">
+                    <i data-lucide="terminal" class="w-4 h-4"></i>
+                    <span class="text-sm">Console</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="pnl">
+                    <i data-lucide="trending-up" class="w-4 h-4"></i>
+                    <span class="text-sm">P&L Cards</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="settings">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    <span class="text-sm">Settings</span>
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                <button class="w-full bg-purple-900 hover:bg-purple-800 text-white py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition">
+                    <span>🐸</span>
+                    <span class="font-medium">Feed the Frogs</span>
+                </button>
+            </div>
+            
+            <div class="mt-6 bg-neutral-800 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="wallet" class="w-4 h-4"></i>
+                        <span class="text-sm">Fee Wallet</span>
+                    </div>
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-gray-500 cursor-pointer hover:text-gray-300" onclick="refreshFeeWallet()"></i>
+                </div>
+                <div class="text-xs text-gray-500 mb-2">Balance Level</div>
+                <div class="mb-2">
+                    <div class="bg-neutral-700 h-2 rounded-full overflow-hidden">
+                        <div class="bg-green-500 h-full" style="width: 66%" id="fee-wallet-level"></div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1" id="fee-wallet-percent">66%</div>
+                </div>
+                <div class="text-green-400 font-mono text-sm mb-3" id="fee-wallet-balance">0.3300 SOL</div>
+                <div class="text-xs text-gray-500 mb-1">Address:</div>
+                <div class="flex items-center gap-2">
+                    <div class="text-xs font-mono truncate flex-1" id="fee-wallet-address">6NBcSPLV...1YnDb8L</div>
+                    <i data-lucide="copy" class="w-3 h-3 text-gray-500 cursor-pointer hover:text-gray-300" onclick="copyFeeWalletAddress()"></i>
+                </div>
+                <button class="w-full mt-3 bg-neutral-700 hover:bg-neutral-600 text-white text-xs py-2 px-3 rounded flex items-center justify-center gap-2 transition" onclick="copyFeeWalletKey()">
+                    <span>Copy Private Key</span>
+                    <i data-lucide="copy" class="w-3 h-3"></i>
+                </button>
+            </div>
+        </nav>
+        
+        <div class="p-4 border-t border-neutral-800 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+                <span class="text-gray-500">RPC Node</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-300" id="rpc-status">Online</span>
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" id="rpc-dot"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-500">RPC Websocket</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-300" id="ws-status">Online</span>
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" id="ws-dot"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-500">Jito</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-300" id="jito-status">Online</span>
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" id="jito-dot"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-500">Proxies</span>
+                <span class="text-gray-300" id="proxy-status">None (0/0)</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-500">Solana/USD</span>
+                <span class="text-gray-300" id="sol-price">$223.66</span>
+            </div>
+        </div>
+        
+        <div class="p-3 border-t border-neutral-800 flex items-center justify-between text-xs">
+            <span>FrogWifTools v3.13.0</span>
+            <div class="flex gap-2">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-gray-500 cursor-pointer hover:text-gray-300" onclick="openDocumentation()"></i>
+                <i data-lucide="share-2" class="w-3.5 h-3.5 text-gray-500 cursor-pointer hover:text-gray-300" onclick="sharePlatform()"></i>
+                <i data-lucide="settings" class="w-3.5 h-3.5 text-gray-500 cursor-pointer hover:text-gray-300" onclick="switchView('settings')"></i>
+            </div>
+        </div>
+        
+        <div class="p-3 border-t border-neutral-800 flex items-center gap-2 text-xs cursor-pointer hover:bg-neutral-800" onclick="switchView('console')">
+            <span>&gt;_</span>
+            <span>CONSOLE</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col">
+        <!-- Wallets View -->
+        <div id="wallets-view" class="view flex-1 flex flex-col">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">💰</span>
+                        <h1 class="text-2xl font-semibold">Wallets</h1>
+                    </div>
+                    <div class="text-xl">
+                        Total: <span class="font-mono font-bold" id="total-balance">0.69 SOL</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3 flex-wrap">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-purple-700 hover:bg-purple-600 text-white" onclick="openModal('generate-modal')">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Generate</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('import-modal')">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Import</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('fund-modal')">
+                        <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+                        <span>Fund</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('withdraw-modal')">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span>Withdraw</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('tag-modal')">
+                        <i data-lucide="tag" class="w-4 h-4"></i>
+                        <span>Tag</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('warm-modal')">
+                        <i data-lucide="flame" class="w-4 h-4"></i>
+                        <span>Warm</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('reclaim-modal')">
+                        <i data-lucide="gift" class="w-4 h-4"></i>
+                        <span>Reclaim Rent</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('export-modal')">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span>Export</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('redistribute-modal')">
+                        <i data-lucide="shuffle" class="w-4 h-4"></i>
+                        <span>Redistribute</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('activate-modal')">
+                        <i data-lucide="power" class="w-4 h-4"></i>
+                        <span>Activate/Deactivate</span>
+                    </button>
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('grouping-modal')">
+                        <i data-lucide="users" class="w-4 h-4"></i>
+                        <span>Grouping</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="bg-neutral-900 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <input
+                        type="text"
+                        placeholder="Search"
+                        class="bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm w-48 focus:outline-none focus:border-neutral-600"
+                        id="wallet-search"
+                    />
+                    <div class="flex gap-2">
+                        <button class="px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white" id="active-tab">
+                            Active
+                        </button>
+                        <button class="px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white" id="inactive-tab">
+                            Inactive
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="exportWallets()">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span>Export</span>
+                    </button>
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="deactivateWallets()">
+                        <i data-lucide="power" class="w-3.5 h-3.5"></i>
+                        <span>Deactivate</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="px-6 py-3 border-b border-neutral-800 bg-neutral-900 flex items-center justify-between" id="bulk-actions" style="display: none;">
+                <div class="text-sm text-gray-400" id="selected-count">0 wallets selected</div>
+                <div class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer hover:text-gray-300" onclick="refreshBalances()">
+                    <span>Re-Sync Balances</span>
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="flex-1 overflow-auto">
+                <table class="w-full">
+                    <thead class="bg-neutral-900 sticky top-0">
+                        <tr class="border-b border-neutral-800">
+                            <th class="text-left p-4 font-medium text-sm text-gray-400 w-8">
+                                <input type="checkbox" class="rounded" id="select-all" />
+                            </th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Name</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Tags</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Address</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Private Key</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Token Holdings</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Unclaimed Rent</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">SOL Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wallets-table-body">
+                        <tr>
+                            <td colspan="8" class="p-8 text-center text-gray-500">Loading wallets...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tokens View -->
+        <div id="tokens-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🪙</span>
+                        <h1 class="text-2xl font-semibold">Tokens</h1>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-purple-700 hover:bg-purple-600 text-white" onclick="openModal('new-launch-modal')">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <span>New Launch</span>
+                        </button>
+                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('copy-token-modal')">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <span>Copy Token</span>
+                        </button>
+                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('import-token-modal')">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Import Token</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="tokens-grid">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
+                                <span class="text-2xl">🪙</span>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Sample Token</h3>
+                                <p class="text-sm text-gray-400">SAMPLE</p>
+                            </div>
+                        </div>
+                        <div class="space-y-2 mb-4">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Supply</span>
+                                <span class="text-sm font-mono">1,000,000</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Holders</span>
+                                <span class="text-sm font-mono">42</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Price</span>
+                                <span class="text-sm font-mono">$0.001</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="flex-1 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded transition">
+                                Launch
+                            </button>
+                            <button class="flex-1 bg-neutral-700 hover:bg-neutral-600 text-white text-sm py-2 px-3 rounded transition">
+                                Archive
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tasks View -->
+        <div id="tasks-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">⚡</span>
+                        <h1 class="text-2xl font-semibold">Tasks</h1>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="bar-chart-3" class="w-6 h-6 text-blue-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Volume</h3>
+                                <p class="text-sm text-gray-400">Generate organic volume</p>
+                            </div>
+                        </div>
+                        <button class="w-full bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('volume-task-modal')">
+                            Configure
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-red-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="trending-down" class="w-6 h-6 text-red-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Bulk Sell</h3>
+                                <p class="text-sm text-gray-400">Sell multiple tokens</p>
+                            </div>
+                        </div>
+                        <button class="w-full bg-red-700 hover:bg-red-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bulk-sell-modal')">
+                            Execute
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-yellow-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="trending-up" class="w-6 h-6 text-yellow-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Bump</h3>
+                                <p class="text-sm text-gray-400">Quick price bumps</p>
+                            </div>
+                        </div>
+                        <button class="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('bump-modal')">
+                            Start Bump
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="refresh-cw" class="w-6 h-6 text-green-200"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold">Sell/Buyback</h3>
+                                <p class="text-sm text-gray-400">Automated strategy</p>
+                            </div>
+                        </div>
+                        <button class="w-full bg-green-700 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition" onclick="openModal('sellbuyback-modal')">
+                            Configure
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console View -->
+        <div id="console-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🖥️</span>
+                        <h1 class="text-2xl font-semibold">Console</h1>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="clearConsole()">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            <span>Clear</span>
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="toggleAutoScroll()">
+                            <i data-lucide="arrow-down" class="w-4 h-4"></i>
+                            <span id="auto-scroll-text">Auto-scroll: ON</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-6">
+                <div class="bg-black rounded-lg p-4 h-full overflow-auto font-mono text-sm" id="console-output">
+                    <div class="console-line flex gap-4 py-1">
+                        <span class="text-gray-500">[00:00:00]</span>
+                        <span class="text-blue-400 font-semibold">INFO</span>
+                        <span class="text-gray-300">System initialized - Ready for trading</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- P&L View -->
+        <div id="pnl-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">💰</span>
+                        <h1 class="text-2xl font-semibold">Profit & Loss Cards</h1>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Total P&L</h3>
+                            <span class="text-2xl font-bold text-green-400">+$1,234.56</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Win Rate</span>
+                                <span class="text-sm font-mono">75%</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Total Trades</span>
+                                <span class="text-sm font-mono">42</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other views (Automations, Blueprint, etc.) -->
+        <div id="automations-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Automations</h1>
+            </div>
+            <div class="flex-1 p-6 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">🤖</div>
+                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p class="text-gray-400">Automation features will be available soon</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="blueprint-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Blueprint</h1>
+            </div>
+            <div class="flex-1 p-6 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">📋</div>
+                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p class="text-gray-400">Blueprint features will be available soon</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="collect-fees-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Collect Fees</h1>
+            </div>
+            <div class="flex-1 p-6 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">💎</div>
+                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p class="text-gray-400">Fee collection features will be available soon</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="vanities-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Vanities</h1>
+            </div>
+            <div class="flex-1 p-6 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">🎯</div>
+                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p class="text-gray-400">Vanity features will be available soon</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="markdown-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Markdown</h1>
+            </div>
+            <div class="flex-1 p-6 flex items-center justify-center">
+                <div class="text-center">
+                    <div class="text-6xl mb-4">📝</div>
+                    <h3 class="text-xl font-semibold mb-2">Coming Soon</h3>
+                    <p class="text-gray-400">Markdown features will be available soon</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-view" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <h1 class="text-2xl font-semibold">Settings</h1>
+            </div>
+            <div class="flex-1 p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <h3 class="text-lg font-semibold mb-4">RPC Configuration</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">RPC URL</label>
+                                <input type="text" value="https://rpc.ankr.com/solana/..." class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">WebSocket URL</label>
+                                <input type="text" value="wss://rpc.ankr.com/solana/..." class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <h3 class="text-lg font-semibold mb-4">Trading Settings</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Default Slippage</label>
+                                <input type="number" value="5" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Max Gas Price</label>
+                                <input type="number" value="5000" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden" id="generate-modal">
+        <div class="flex items-center justify-center h-full">
+            <div class="bg-neutral-900 border border-neutral-800 rounded-lg max-w-md w-full mx-4">
+                <div class="flex items-center justify-between p-6 border-b border-neutral-800">
+                    <h2 class="text-xl font-semibold">Generate Wallets</h2>
+                    <button class="text-gray-400 hover:text-white" onclick="closeModal('generate-modal')">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Number of Wallets</label>
+                        <input type="number" id="generate-count" placeholder="Enter number..." class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 p-6 border-t border-neutral-800">
+                    <button class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-sm transition" onclick="closeModal('generate-modal')">
+                        Cancel
+                    </button>
+                    <button class="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-sm transition" onclick="executeGenerate()">
+                        Generate
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="fixed top-4 right-4 z-50 space-y-2" id="toast-container"></div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // State
+        let selectedWallets = new Set();
+        let wallets = [];
+        let currentView = 'wallets';
+        let autoScroll = true;
+
+        // Sample wallet data
+        const sampleWallets = [
+            { name: 'sour-elephant', emoji: '🐘', address: 'xVXqu8xYd7r4PjfnJ4ExvAMjL7TuWyaD6kbhpGQyuvaSp', tokens: 6, rent: -0.01, balance: 0.97, tags: ['🏠'] },
+            { name: 'decisive-parrot', emoji: '🦜', address: 'GPWuicusP+rxYUjseszLqEHdwzDSL0ttsjrR9jbCGgc8', tokens: 8, rent: -0.01, balance: 0.3, tags: ['🏠', '🌱', '⚠️', '🔰'] },
+            { name: 'unaware-shark', emoji: '🦈', address: 'N8fLtQnSEtpPMeVJ7a7EGbCx+T4u8bnzVE79ktj5wtL', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'tempting-cat', emoji: '🐈', address: '66rAEWpMnjqxU7841i1+w85LK57xjy28Stb1uioVzNtV?', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'dense-flamingo', emoji: '🦩', address: '3Scyg0Gmh1Bps3ZVaiV7PTOJuQR8gjnJOExFAhqYBgMwZ', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'rosy-giraffe', emoji: '🦒', address: '8APPiBRLTAWP3R9JMnsforYgbc5JNxeQ2jMj2kCEngl', tokens: 2, rent: 0, balance: 0.01, tags: ['🏠', '⚠️', '👑', '🌱'] },
+            { name: 'rubbery-cat', emoji: '😺', address: '7hCj9EsjzqdizPntD32rNqJMGQtY5hisiqDhs9TLAUNzu', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'acclaimed-rabbit', emoji: '🐰', address: '8cgxBsk069EOP2Uaq7nmMTis35fcBy8QpTtc78R13WXr', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'cautious-fish', emoji: '🐟', address: '9SDdzqL7XNkYNHKqyGcdTgYTwLvaB1YC9qS8MQJqQf2ze', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'tidy-dog', emoji: '🐕', address: 't35nCFwXxjoJJOqzEPxsewVsjd3BcuPoSRwvi46xq9PT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'respectful-turtle', emoji: '🐢', address: '7NPisMGzttLGdUAqrM037SLpRHWZ2mVtK2LthQ16qEcT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
+            { name: 'calculating-fox', emoji: '🦊', address: 'C3Gx25mQ2iYfnH1iEuf3c7SHDKkqMYVBLoxjaqYYwPxJ', tokens: 0, rent: 0, balance: 0.01, tags: ['⚠️', '📦'] }
+        ];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            wallets = [...sampleWallets];
+            renderWallets();
+            updateTotalBalance();
+            initializeEventListeners();
+            startStatusUpdates();
+            addConsoleLog('System initialized - Ready for trading', 'info');
+        });
+
+        function initializeEventListeners() {
+            // Navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const view = item.dataset.view;
+                    switchView(view);
+                });
+            });
+            
+            // Search
+            document.getElementById('wallet-search').addEventListener('input', filterWallets);
+            
+            // Tab switching
+            document.getElementById('active-tab').addEventListener('click', () => switchTab('active'));
+            document.getElementById('inactive-tab').addEventListener('click', () => switchTab('inactive'));
+            
+            // Select all
+            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+        }
+
+        function switchView(viewName) {
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
+            });
+            document.querySelector(`[data-view="${viewName}"]`).className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
+            
+            // Update views
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            document.getElementById(`${viewName}-view`).classList.remove('hidden');
+            
+            currentView = viewName;
+            
+            // Load view-specific data
+            if (viewName === 'wallets') {
+                renderWallets();
+            }
+        }
+
+        function renderWallets() {
+            const tbody = document.getElementById('wallets-table-body');
+            tbody.innerHTML = wallets.map(wallet => `
+                <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="toggleWalletSelection('${wallet.name}')">
+                    <td class="p-4">
+                        <input type="checkbox" class="rounded wallet-checkbox" data-wallet="${wallet.name}" ${selectedWallets.has(wallet.name) ? 'checked' : ''} />
+                    </td>
+                    <td class="p-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${wallet.emoji}</span>
+                            <span class="font-mono text-sm">${wallet.name}</span>
+                            <i data-lucide="edit-2" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300"></i>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <div class="flex gap-1">
+                            ${wallet.tags.map(tag => `<span class="text-base">${tag}</span>`).join('')}
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs text-gray-400 truncate max-w-xs">${wallet.address}</span>
+                            <i data-lucide="copy" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" onclick="copyAddress('${wallet.address}')"></i>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500">••••</span>
+                            <i data-lucide="copy" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300"></i>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <span class="text-sm">
+                            ${wallet.tokens > 0 ? `${wallet.tokens} Tokens` : '—'}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <span class="text-sm text-gray-400">
+                            ${wallet.rent < 0 ? `<${wallet.rent} SOL` : '—'}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <div class="inline-block bg-purple-900 text-purple-200 px-3 py-1 rounded-full text-sm font-mono">
+                            &lt;${wallet.balance} SOL
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            
+            // Re-initialize icons
+            lucide.createIcons();
+        }
+
+        function toggleWalletSelection(walletName) {
+            if (selectedWallets.has(walletName)) {
+                selectedWallets.delete(walletName);
+            } else {
+                selectedWallets.add(walletName);
+            }
+            updateBulkActions();
+        }
+
+        function updateBulkActions() {
+            const bulkActions = document.getElementById('bulk-actions');
+            const selectedCount = document.getElementById('selected-count');
+            
+            if (selectedWallets.size > 0) {
+                bulkActions.style.display = 'flex';
+                selectedCount.textContent = `${selectedWallets.size} wallets selected`;
+            } else {
+                bulkActions.style.display = 'none';
+            }
+        }
+
+        function updateTotalBalance() {
+            const total = wallets.reduce((sum, w) => sum + w.balance, 0);
+            document.getElementById('total-balance').textContent = `${total.toFixed(2)} SOL`;
+        }
+
+        function filterWallets() {
+            const searchTerm = document.getElementById('wallet-search').value.toLowerCase();
+            // In a real app, you'd filter the wallets array here
+            renderWallets();
+        }
+
+        function switchTab(tab) {
+            document.getElementById('active-tab').className = tab === 'active' ? 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white' : 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+            document.getElementById('inactive-tab').className = tab === 'inactive' ? 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white' : 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            const checkboxes = document.querySelectorAll('.wallet-checkbox');
+            
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll.checked;
+                const walletName = cb.dataset.wallet;
+                if (selectAll.checked) {
+                    selectedWallets.add(walletName);
+                } else {
+                    selectedWallets.delete(walletName);
+                }
+            });
+            updateBulkActions();
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function executeGenerate() {
+            const count = parseInt(document.getElementById('generate-count').value);
+            if (!count || count < 1 || count > 100) {
+                showToast('Please enter a valid number (1-100)', 'error');
+                return;
+            }
+            
+            showToast(`Generating ${count} wallets...`, 'info');
+            addConsoleLog(`Generating ${count} new wallets`, 'info');
+            closeModal('generate-modal');
+            
+            setTimeout(() => {
+                showToast(`Successfully generated ${count} wallets!`, 'success');
+                addConsoleLog(`Generated ${count} new wallets`, 'success');
+            }, 2000);
+        }
+
+        function copyAddress(address) {
+            navigator.clipboard.writeText(address);
+            showToast('Address copied!', 'success');
+        }
+
+        function copyFeeWalletAddress() {
+            const address = '6NBcSPLV...1YnDb8L';
+            navigator.clipboard.writeText(address);
+            showToast('Fee wallet address copied!', 'success');
+        }
+
+        function copyFeeWalletKey() {
+            showToast('Fee wallet private key copied!', 'success');
+        }
+
+        function refreshFeeWallet() {
+            showToast('Refreshing fee wallet...', 'info');
+            addConsoleLog('Refreshing fee wallet balance', 'info');
+        }
+
+        function exportWallets() {
+            showToast(`Exported ${selectedWallets.size || wallets.length} wallets`, 'success');
+        }
+
+        function deactivateWallets() {
+            showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
+        }
+
+        function refreshBalances() {
+            showToast('Refreshing balances...', 'info');
+            addConsoleLog('Refreshing wallet balances', 'info');
+            setTimeout(() => {
+                showToast('Balances updated!', 'success');
+            }, 1000);
+        }
+
+        function clearConsole() {
+            document.getElementById('console-output').innerHTML = '';
+            addConsoleLog('Console cleared', 'info');
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('auto-scroll-text').textContent = `Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`;
+        }
+
+        function addConsoleLog(message, type = 'info') {
+            const consoleOutput = document.getElementById('console-output');
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            
+            const line = document.createElement('div');
+            line.className = 'console-line flex gap-4 py-1';
+            line.innerHTML = `
+                <span class="text-gray-500">[${time}]</span>
+                <span class="font-semibold ${
+                    type === 'success' ? 'text-green-400' :
+                    type === 'error' ? 'text-red-400' :
+                    type === 'warning' ? 'text-yellow-400' :
+                    'text-blue-400'
+                }">${type.toUpperCase()}</span>
+                <span class="text-gray-300">${message}</span>
+            `;
+            
+            consoleOutput.insertBefore(line, consoleOutput.firstChild);
+            
+            // Keep only last 100 lines
+            while (consoleOutput.children.length > 100) {
+                consoleOutput.removeChild(consoleOutput.lastChild);
+            }
+            
+            if (autoScroll) {
+                consoleOutput.scrollTop = 0;
+            }
+        }
+
+        function startStatusUpdates() {
+            // Simulate status updates
+            setInterval(() => {
+                const statuses = ['Online', 'Connecting', 'Offline'];
+                const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+                
+                if (Math.random() > 0.8) {
+                    document.getElementById('rpc-status').textContent = randomStatus;
+                    document.getElementById('ws-status').textContent = randomStatus;
+                    document.getElementById('jito-status').textContent = randomStatus;
+                }
+            }, 10000);
+            
+            // Simulate console activity
+            setInterval(() => {
+                const activities = [
+                    'Price check completed',
+                    'RPC connection healthy',
+                    'Monitoring active positions',
+                    'System status: OK',
+                    'Wallet balance updated',
+                    'Transaction confirmed'
+                ];
+                const random = activities[Math.floor(Math.random() * activities.length)];
+                addConsoleLog(random, 'info');
+            }, 30000);
+        }
+
+        function openDocumentation() {
+            showToast('Opening documentation...', 'info');
+        }
+
+        function sharePlatform() {
+            showToast('Platform link copied to clipboard!', 'success');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+                type === 'success' ? 'bg-green-900 text-green-200 border border-green-700' :
+                type === 'error' ? 'bg-red-900 text-red-200 border border-red-700' :
+                type === 'warning' ? 'bg-yellow-900 text-yellow-200 border border-yellow-700' :
+                'bg-blue-900 text-blue-200 border border-blue-700'
+            }`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

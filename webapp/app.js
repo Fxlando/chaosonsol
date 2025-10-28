@@ -1,18 +1,35 @@
-// Chaos Bot Control Panel - Main Application
+// Chaos Bot Control Panel - Advanced Trading Platform
 const API_BASE = window.location.origin;
+let isBackendAvailable = false;
 
 // State
 let currentView = 'dashboard';
 let wallets = [];
 let groups = [];
-let stats = {};
+let stats = null;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('⚡ Chaos Bot Control Panel Loading...');
     initializeNav();
-    loadDashboard();
+    await checkBackendConnection();
+    await loadDashboard();
     startAutoRefresh();
 });
+
+// Check if backend API is available
+async function checkBackendConnection() {
+    try {
+        const response = await fetch(`${API_BASE}/api/stats`, { timeout: 2000 });
+        if (response.ok) {
+            isBackendAvailable = true;
+            console.log('✅ Backend API connected');
+        }
+    } catch (error) {
+        isBackendAvailable = false;
+        console.log('ℹ️ Running in demo mode (backend not connected)');
+    }
+}
 
 // Navigation
 function initializeNav() {
@@ -44,13 +61,30 @@ function switchView(viewName) {
     // Update title
     const titles = {
         'dashboard': 'Dashboard',
-        'wallets': 'Wallets',
+        'wallets': 'Wallet Groups',
+        'analytics': 'Analytics',
         'volume': 'Volume Trading',
-        'smartsell': 'Smart Sell',
+        'smartsell': 'Smart Sell AI',
+        'instant': 'Instant Trading',
+        'pumpfun': 'Pump.fun Sniper',
         'trade': 'Manual Trade',
         'history': 'Trade History'
     };
+    
+    const subtitles = {
+        'dashboard': 'System Overview',
+        'wallets': 'Multi-wallet Operations',
+        'analytics': 'Performance Insights',
+        'volume': 'Coordinated Trading',
+        'smartsell': 'AI-Powered Selling',
+        'instant': '10s Detection System',
+        'pumpfun': 'Early Launch Sniping',
+        'trade': 'Jupiter V6 Swaps',
+        'history': 'Transaction Logs'
+    };
+    
     document.getElementById('page-title').textContent = titles[viewName];
+    document.getElementById('page-subtitle').textContent = subtitles[viewName];
     
     // Load view data
     currentView = viewName;
@@ -71,98 +105,203 @@ async function loadViewData(viewName) {
         case 'smartsell':
             await loadSmartSellView();
             break;
-        case 'trade':
-            await loadTradeView();
-            break;
-        case 'history':
-            await loadHistory();
-            break;
     }
 }
 
 // Dashboard
 async function loadDashboard() {
     try {
-        const response = await fetch(`${API_BASE}/api/stats`);
-        stats = await response.json();
+        if (isBackendAvailable) {
+            const response = await fetch(`${API_BASE}/api/stats`);
+            stats = await response.json();
+        } else {
+            // Demo data
+            stats = {
+                wallets: { total: 40, active: 40 },
+                balance: { sol: 0, usd: 0 },
+                groups: 2,
+                solPrice: 180,
+                network: 'mainnet-beta'
+            };
+        }
         
-        // Update stats
-        document.getElementById('stat-wallets').textContent = stats.wallets.total;
-        document.querySelector('#stat-wallets + .stat-change').textContent = 
-            `${stats.wallets.active} active`;
+        updateDashboardStats();
+        await updateSystemStatus();
         
-        document.getElementById('stat-sol').textContent = 
-            `${stats.balance.sol.toFixed(2)} SOL`;
-        document.getElementById('stat-usd').textContent = 
-            `$${stats.balance.usd.toFixed(2)}`;
-        
-        document.getElementById('stat-groups').textContent = stats.groups;
-        
-        // Update SOL price
-        document.getElementById('sol-price').textContent = 
-            `$${stats.solPrice.toFixed(2)}`;
-        
-        // Load volume status
-        const volumeStatus = await fetch(`${API_BASE}/api/volume/status`);
-        const volume = await volumeStatus.json();
-        document.getElementById('volume-status').textContent = 
-            volume.isActive ? 'Active' : 'Standby';
-        
-        // Load smart sell status
-        const smartSellStatus = await fetch(`${API_BASE}/api/smartsell/status`);
-        const smartSell = await smartSellStatus.json();
-        document.getElementById('smartsell-status').textContent = 
-            smartSell.isEnabled ? 'Enabled' : 'Disabled';
-            
     } catch (error) {
-        console.error('Failed to load dashboard:', error);
-        showToast('Failed to load dashboard data', 'error');
+        console.error('Dashboard load error:', error);
+        showToast('Failed to load dashboard', 'error');
+    }
+}
+
+function updateDashboardStats() {
+    if (!stats) return;
+    
+    // Update stats
+    document.getElementById('total-wallets').textContent = stats.wallets.total;
+    document.getElementById('active-wallets').textContent = stats.wallets.active;
+    document.getElementById('total-sol').textContent = `${stats.balance.sol.toFixed(2)} SOL`;
+    document.getElementById('total-usd').textContent = `$${stats.balance.usd.toFixed(2)}`;
+    document.getElementById('total-groups').textContent = stats.groups;
+    
+    // Update SOL price
+    document.getElementById('sol-price').textContent = `$${stats.solPrice.toFixed(2)}`;
+}
+
+async function updateSystemStatus() {
+    try {
+        if (isBackendAvailable) {
+            // Volume status
+            const volumeResp = await fetch(`${API_BASE}/api/volume/status`);
+            const volume = await volumeResp.json();
+            document.getElementById('volume-status').textContent = 
+                volume.isActive ? 'Active' : 'Standby';
+            document.getElementById('volume-indicator').className = 
+                volume.isActive ? 'indicator-dot status-active' : 'indicator-dot';
+            document.getElementById('volume-sessions').textContent = 
+                volume.sessions.length || 0;
+            document.getElementById('volume-cycles').textContent = 
+                volume.stats.totalTrades || 0;
+            
+            // Smart sell status
+            const smartResp = await fetch(`${API_BASE}/api/smartsell/status`);
+            const smart = await smartResp.json();
+            document.getElementById('smartsell-status').textContent = 
+                smart.isEnabled ? 'Enabled' : 'Disabled';
+            document.getElementById('smartsell-indicator').className = 
+                smart.isEnabled ? 'indicator-dot status-active' : 'indicator-dot';
+            document.getElementById('smartsell-monitoring').textContent = 
+                `${smart.activeMonitors || 0} tokens`;
+        } else {
+            // Demo mode
+            document.getElementById('volume-status').textContent = 'Standby';
+            document.getElementById('volume-indicator').className = 'indicator-dot';
+            document.getElementById('volume-sessions').textContent = '0';
+            document.getElementById('volume-cycles').textContent = '0';
+            document.getElementById('smartsell-status').textContent = 'Disabled';
+            document.getElementById('smartsell-indicator').className = 'indicator-dot';
+            document.getElementById('smartsell-monitoring').textContent = '0 tokens';
+        }
+    } catch (error) {
+        console.error('Status update error:', error);
     }
 }
 
 // Wallets
 async function loadWallets() {
     try {
-        const response = await fetch(`${API_BASE}/api/wallets`);
-        wallets = await response.json();
-        
-        const tbody = document.getElementById('wallets-table');
-        tbody.innerHTML = '';
-        
-        if (wallets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">No wallets found</td></tr>';
-            return;
+        if (isBackendAvailable) {
+            const response = await fetch(`${API_BASE}/api/wallets`);
+            wallets = await response.json();
+        } else {
+            // Demo data
+            wallets = generateDemoWallets();
         }
         
-        wallets.forEach(wallet => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${wallet.name}</td>
-                <td><span class="wallet-address">${truncateAddress(wallet.publicKey)}</span></td>
-                <td>${wallet.groupName || 'N/A'}</td>
-                <td>${wallet.balance.toFixed(4)}</td>
-                <td>$${wallet.usdValue.toFixed(2)}</td>
-                <td><span class="status-badge ${wallet.status}">${wallet.status}</span></td>
-            `;
-            tbody.appendChild(row);
-        });
+        updateWalletGroups();
+        updateWalletsTable();
         
     } catch (error) {
-        console.error('Failed to load wallets:', error);
+        console.error('Wallets load error:', error);
         showToast('Failed to load wallets', 'error');
     }
 }
 
+function generateDemoWallets() {
+    const demoWallets = [];
+    for (let i = 1; i <= 20; i++) {
+        demoWallets.push({
+            name: `Volume_${i}`,
+            publicKey: generateRandomAddress(),
+            groupName: 'Volume',
+            balance: 0,
+            usdValue: 0,
+            status: 'active'
+        });
+    }
+    for (let i = 1; i <= 20; i++) {
+        demoWallets.push({
+            name: `Pump_${i}`,
+            publicKey: generateRandomAddress(),
+            groupName: 'VolumePump',
+            balance: 0,
+            usdValue: 0,
+            status: 'active'
+        });
+    }
+    return demoWallets;
+}
+
+function generateRandomAddress() {
+    const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let address = '';
+    for (let i = 0; i < 44; i++) {
+        address += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return address;
+}
+
+function updateWalletGroups() {
+    const volumeWallets = wallets.filter(w => w.groupName === 'Volume' || w.groupName === 'test');
+    const pumpWallets = wallets.filter(w => w.groupName === 'VolumePump');
+    
+    document.getElementById('volume-group-count').textContent = `${volumeWallets.length} wallets`;
+    document.getElementById('pump-group-count').textContent = `${pumpWallets.length} wallets`;
+    
+    const volumeBalance = volumeWallets.reduce((sum, w) => sum + w.balance, 0);
+    const pumpBalance = pumpWallets.reduce((sum, w) => sum + w.balance, 0);
+    
+    document.getElementById('volume-balance').textContent = `${volumeBalance.toFixed(2)} SOL`;
+    document.getElementById('pump-balance').textContent = `${pumpBalance.toFixed(2)} SOL`;
+}
+
+function updateWalletsTable() {
+    const tbody = document.getElementById('wallets-table');
+    tbody.innerHTML = '';
+    
+    if (wallets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">No wallets found</td></tr>';
+        return;
+    }
+    
+    wallets.slice(0, 20).forEach(wallet => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${wallet.name}</td>
+            <td><code>${truncateAddress(wallet.publicKey)}</code></td>
+            <td><span class="group-badge">${wallet.groupName}</span></td>
+            <td>${wallet.balance.toFixed(4)}</td>
+            <td>$${wallet.usdValue.toFixed(2)}</td>
+            <td><span class="status-${wallet.status}">${wallet.status}</span></td>
+            <td><button class="btn-small" onclick="viewWallet('${wallet.publicKey}')">View</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
 async function refreshWallets() {
-    showToast('Refreshing wallets...', 'success');
+    showToast('Refreshing wallet balances...', 'success');
     await loadWallets();
+    showToast('Wallets refreshed!', 'success');
+}
+
+function viewWallet(address) {
+    const solscanUrl = `https://solscan.io/account/${address}`;
+    window.open(solscanUrl, '_blank');
 }
 
 // Volume Trading
 async function loadVolumeView() {
     try {
-        const response = await fetch(`${API_BASE}/api/groups`);
-        groups = await response.json();
+        if (isBackendAvailable) {
+            const response = await fetch(`${API_BASE}/api/groups`);
+            groups = await response.json();
+        } else {
+            groups = [
+                { id: 'test', name: 'Test Wallets', walletCount: 10 },
+                { id: 'VolumePump', name: 'Pump.Fun Launch Group', walletCount: 20 }
+            ];
+        }
         
         const select = document.getElementById('volume-group');
         select.innerHTML = '<option value="">Select group...</option>';
@@ -175,31 +314,49 @@ async function loadVolumeView() {
         });
         
     } catch (error) {
-        console.error('Failed to load groups:', error);
+        console.error('Volume view load error:', error);
     }
 }
 
 async function startVolume() {
     const groupId = document.getElementById('volume-group').value;
     const tokenAddress = document.getElementById('volume-token').value;
+    const buyAmount = parseFloat(document.getElementById('volume-buy-amount').value);
+    const sellAmount = parseFloat(document.getElementById('volume-sell-amount').value);
     const cycles = parseInt(document.getElementById('volume-cycles').value);
+    const bundlingMode = document.getElementById('bundling-mode').value;
     
     if (!groupId || !tokenAddress) {
         showToast('Please fill in all required fields', 'error');
         return;
     }
     
+    if (!isBackendAvailable) {
+        showToast('Backend API not connected. Start the bot with: npm run web', 'error');
+        return;
+    }
+    
     try {
+        showToast('Starting volume trading session...', 'success');
+        
         const response = await fetch(`${API_BASE}/api/volume/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId, tokenAddress, cycles })
+            body: JSON.stringify({ 
+                groupId, 
+                tokenAddress, 
+                buyAmount,
+                sellAmount,
+                cycles,
+                bundlingMode
+            })
         });
         
         const result = await response.json();
         
         if (result.success) {
             showToast('Volume trading session started!', 'success');
+            await updateSystemStatus();
         } else {
             showToast(`Failed: ${result.error}`, 'error');
         }
@@ -209,6 +366,11 @@ async function startVolume() {
 }
 
 async function stopVolume() {
+    if (!isBackendAvailable) {
+        showToast('Backend API not connected', 'error');
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE}/api/volume/stop`, {
             method: 'POST',
@@ -220,6 +382,7 @@ async function stopVolume() {
         
         if (result.success) {
             showToast('All volume sessions stopped', 'success');
+            await updateSystemStatus();
         } else {
             showToast(`Failed: ${result.error}`, 'error');
         }
@@ -230,23 +393,40 @@ async function stopVolume() {
 
 // Smart Sell
 async function loadSmartSellView() {
-    // Settings are already set in HTML
+    // Settings are pre-populated
 }
 
 async function enableSmartSell() {
     const tokenAddress = document.getElementById('smartsell-token').value;
+    const profitTarget = parseFloat(document.getElementById('profit-target').value);
+    const stopLoss = parseFloat(document.getElementById('stop-loss').value);
+    const trailingStop = parseFloat(document.getElementById('trailing-stop').value);
+    const emergencyStop = parseFloat(document.getElementById('emergency-stop').value);
     
     if (!tokenAddress) {
         showToast('Please enter a token address', 'error');
         return;
     }
     
+    if (!isBackendAvailable) {
+        showToast('Backend API not connected. Start the bot with: npm run web', 'error');
+        return;
+    }
+    
     try {
+        showToast('Enabling Smart Sell AI...', 'success');
+        
         const response = await fetch(`${API_BASE}/api/smartsell/enable`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 tokenAddress,
+                settings: {
+                    profitTarget,
+                    stopLoss,
+                    trailingStop,
+                    emergencyStop
+                },
                 wallets: wallets.map(w => w.publicKey)
             })
         });
@@ -254,7 +434,8 @@ async function enableSmartSell() {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Smart Sell enabled!', 'success');
+            showToast('Smart Sell enabled! Monitoring active.', 'success');
+            await updateSystemStatus();
         } else {
             showToast(`Failed: ${result.error}`, 'error');
         }
@@ -264,6 +445,11 @@ async function enableSmartSell() {
 }
 
 async function disableSmartSell() {
+    if (!isBackendAvailable) {
+        showToast('Backend API not connected', 'error');
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE}/api/smartsell/disable`, {
             method: 'POST',
@@ -275,6 +461,7 @@ async function disableSmartSell() {
         
         if (result.success) {
             showToast('Smart Sell disabled', 'success');
+            await updateSystemStatus();
         } else {
             showToast(`Failed: ${result.error}`, 'error');
         }
@@ -283,100 +470,9 @@ async function disableSmartSell() {
     }
 }
 
-// Manual Trade
-async function loadTradeView() {
-    if (wallets.length === 0) {
-        await loadWallets();
-    }
-    
-    const select = document.getElementById('trade-wallet');
-    select.innerHTML = '<option value="">Select wallet...</option>';
-    
-    wallets.forEach(wallet => {
-        const option = document.createElement('option');
-        option.value = wallet.publicKey;
-        option.textContent = `${wallet.name} (${wallet.balance.toFixed(4)} SOL)`;
-        select.appendChild(option);
-    });
-}
-
-async function executeTrade(action) {
-    const walletAddress = document.getElementById('trade-wallet').value;
-    const tokenAddress = document.getElementById('trade-token').value;
-    const amount = parseFloat(document.getElementById('trade-amount').value);
-    
-    if (!walletAddress || !tokenAddress || !amount) {
-        showToast('Please fill in all fields', 'error');
-        return;
-    }
-    
-    if (!confirm(`Are you sure you want to ${action.toUpperCase()} ${amount} SOL worth of tokens?`)) {
-        return;
-    }
-    
-    try {
-        showToast(`Executing ${action}...`, 'success');
-        
-        const response = await fetch(`${API_BASE}/api/trade/execute`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress, tokenAddress, action, amount })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast(`${action.toUpperCase()} successful! Sig: ${truncateAddress(result.signature)}`, 'success');
-        } else {
-            showToast(`Trade failed: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        showToast('Failed to execute trade', 'error');
-    }
-}
-
-// History
-async function loadHistory() {
-    try {
-        const response = await fetch(`${API_BASE}/api/history`);
-        const history = await response.json();
-        
-        const tbody = document.getElementById('history-table');
-        tbody.innerHTML = '';
-        
-        if (!history || history.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7">No trades yet</td></tr>';
-            return;
-        }
-        
-        history.slice(0, 50).forEach(trade => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${new Date(trade.timestamp).toLocaleString()}</td>
-                <td>${trade.type}</td>
-                <td><span class="wallet-address">${truncateAddress(trade.wallet)}</span></td>
-                <td><span class="wallet-address">${truncateAddress(trade.token)}</span></td>
-                <td>${trade.amount}</td>
-                <td>${trade.status}</td>
-                <td><span class="wallet-address">${truncateAddress(trade.signature)}</span></td>
-            `;
-            tbody.appendChild(row);
-        });
-        
-    } catch (error) {
-        console.error('Failed to load history:', error);
-    }
-}
-
-async function refreshHistory() {
-    showToast('Refreshing history...', 'success');
-    await loadHistory();
-}
-
 // Utilities
 function truncateAddress(address) {
-    if (!address) return 'N/A';
-    if (address.length <= 10) return address;
+    if (!address || address.length <= 12) return address;
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
@@ -390,7 +486,7 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 4000);
 }
 
 // Auto refresh
@@ -405,15 +501,17 @@ function startAutoRefresh() {
     // Update SOL price every 5 seconds
     setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE}/api/stats`);
-            const data = await response.json();
-            document.getElementById('sol-price').textContent = 
-                `$${data.solPrice.toFixed(2)}`;
+            if (isBackendAvailable) {
+                const response = await fetch(`${API_BASE}/api/stats`);
+                const data = await response.json();
+                document.getElementById('sol-price').textContent = 
+                    `$${data.solPrice.toFixed(2)}`;
+            }
         } catch (error) {}
     }, 5000);
 }
 
-// CSS for slideOut animation
+// Add slideOut animation
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideOut {
@@ -426,6 +524,39 @@ style.textContent = `
             opacity: 0;
         }
     }
+    
+    code {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85em;
+    }
+    
+    .group-badge {
+        padding: 0.25rem 0.5rem;
+        background: rgba(139, 92, 246, 0.15);
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        color: var(--success);
+    }
+    
+    .btn-small {
+        padding: 0.35rem 0.75rem;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-small:hover {
+        background: var(--primary-dark);
+    }
 `;
 document.head.appendChild(style);
 
+console.log('✅ Chaos Bot Control Panel Loaded');

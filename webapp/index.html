@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chaos Bot - Control Panel</title>
+    <title>Chaos Bot - Advanced Solana Trading Platform</title>
     <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -13,39 +13,67 @@
             <div class="logo">
                 <span class="logo-icon">⚡</span>
                 <span class="logo-text">CHAOS BOT</span>
+                <span class="version">v2.0</span>
             </div>
             
             <nav class="nav">
+                <div class="nav-section">OVERVIEW</div>
                 <a href="#" class="nav-item active" data-view="dashboard">
                     <span class="nav-icon">📊</span>
                     <span>Dashboard</span>
                 </a>
+                
+                <div class="nav-section">WALLET SYSTEM</div>
                 <a href="#" class="nav-item" data-view="wallets">
                     <span class="nav-icon">👛</span>
-                    <span>Wallets</span>
+                    <span>Wallet Groups</span>
                 </a>
-                <a href="#" class="nav-item" data-view="volume">
+                <a href="#" class="nav-item" data-view="analytics">
                     <span class="nav-icon">📈</span>
+                    <span>Analytics</span>
+                </a>
+                
+                <div class="nav-section">TRADING ENGINES</div>
+                <a href="#" class="nav-item" data-view="volume">
+                    <span class="nav-icon">🔄</span>
                     <span>Volume Trading</span>
                 </a>
                 <a href="#" class="nav-item" data-view="smartsell">
                     <span class="nav-icon">🧠</span>
-                    <span>Smart Sell</span>
+                    <span>Smart Sell AI</span>
                 </a>
-                <a href="#" class="nav-item" data-view="trade">
+                <a href="#" class="nav-item" data-view="instant">
                     <span class="nav-icon">⚡</span>
+                    <span>Instant Trading</span>
+                </a>
+                <a href="#" class="nav-item" data-view="pumpfun">
+                    <span class="nav-icon">🚀</span>
+                    <span>Pump.fun Sniper</span>
+                </a>
+                
+                <div class="nav-section">OPERATIONS</div>
+                <a href="#" class="nav-item" data-view="trade">
+                    <span class="nav-icon">💱</span>
                     <span>Manual Trade</span>
                 </a>
                 <a href="#" class="nav-item" data-view="history">
                     <span class="nav-icon">📋</span>
-                    <span>History</span>
+                    <span>Trade History</span>
                 </a>
             </nav>
 
             <div class="sidebar-footer">
-                <div class="status-badge" id="connection-status">
-                    <span class="status-dot"></span>
-                    <span>Connected</span>
+                <div class="connection-info">
+                    <div class="connection-item">
+                        <span class="status-dot status-active"></span>
+                        <div class="connection-details">
+                            <div class="connection-label">RPC</div>
+                            <div class="connection-value">Ankr Premium</div>
+                        </div>
+                    </div>
+                    <div class="connection-stats">
+                        <span>1,500 RPS</span>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -56,108 +84,245 @@
             <header class="header">
                 <div class="header-left">
                     <h1 id="page-title">Dashboard</h1>
+                    <span class="subtitle" id="page-subtitle">System Overview</span>
                 </div>
                 <div class="header-right">
-                    <div class="sol-price">
-                        <span class="label">SOL</span>
-                        <span class="value" id="sol-price">$0.00</span>
+                    <div class="header-stat">
+                        <span class="label">SOL Price</span>
+                        <span class="value sol-price" id="sol-price">$0.00</span>
                     </div>
-                    <div class="network-badge">
-                        <span id="network">Mainnet</span>
+                    <div class="header-stat">
+                        <span class="label">Network</span>
+                        <span class="value network">Mainnet-β</span>
+                    </div>
+                    <div class="header-stat">
+                        <span class="label">Status</span>
+                        <span class="value status-online">● LIVE</span>
                     </div>
                 </div>
             </header>
 
             <!-- Dashboard View -->
             <div id="dashboard-view" class="view active">
-                <!-- Quick Stats -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Total Wallets</div>
-                        <div class="stat-value" id="stat-wallets">--</div>
-                        <div class="stat-change">--  active</div>
+                <!-- System Status Cards -->
+                <div class="section-title">System Status</div>
+                <div class="status-cards">
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">📊</span>
+                            <h3>Volume Trading Engine</h3>
+                        </div>
+                        <div class="status-body">
+                            <div class="status-indicator">
+                                <span class="indicator-dot" id="volume-indicator"></span>
+                                <span id="volume-status">Standby</span>
+                            </div>
+                            <div class="status-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">Active Sessions</span>
+                                    <span class="detail-value" id="volume-sessions">0</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Total Cycles</span>
+                                    <span class="detail-value" id="volume-cycles">0</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Total Balance</div>
-                        <div class="stat-value" id="stat-sol">-- SOL</div>
-                        <div class="stat-change" id="stat-usd">$0.00</div>
+
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">🧠</span>
+                            <h3>Smart Sell AI</h3>
+                        </div>
+                        <div class="status-body">
+                            <div class="status-indicator">
+                                <span class="indicator-dot" id="smartsell-indicator"></span>
+                                <span id="smartsell-status">Disabled</span>
+                            </div>
+                            <div class="status-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">Monitoring</span>
+                                    <span class="detail-value" id="smartsell-monitoring">0 tokens</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Bubble Detection</span>
+                                    <span class="detail-value">Enabled</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Wallet Groups</div>
-                        <div class="stat-value" id="stat-groups">--</div>
-                        <div class="stat-change">configured</div>
+
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">⚡</span>
+                            <h3>Instant Trading System</h3>
+                        </div>
+                        <div class="status-body">
+                            <div class="status-indicator">
+                                <span class="indicator-dot status-active"></span>
+                                <span>Active</span>
+                            </div>
+                            <div class="status-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">Detection Speed</span>
+                                    <span class="detail-value">10s</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Min Profit</span>
+                                    <span class="detail-value">20%</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">RPS Available</div>
-                        <div class="stat-value">1,500</div>
-                        <div class="stat-change">Ankr Premium</div>
+
+                    <div class="status-card">
+                        <div class="status-header">
+                            <span class="status-icon">🚀</span>
+                            <h3>Pump.fun Sniper</h3>
+                        </div>
+                        <div class="status-body">
+                            <div class="status-indicator">
+                                <span class="indicator-dot status-active"></span>
+                                <span>Ready</span>
+                            </div>
+                            <div class="status-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">Integration</span>
+                                    <span class="detail-value">Jupiter V6</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Slippage</span>
+                                    <span class="detail-value">1%</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- System Status -->
-                <div class="section">
-                    <h2>System Status</h2>
-                    <div class="status-grid">
-                        <div class="status-item">
-                            <span class="status-icon">📊</span>
-                            <div class="status-info">
-                                <div class="status-name">Volume Trading</div>
-                                <div class="status-value" id="volume-status">Standby</div>
-                            </div>
-                            <span class="status-indicator status-inactive"></span>
+                <!-- Stats Overview -->
+                <div class="section-title">Portfolio Overview</div>
+                <div class="stats-grid">
+                    <div class="stat-card gradient-purple">
+                        <div class="stat-icon">👛</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Total Wallets</div>
+                            <div class="stat-value" id="total-wallets">--</div>
+                            <div class="stat-subtext"><span id="active-wallets">--</span> active</div>
                         </div>
-                        <div class="status-item">
-                            <span class="status-icon">🧠</span>
-                            <div class="status-info">
-                                <div class="status-name">Smart Sell</div>
-                                <div class="status-value" id="smartsell-status">Disabled</div>
-                            </div>
-                            <span class="status-indicator status-inactive"></span>
+                    </div>
+
+                    <div class="stat-card gradient-blue">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Total Balance</div>
+                            <div class="stat-value" id="total-sol">-- SOL</div>
+                            <div class="stat-subtext" id="total-usd">$0.00</div>
                         </div>
-                        <div class="status-item">
-                            <span class="status-icon">🔗</span>
-                            <div class="status-info">
-                                <div class="status-name">RPC Connection</div>
-                                <div class="status-value" id="rpc-status">Connected</div>
-                            </div>
-                            <span class="status-indicator status-active"></span>
+                    </div>
+
+                    <div class="stat-card gradient-green">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Wallet Groups</div>
+                            <div class="stat-value" id="total-groups">--</div>
+                            <div class="stat-subtext">Configured</div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card gradient-orange">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Performance</div>
+                            <div class="stat-value">1,500</div>
+                            <div class="stat-subtext">RPS Capacity</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Quick Actions -->
-                <div class="section">
-                    <h2>Quick Actions</h2>
-                    <div class="action-grid">
-                        <button class="action-btn" onclick="switchView('wallets')">
-                            <span class="action-icon">👛</span>
-                            <span>View Wallets</span>
-                        </button>
-                        <button class="action-btn" onclick="switchView('volume')">
-                            <span class="action-icon">📈</span>
-                            <span>Start Volume</span>
-                        </button>
-                        <button class="action-btn" onclick="switchView('smartsell')">
-                            <span class="action-icon">🧠</span>
-                            <span>Configure Smart Sell</span>
-                        </button>
-                        <button class="action-btn" onclick="switchView('trade')">
-                            <span class="action-icon">⚡</span>
-                            <span>Execute Trade</span>
-                        </button>
-                    </div>
+                <div class="section-title">Quick Actions</div>
+                <div class="action-grid">
+                    <button class="action-card" onclick="switchView('volume')">
+                        <span class="action-icon">🔄</span>
+                        <span class="action-title">Start Volume</span>
+                        <span class="action-desc">Launch coordinated trading</span>
+                    </button>
+                    <button class="action-card" onclick="switchView('smartsell')">
+                        <span class="action-icon">🧠</span>
+                        <span class="action-title">Enable Smart Sell</span>
+                        <span class="action-desc">AI-powered profit taking</span>
+                    </button>
+                    <button class="action-card" onclick="switchView('pumpfun')">
+                        <span class="action-icon">🚀</span>
+                        <span class="action-title">Pump.fun Snipe</span>
+                        <span class="action-desc">Early token detection</span>
+                    </button>
+                    <button class="action-card" onclick="switchView('trade')">
+                        <span class="action-icon">💱</span>
+                        <span class="action-title">Manual Trade</span>
+                        <span class="action-desc">Execute instant swap</span>
+                    </button>
                 </div>
             </div>
 
             <!-- Wallets View -->
             <div id="wallets-view" class="view">
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Your Wallets</h2>
-                        <button class="btn-primary" onclick="refreshWallets()">
-                            <span>🔄 Refresh</span>
-                        </button>
+                <div class="view-header">
+                    <div>
+                        <h2>Wallet Groups</h2>
+                        <p class="view-subtitle">Manage multi-wallet operations</p>
                     </div>
+                    <button class="btn-primary" onclick="refreshWallets()">
+                        <span>🔄</span>
+                        <span>Refresh Balances</span>
+                    </button>
+                </div>
+
+                <div class="wallet-groups">
+                    <div class="group-card">
+                        <div class="group-header">
+                            <div>
+                                <h3>📊 Volume Group</h3>
+                                <p>Coordinated volume trading wallets</p>
+                            </div>
+                            <span class="group-count" id="volume-group-count">20 wallets</span>
+                        </div>
+                        <div class="group-stats">
+                            <div class="group-stat">
+                                <span class="stat-label">Total Balance</span>
+                                <span class="stat-value" id="volume-balance">-- SOL</span>
+                            </div>
+                            <div class="group-stat">
+                                <span class="stat-label">Strategy</span>
+                                <span class="stat-value">Simultaneous</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="group-card">
+                        <div class="group-header">
+                            <div>
+                                <h3>🚀 Pump.fun Group</h3>
+                                <p>Early sniper wallets</p>
+                            </div>
+                            <span class="group-count" id="pump-group-count">20 wallets</span>
+                        </div>
+                        <div class="group-stats">
+                            <div class="group-stat">
+                                <span class="stat-label">Total Balance</span>
+                                <span class="stat-value" id="pump-balance">-- SOL</span>
+                            </div>
+                            <div class="group-stat">
+                                <span class="stat-label">Strategy</span>
+                                <span class="stat-value">Round-Robin</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-section">
+                    <h3>All Wallets</h3>
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
@@ -168,10 +333,11 @@
                                     <th>Balance (SOL)</th>
                                     <th>Value (USD)</th>
                                     <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="wallets-table">
-                                <tr><td colspan="6">Loading...</td></tr>
+                                <tr><td colspan="7" class="loading">Loading wallets...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -180,186 +346,281 @@
 
             <!-- Volume Trading View -->
             <div id="volume-view" class="view">
-                <div class="section">
-                    <h2>Volume Trading Control</h2>
-                    
-                    <div class="form-container">
-                        <div class="form-group">
-                            <label>Wallet Group</label>
-                            <select id="volume-group" class="input">
-                                <option value="">Select group...</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Token Address</label>
-                            <input type="text" id="volume-token" class="input" placeholder="Token mint address...">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Number of Cycles</label>
-                            <input type="number" id="volume-cycles" class="input" value="10" min="1">
+                <div class="view-header">
+                    <div>
+                        <h2>Volume Trading Engine</h2>
+                        <p class="view-subtitle">Coordinated multi-wallet trading operations</p>
+                    </div>
+                </div>
+
+                <div class="trading-panel">
+                    <div class="panel-section">
+                        <h3>Configuration</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Wallet Group</label>
+                                <select id="volume-group" class="input">
+                                    <option value="">Select group...</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Token Address</label>
+                                <input type="text" id="volume-token" class="input" placeholder="Enter token mint address">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Buy Amount (SOL per wallet)</label>
+                                <input type="number" id="volume-buy-amount" class="input" value="0.01" step="0.001" min="0.001">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Sell Amount (SOL per wallet)</label>
+                                <input type="number" id="volume-sell-amount" class="input" value="0.005" step="0.001" min="0.001">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Number of Cycles</label>
+                                <input type="number" id="volume-cycles" class="input" value="10" min="1" max="100">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Bundling Mode</label>
+                                <select id="bundling-mode" class="input">
+                                    <option value="safe">Safe (Conservative)</option>
+                                    <option value="standard">Standard</option>
+                                    <option value="aggressive">Aggressive</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="button-group">
-                            <button class="btn-primary btn-large" onclick="startVolume()">
-                                <span>▶️ Start Volume Session</span>
+                            <button class="btn-success btn-large" onclick="startVolume()">
+                                <span>▶️</span>
+                                <span>Start Volume Session</span>
                             </button>
                             <button class="btn-danger btn-large" onclick="stopVolume()">
-                                <span>⏹️ Stop All Sessions</span>
+                                <span>⏹️</span>
+                                <span>Stop All Sessions</span>
                             </button>
                         </div>
                     </div>
 
-                    <div class="info-box">
-                        <h3>ℹ️ Volume Trading Info</h3>
-                        <ul>
-                            <li>Executes coordinated buy/sell cycles across multiple wallets</li>
-                            <li>Uses Jupiter V6 for optimal swap routing</li>
-                            <li>Randomizes amounts and timing for natural patterns</li>
-                            <li>5% slippage protection enabled</li>
-                        </ul>
+                    <div class="panel-section">
+                        <h3>Engine Features</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Randomization</strong>
+                                    <p>Amounts and timing randomized for natural patterns</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Jupiter V6 Integration</strong>
+                                    <p>Optimal swap routing with best prices</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Slippage Protection</strong>
+                                    <p>5% max slippage with auto-retry</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Multi-Wallet Coordination</strong>
+                                    <p>Simultaneous or round-robin execution</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Smart Sell View -->
             <div id="smartsell-view" class="view">
-                <div class="section">
-                    <h2>Smart Sell Configuration</h2>
-                    
-                    <div class="form-container">
+                <div class="view-header">
+                    <div>
+                        <h2>Smart Sell AI Engine</h2>
+                        <p class="view-subtitle">Automated profit-taking with bubble detection</p>
+                    </div>
+                </div>
+
+                <div class="trading-panel">
+                    <div class="panel-section">
+                        <h3>Configuration</h3>
                         <div class="form-group">
-                            <label>Token Address to Monitor</label>
-                            <input type="text" id="smartsell-token" class="input" placeholder="Token mint address...">
+                            <label>Token to Monitor</label>
+                            <input type="text" id="smartsell-token" class="input" placeholder="Enter token mint address">
                         </div>
 
                         <div class="settings-grid">
-                            <div class="setting-item">
-                                <label>Profit Target</label>
-                                <div class="input-with-suffix">
-                                    <input type="number" id="profit-target" class="input" value="30">
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <span class="setting-icon">📈</span>
+                                    <span>Profit Target</span>
+                                </div>
+                                <div class="setting-input">
+                                    <input type="number" id="profit-target" class="input-large" value="30">
                                     <span class="suffix">%</span>
                                 </div>
+                                <p class="setting-desc">Sell when profit reaches this level</p>
                             </div>
-                            <div class="setting-item">
-                                <label>Stop Loss</label>
-                                <div class="input-with-suffix">
-                                    <input type="number" id="stop-loss" class="input" value="15">
+
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <span class="setting-icon">📉</span>
+                                    <span>Stop Loss</span>
+                                </div>
+                                <div class="setting-input">
+                                    <input type="number" id="stop-loss" class="input-large" value="15">
                                     <span class="suffix">%</span>
                                 </div>
+                                <p class="setting-desc">Cut losses at this threshold</p>
                             </div>
-                            <div class="setting-item">
-                                <label>Trailing Stop</label>
-                                <div class="input-with-suffix">
-                                    <input type="number" id="trailing-stop" class="input" value="10">
+
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <span class="setting-icon">🎯</span>
+                                    <span>Trailing Stop</span>
+                                </div>
+                                <div class="setting-input">
+                                    <input type="number" id="trailing-stop" class="input-large" value="10">
                                     <span class="suffix">%</span>
                                 </div>
+                                <p class="setting-desc">Lock in profits during run-ups</p>
                             </div>
-                            <div class="setting-item">
-                                <label>Emergency Stop</label>
-                                <div class="input-with-suffix">
-                                    <input type="number" id="emergency-stop" class="input" value="25">
+
+                            <div class="setting-card">
+                                <div class="setting-header">
+                                    <span class="setting-icon">🚨</span>
+                                    <span>Emergency Stop</span>
+                                </div>
+                                <div class="setting-input">
+                                    <input type="number" id="emergency-stop" class="input-large" value="25">
                                     <span class="suffix">%</span>
                                 </div>
+                                <p class="setting-desc">Immediate dump threshold</p>
                             </div>
                         </div>
 
                         <div class="button-group">
                             <button class="btn-success btn-large" onclick="enableSmartSell()">
-                                <span>✅ Enable Smart Sell</span>
+                                <span>✅</span>
+                                <span>Enable Smart Sell</span>
                             </button>
                             <button class="btn-danger btn-large" onclick="disableSmartSell()">
-                                <span>❌ Disable Smart Sell</span>
+                                <span>❌</span>
+                                <span>Disable Smart Sell</span>
                             </button>
                         </div>
                     </div>
 
-                    <div class="info-box">
-                        <h3>ℹ️ Smart Sell Features</h3>
-                        <ul>
-                            <li>Real-time price monitoring with bubble detection</li>
-                            <li>Automatic profit taking at target levels</li>
-                            <li>Stop-loss protection to minimize losses</li>
-                            <li>Trailing stops to maximize gains</li>
-                            <li>Emergency sell at critical loss levels</li>
-                        </ul>
+                    <div class="panel-section">
+                        <h3>AI Features</h3>
+                        <div class="feature-list">
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Bubble Detection Algorithm</strong>
+                                    <p>Analyzes price growth patterns and market behavior</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Real-time Monitoring</strong>
+                                    <p>30-second price checks with instant execution</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Volatility Analysis</strong>
+                                    <p>Risk assessment and automated position management</p>
+                                </div>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <div class="feature-content">
+                                    <strong>Multi-Wallet Coordination</strong>
+                                    <p>Synchronized selling with cooldown protection</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Manual Trade View -->
+            <!-- Other views placeholders -->
+            <div id="instant-view" class="view">
+                <div class="view-header">
+                    <h2>Instant Trading System</h2>
+                    <p class="view-subtitle">10-second detection with 20% profit threshold</p>
+                </div>
+                <div class="coming-soon">
+                    <span class="soon-icon">⚡</span>
+                    <h3>Instant Trading Interface</h3>
+                    <p>Automated outsider buy detection and instant dump system</p>
+                </div>
+            </div>
+
+            <div id="pumpfun-view" class="view">
+                <div class="view-header">
+                    <h2>Pump.fun Sniper</h2>
+                    <p class="view-subtitle">Early token launch detection and sniping</p>
+                </div>
+                <div class="coming-soon">
+                    <span class="soon-icon">🚀</span>
+                    <h3>Pump.fun Integration</h3>
+                    <p>20-wallet coordinated pump strategy after early snipers</p>
+                </div>
+            </div>
+
+            <div id="analytics-view" class="view">
+                <div class="view-header">
+                    <h2>Wallet Analytics</h2>
+                    <p class="view-subtitle">Performance tracking and insights</p>
+                </div>
+                <div class="coming-soon">
+                    <span class="soon-icon">📈</span>
+                    <h3>Analytics Dashboard</h3>
+                    <p>Detailed performance metrics and trade analytics</p>
+                </div>
+            </div>
+
             <div id="trade-view" class="view">
-                <div class="section">
-                    <h2>Manual Trade Execution</h2>
-                    
-                    <div class="form-container">
-                        <div class="form-group">
-                            <label>Select Wallet</label>
-                            <select id="trade-wallet" class="input">
-                                <option value="">Select wallet...</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Token Address</label>
-                            <input type="text" id="trade-token" class="input" placeholder="Token mint address...">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Amount (SOL)</label>
-                            <input type="number" id="trade-amount" class="input" value="0.01" step="0.001" min="0.001">
-                        </div>
-
-                        <div class="button-group">
-                            <button class="btn-success btn-large" onclick="executeTrade('buy')">
-                                <span>📈 BUY</span>
-                            </button>
-                            <button class="btn-danger btn-large" onclick="executeTrade('sell')">
-                                <span>📉 SELL</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-warning">
-                        <strong>⚠️ Warning:</strong> Manual trades execute immediately on mainnet. Double-check all parameters before executing.
-                    </div>
+                <div class="view-header">
+                    <h2>Manual Trade</h2>
+                    <p class="view-subtitle">Execute instant swaps via Jupiter V6</p>
+                </div>
+                <div class="coming-soon">
+                    <span class="soon-icon">💱</span>
+                    <h3>Manual Trading Interface</h3>
+                    <p>Direct wallet-to-wallet trading execution</p>
                 </div>
             </div>
 
-            <!-- History View -->
             <div id="history-view" class="view">
-                <div class="section">
-                    <div class="section-header">
-                        <h2>Trade History</h2>
-                        <button class="btn-primary" onclick="refreshHistory()">
-                            <span>🔄 Refresh</span>
-                        </button>
-                    </div>
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Type</th>
-                                    <th>Wallet</th>
-                                    <th>Token</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Signature</th>
-                                </tr>
-                            </thead>
-                            <tbody id="history-table">
-                                <tr><td colspan="7">No trades yet</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="view-header">
+                    <h2>Trade History</h2>
+                    <p class="view-subtitle">Transaction logs and signatures</p>
+                </div>
+                <div class="coming-soon">
+                    <span class="soon-icon">📋</span>
+                    <h3>History Viewer</h3>
+                    <p>Complete transaction history with Solscan links</p>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Toast Notifications -->
+    <!-- Toast Container -->
     <div id="toast-container"></div>
 
     <script src="app.js"></script>

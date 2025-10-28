@@ -1,15 +1,24 @@
 [build]
   publish = "webapp"
-  command = "echo 'No build needed - static site'"
+  command = "echo 'Build complete'"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
 
 [dev]
-  command = "cd webapp && node server.js"
+  command = "cd webapp && node api-server.js"
   port = 3000
   publish = "webapp"
 

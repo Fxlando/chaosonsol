@@ -1,5 +1,7 @@
 // Chaos Bot Control Panel - Advanced Trading Platform
-const API_BASE = window.location.origin;
+const API_BASE = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000' 
+  : '/.netlify/functions';
 let isBackendAvailable = false;
 
 // State
@@ -20,7 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Check if backend API is available
 async function checkBackendConnection() {
     try {
-        const response = await fetch(`${API_BASE}/api/stats`, { timeout: 2000 });
+        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        const response = await fetch(endpoint);
         if (response.ok) {
             isBackendAvailable = true;
             console.log('✅ Backend API connected');
@@ -111,26 +114,24 @@ async function loadViewData(viewName) {
 // Dashboard
 async function loadDashboard() {
     try {
-        if (isBackendAvailable) {
-            const response = await fetch(`${API_BASE}/api/stats`);
-            stats = await response.json();
-        } else {
-            // Demo data
-            stats = {
-                wallets: { total: 40, active: 40 },
-                balance: { sol: 0, usd: 0 },
-                groups: 2,
-                solPrice: 180,
-                network: 'mainnet-beta'
-            };
-        }
+        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        const response = await fetch(endpoint);
+        stats = await response.json();
         
         updateDashboardStats();
         await updateSystemStatus();
         
     } catch (error) {
         console.error('Dashboard load error:', error);
-        showToast('Failed to load dashboard', 'error');
+        // Fallback to demo data
+        stats = {
+            wallets: { total: 40, active: 40 },
+            balance: { sol: 0, usd: 0 },
+            groups: 2,
+            solPrice: 180,
+            network: 'mainnet-beta'
+        };
+        updateDashboardStats();
     }
 }
 
@@ -150,60 +151,57 @@ function updateDashboardStats() {
 
 async function updateSystemStatus() {
     try {
-        if (isBackendAvailable) {
-            // Volume status
-            const volumeResp = await fetch(`${API_BASE}/api/volume/status`);
-            const volume = await volumeResp.json();
-            document.getElementById('volume-status').textContent = 
-                volume.isActive ? 'Active' : 'Standby';
-            document.getElementById('volume-indicator').className = 
-                volume.isActive ? 'indicator-dot status-active' : 'indicator-dot';
-            document.getElementById('volume-sessions').textContent = 
-                volume.sessions.length || 0;
-            document.getElementById('volume-cycles').textContent = 
-                volume.stats.totalTrades || 0;
-            
-            // Smart sell status
-            const smartResp = await fetch(`${API_BASE}/api/smartsell/status`);
-            const smart = await smartResp.json();
-            document.getElementById('smartsell-status').textContent = 
-                smart.isEnabled ? 'Enabled' : 'Disabled';
-            document.getElementById('smartsell-indicator').className = 
-                smart.isEnabled ? 'indicator-dot status-active' : 'indicator-dot';
-            document.getElementById('smartsell-monitoring').textContent = 
-                `${smart.activeMonitors || 0} tokens`;
-        } else {
-            // Demo mode
-            document.getElementById('volume-status').textContent = 'Standby';
-            document.getElementById('volume-indicator').className = 'indicator-dot';
-            document.getElementById('volume-sessions').textContent = '0';
-            document.getElementById('volume-cycles').textContent = '0';
-            document.getElementById('smartsell-status').textContent = 'Disabled';
-            document.getElementById('smartsell-indicator').className = 'indicator-dot';
-            document.getElementById('smartsell-monitoring').textContent = '0 tokens';
-        }
+        // Volume status
+        const volumeEndpoint = API_BASE.includes('netlify') ? `${API_BASE}/volume-status` : `${API_BASE}/api/volume/status`;
+        const volumeResp = await fetch(volumeEndpoint);
+        const volume = await volumeResp.json();
+        document.getElementById('volume-status').textContent = 
+            volume.isActive ? 'Active' : 'Standby';
+        document.getElementById('volume-indicator').className = 
+            volume.isActive ? 'indicator-dot status-active' : 'indicator-dot';
+        document.getElementById('volume-sessions').textContent = 
+            volume.sessions.length || 0;
+        document.getElementById('volume-cycles').textContent = 
+            volume.stats.totalTrades || 0;
+        
+        // Smart sell status
+        const smartEndpoint = API_BASE.includes('netlify') ? `${API_BASE}/smartsell-status` : `${API_BASE}/api/smartsell/status`;
+        const smartResp = await fetch(smartEndpoint);
+        const smart = await smartResp.json();
+        document.getElementById('smartsell-status').textContent = 
+            smart.isEnabled ? 'Enabled' : 'Disabled';
+        document.getElementById('smartsell-indicator').className = 
+            smart.isEnabled ? 'indicator-dot status-active' : 'indicator-dot';
+        document.getElementById('smartsell-monitoring').textContent = 
+            `${smart.activeMonitors || 0} tokens`;
     } catch (error) {
         console.error('Status update error:', error);
+        // Set defaults on error
+        document.getElementById('volume-status').textContent = 'Standby';
+        document.getElementById('volume-indicator').className = 'indicator-dot';
+        document.getElementById('volume-sessions').textContent = '0';
+        document.getElementById('volume-cycles').textContent = '0';
+        document.getElementById('smartsell-status').textContent = 'Disabled';
+        document.getElementById('smartsell-indicator').className = 'indicator-dot';
+        document.getElementById('smartsell-monitoring').textContent = '0 tokens';
     }
 }
 
 // Wallets
 async function loadWallets() {
     try {
-        if (isBackendAvailable) {
-            const response = await fetch(`${API_BASE}/api/wallets`);
-            wallets = await response.json();
-        } else {
-            // Demo data
-            wallets = generateDemoWallets();
-        }
+        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
+        const response = await fetch(endpoint);
+        wallets = await response.json();
         
         updateWalletGroups();
         updateWalletsTable();
         
     } catch (error) {
         console.error('Wallets load error:', error);
-        showToast('Failed to load wallets', 'error');
+        wallets = generateDemoWallets();
+        updateWalletGroups();
+        updateWalletsTable();
     }
 }
 
@@ -293,15 +291,9 @@ function viewWallet(address) {
 // Volume Trading
 async function loadVolumeView() {
     try {
-        if (isBackendAvailable) {
-            const response = await fetch(`${API_BASE}/api/groups`);
-            groups = await response.json();
-        } else {
-            groups = [
-                { id: 'test', name: 'Test Wallets', walletCount: 10 },
-                { id: 'VolumePump', name: 'Pump.Fun Launch Group', walletCount: 20 }
-            ];
-        }
+        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/groups` : `${API_BASE}/api/groups`;
+        const response = await fetch(endpoint);
+        groups = await response.json();
         
         const select = document.getElementById('volume-group');
         select.innerHTML = '<option value="">Select group...</option>';
@@ -315,6 +307,19 @@ async function loadVolumeView() {
         
     } catch (error) {
         console.error('Volume view load error:', error);
+        // Fallback groups
+        groups = [
+            { id: 'test', name: 'Test Wallets', walletCount: 10 },
+            { id: 'VolumePump', name: 'Pump.Fun Launch Group', walletCount: 20 }
+        ];
+        const select = document.getElementById('volume-group');
+        select.innerHTML = '<option value="">Select group...</option>';
+        groups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = `${group.name} (${group.walletCount} wallets)`;
+            select.appendChild(option);
+        });
     }
 }
 
@@ -501,12 +506,11 @@ function startAutoRefresh() {
     // Update SOL price every 5 seconds
     setInterval(async () => {
         try {
-            if (isBackendAvailable) {
-                const response = await fetch(`${API_BASE}/api/stats`);
-                const data = await response.json();
-                document.getElementById('sol-price').textContent = 
-                    `$${data.solPrice.toFixed(2)}`;
-            }
+            const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+            const response = await fetch(endpoint);
+            const data = await response.json();
+            document.getElementById('sol-price').textContent = 
+                `$${data.solPrice.toFixed(2)}`;
         } catch (error) {}
     }, 5000);
 }

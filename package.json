@@ -1,0 +1,51 @@
+{
+  "name": "simple-solana-wallet-manager",
+  "version": "1.0.0",
+  "description": "Simple Solana Wallet Manager with Command Center - Telegram Bot",
+  "main": "simple-bot.js",
+  "scripts": {
+    "start": "node simple-bot.js",
+    "dev": "node --watch simple-bot.js",
+    "web": "node webapp/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "solana",
+    "telegram",
+    "bot",
+    "wallet",
+    "manager",
+    "crypto"
+  ],
+  "author": "Simple Wallet Manager",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/spl-token": "^0.4.8",
+    "@solana/web3.js": "^1.95.2",
+    "axios": "^1.6.8",
+    "bs58": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "pumpfun-sdk": "^1.0.3",
+    "telegraf": "^4.16.2",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.1.0",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/solana-pro-bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/solana-pro-bot/issues"
+  },
+  "homepage": "https://github.com/your-username/solana-pro-bot#readme"
+}

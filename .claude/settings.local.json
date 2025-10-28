@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm audit:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(node:*)",
+      "Bash(npm install)",
+      "Bash(cp:*)",
+      "Bash(timeout:*)",
+      "Bash(npm start)",
+      "Bash(ipconfig /flushdns)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)",
+      "Bash(WMIC process where:*)",
+      "Bash(touch:*)",
+      "Bash(rm:*)",
+      "Bash(pkill:*)",
+      "Bash(del test-tokeninfo.js)",
+      "Bash(powershell:*)",
+      "Bash(TASKKILL /F /IM node.exe)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(tasklist:*)",
+      "WebFetch(domain:pumpportal.fun)",
+      "Bash(del test-api-endpoints.js test-updated-endpoints.js test-final-endpoints.js)",
+      "Bash(dir .env)",
+      "Bash(find:*)",
+      "Bash(wmic process where:*)",
+      "Bash(del \"bot.log\" \"combined.log\" \"error.log\" \"temp-keypair.json\")",
+      "Bash(TASKKILL /PID 7416 /F)",
+      "Bash(TASKKILL /PID 27540 /F)",
+      "Bash(cmd /c:*)",
+      "Bash(TASKKILL /PID 30384 /F)",
+      "Bash(del:*)",
+      "Bash(echo $NODE_ENV)",
+      "Bash(dir:*)",
+      "Bash(git checkout:*)"
+    ],
+    "deny": []
+  }
+}

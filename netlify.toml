@@ -1,0 +1,15 @@
+[build]
+  publish = "webapp"
+  command = "echo 'No build needed - static site'"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
+
+[dev]
+  command = "cd webapp && node server.js"
+  port = 3000
+  publish = "webapp"
+

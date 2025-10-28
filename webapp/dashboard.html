@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Chaos Bot</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="logo">⚡ CHAOS BOT</span>
+            </div>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Connected</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard">
+        <div class="container">
+            <!-- Dashboard Header -->
+            <div class="dashboard-header">
+                <div>
+                    <h1>Command Center</h1>
+                    <p class="text-muted">Professional Solana trading automation</p>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-pill">
+                        <span class="stat-label">SOL Price</span>
+                        <span class="stat-value" id="sol-price">Loading...</span>
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-label">Network</span>
+                        <span class="stat-value">Mainnet</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="quick-stats">
+                <div class="stat-box">
+                    <div class="stat-icon">👛</div>
+                    <div class="stat-info">
+                        <div class="stat-number">--</div>
+                        <div class="stat-text">Active Wallets</div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-info">
+                        <div class="stat-number">-- SOL</div>
+                        <div class="stat-text">Total Balance</div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-info">
+                        <div class="stat-number">--</div>
+                        <div class="stat-text">Volume Trades</div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-info">
+                        <div class="stat-number">1,500</div>
+                        <div class="stat-text">RPS Available</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Grid -->
+            <div class="dashboard-grid">
+                <!-- Command Center -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2>🎛️ Command Center</h2>
+                        <span class="badge badge-primary">Active</span>
+                    </div>
+                    <div class="card-content">
+                        <p class="card-description">Master control panel for all bot operations</p>
+                        <div class="button-grid">
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">👑</span>
+                                <span class="btn-text">Wallet Commander</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">⚙️</span>
+                                <span class="btn-text">System Settings</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">📈</span>
+                                <span class="btn-text">View Analytics</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">🔄</span>
+                                <span class="btn-text">Refresh Status</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Volume Trading -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2>📊 Volume Trading</h2>
+                        <span class="badge badge-success">Live</span>
+                    </div>
+                    <div class="card-content">
+                        <p class="card-description">Coordinated multi-wallet trading operations</p>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Status</span>
+                                <span class="info-value text-success">Ready</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Slippage</span>
+                                <span class="info-value">5%</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Active Sessions</span>
+                                <span class="info-value">0</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Success Rate</span>
+                                <span class="info-value">--%</span>
+                            </div>
+                        </div>
+                        <div class="button-grid mt-2">
+                            <button class="dashboard-btn btn-primary">
+                                <span class="btn-icon">▶️</span>
+                                <span class="btn-text">Start Session</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">⚙️</span>
+                                <span class="btn-text">Settings</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smart Sell -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2>🧠 Smart Sell Engine</h2>
+                        <span class="badge badge-success">Live</span>
+                    </div>
+                    <div class="card-content">
+                        <p class="card-description">AI-powered automated selling with bubble detection</p>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">Status</span>
+                                <span class="info-value text-warning">Standby</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Profit Target</span>
+                                <span class="info-value text-success">+30%</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Stop Loss</span>
+                                <span class="info-value text-danger">-15%</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Trailing Stop</span>
+                                <span class="info-value">10%</span>
+                            </div>
+                        </div>
+                        <div class="button-grid mt-2">
+                            <button class="dashboard-btn btn-success">
+                                <span class="btn-icon">✅</span>
+                                <span class="btn-text">Enable</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">⚙️</span>
+                                <span class="btn-text">Configure</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Manager -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2>👛 Wallet Manager</h2>
+                    </div>
+                    <div class="card-content">
+                        <p class="card-description">Manage your Solana wallets and balances</p>
+                        <div class="button-grid">
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">👁️</span>
+                                <span class="btn-text">View Wallets</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">➕</span>
+                                <span class="btn-text">Generate Wallet</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">💸</span>
+                                <span class="btn-text">Fund Wallets</span>
+                            </button>
+                            <button class="dashboard-btn">
+                                <span class="btn-icon">🏥</span>
+                                <span class="btn-text">Check Health</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="dashboard-card full-width">
+                <div class="card-header">
+                    <h2>📋 Activity Log</h2>
+                    <button class="btn-small">Clear</button>
+                </div>
+                <div class="card-content">
+                    <div class="activity-log">
+                        <div class="log-item">
+                            <span class="log-time">Just now</span>
+                            <span class="log-message">Dashboard initialized</span>
+                            <span class="log-status status-success">●</span>
+                        </div>
+                        <div class="log-item">
+                            <span class="log-time">1m ago</span>
+                            <span class="log-message">Connected to Solana mainnet</span>
+                            <span class="log-status status-success">●</span>
+                        </div>
+                        <div class="log-item">
+                            <span class="log-time">2m ago</span>
+                            <span class="log-message">System health check passed</span>
+                            <span class="log-status status-success">●</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
+

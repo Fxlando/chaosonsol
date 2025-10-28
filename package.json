@@ -42,10 +42,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/solana-pro-bot.git"
+    "url": "https://github.com/Fxlando/chaosonsol.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/solana-pro-bot/issues"
+    "url": "https://github.com/Fxlando/chaosonsol/issues"
   },
-  "homepage": "https://github.com/your-username/solana-pro-bot#readme"
+  "homepage": "https://github.com/Fxlando/chaosonsol#readme"
 }

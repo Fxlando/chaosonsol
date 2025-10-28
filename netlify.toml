@@ -15,7 +15,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@solana/web3.js", "@solana/spl-token"]
+  included_files = ["volume-wallets-public.json", "pump-wallets-public.json", "groups-config.json"]
 
 [dev]
   command = "cd webapp && node api-server.js"

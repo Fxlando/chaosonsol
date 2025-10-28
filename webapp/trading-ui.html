@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chaos Bot - Professional Trading Platform</title>
+    <link rel="stylesheet" href="trading-ui.css">
+</head>
+<body>
+    <!-- Main App Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">⚡</span>
+                    <span class="logo-text">CHAOS</span>
+                </div>
+                <div class="network-badge">
+                    <span class="status-dot"></span>
+                    <span>MAINNET</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">CORE</div>
+                <a href="#dashboard" class="nav-item active" data-view="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Dashboard</span>
+                </a>
+                <a href="#wallets" class="nav-item" data-view="wallets">
+                    <span class="nav-icon">👛</span>
+                    <span class="nav-label">Wallet Commander</span>
+                    <span class="nav-count" id="wallet-count">40</span>
+                </a>
+                <a href="#tokens" class="nav-item" data-view="tokens">
+                    <span class="nav-icon">🪙</span>
+                    <span class="nav-label">Token Manager</span>
+                </a>
+
+                <div class="nav-section">TRADING</div>
+                <a href="#tasks" class="nav-item" data-view="tasks">
+                    <span class="nav-icon">⚡</span>
+                    <span class="nav-label">Trading Tasks</span>
+                </a>
+                <a href="#volume" class="nav-item" data-view="volume">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-label">Volume Engine</span>
+                </a>
+                <a href="#smartsell" class="nav-item" data-view="smartsell">
+                    <span class="nav-icon">🧠</span>
+                    <span class="nav-label">Smart Sell AI</span>
+                </a>
+                <a href="#pumpfun" class="nav-item" data-view="pumpfun">
+                    <span class="nav-icon">🚀</span>
+                    <span class="nav-label">Pump.fun Sniper</span>
+                </a>
+
+                <div class="nav-section">ANALYTICS</div>
+                <a href="#pnl" class="nav-item" data-view="pnl">
+                    <span class="nav-icon">💰</span>
+                    <span class="nav-label">P&L Dashboard</span>
+                </a>
+                <a href="#console" class="nav-item" data-view="console">
+                    <span class="nav-icon">🖥️</span>
+                    <span class="nav-label">Live Console</span>
+                </a>
+
+                <div class="nav-section">TOOLS</div>
+                <a href="#automations" class="nav-item" data-view="automations">
+                    <span class="nav-icon">🤖</span>
+                    <span class="nav-label">Automations</span>
+                </a>
+                <a href="#settings" class="nav-item" data-view="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="rpc-info">
+                    <div class="rpc-label">RPC STATUS</div>
+                    <div class="rpc-value">1,500 RPS</div>
+                    <div class="rpc-provider">Ankr Premium</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-info">
+                    <h1 id="page-title">Dashboard</h1>
+                    <p id="page-subtitle">System Overview</p>
+                </div>
+                <div class="top-bar-actions">
+                    <div class="sol-price">
+                        <span class="price-label">SOL</span>
+                        <span class="price-value" id="sol-price">$0.00</span>
+                        <span class="price-change positive" id="sol-change">+0.0%</span>
+                    </div>
+                    <button class="refresh-btn" id="refresh-btn">
+                        <span>🔄</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- View Container -->
+            <div class="view-container">
+                
+                <!-- Dashboard View -->
+                <div id="dashboard-view" class="view active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">👛</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="total-wallets">40</div>
+                                <div class="stat-label">Total Wallets</div>
+                                <div class="stat-sub" id="active-wallets">40 Active</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="total-balance">0.00 SOL</div>
+                                <div class="stat-label">Total Balance</div>
+                                <div class="stat-sub" id="total-usd">$0.00 USD</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="total-groups">2</div>
+                                <div class="stat-label">Wallet Groups</div>
+                                <div class="stat-sub">Volume • Pump.fun</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🔥</div>
+                            <div class="stat-content">
+                                <div class="stat-value" id="total-trades">--</div>
+                                <div class="stat-label">Total Trades</div>
+                                <div class="stat-sub">This Session</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="system-status">
+                        <h2>System Status</h2>
+                        <div class="status-grid">
+                            <div class="status-card">
+                                <div class="status-header">
+                                    <span class="status-icon">📊</span>
+                                    <span>Volume Engine</span>
+                                    <span class="status-badge" id="volume-status">READY</span>
+                                </div>
+                                <div class="status-details">
+                                    <div class="detail-row">
+                                        <span>Active Sessions</span>
+                                        <span id="volume-sessions">0</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span>Total Cycles</span>
+                                        <span id="volume-cycles">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="status-card">
+                                <div class="status-header">
+                                    <span class="status-icon">🧠</span>
+                                    <span>Smart Sell AI</span>
+                                    <span class="status-badge" id="smartsell-status">STANDBY</span>
+                                </div>
+                                <div class="status-details">
+                                    <div class="detail-row">
+                                        <span>Monitoring</span>
+                                        <span id="smartsell-monitoring">0 tokens</span>
+                                    </div>
+                                    <div class="detail-row">
+                                        <span>Mode</span>
+                                        <span>Bubble Detection</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Commander View -->
+                <div id="wallets-view" class="view">
+                    <!-- Wallet Toolbar -->
+                    <div class="wallet-toolbar">
+                        <div class="toolbar-left">
+                            <div class="search-box">
+                                <input type="text" id="wallet-search" placeholder="Search wallets..." />
+                            </div>
+                            <div class="filter-group">
+                                <button class="filter-btn active" data-filter="all">All</button>
+                                <button class="filter-btn" data-filter="active">Active</button>
+                                <button class="filter-btn" data-filter="inactive">Inactive</button>
+                            </div>
+                            <div class="selection-info">
+                                <span id="selected-count">0</span> selected
+                            </div>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="action-btn" id="resync-btn">🔄 Re-sync</button>
+                            <button class="action-btn primary" id="generate-wallets-btn">➕ Generate</button>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Actions Bar -->
+                    <div class="bulk-actions" id="bulk-actions">
+                        <div class="bulk-info">
+                            <span id="bulk-count">0</span> wallets selected
+                        </div>
+                        <div class="bulk-buttons">
+                            <button class="bulk-btn" id="fund-btn">💰 Fund</button>
+                            <button class="bulk-btn" id="withdraw-btn">💸 Withdraw</button>
+                            <button class="bulk-btn" id="tag-btn">🏷️ Tag</button>
+                            <button class="bulk-btn" id="warm-btn">🔥 Warm</button>
+                            <button class="bulk-btn" id="redistribute-btn">🔄 Redistribute</button>
+                            <button class="bulk-btn" id="reclaim-btn">💎 Reclaim Rent</button>
+                            <button class="bulk-btn" id="export-btn">📤 Export</button>
+                            <button class="bulk-btn danger" id="deactivate-btn">⏸️ Deactivate</button>
+                        </div>
+                    </div>
+
+                    <!-- Wallet Table -->
+                    <div class="table-container">
+                        <table class="wallet-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" id="select-all" />
+                                    </th>
+                                    <th class="sortable" data-sort="name">Name</th>
+                                    <th>Tags</th>
+                                    <th>Address</th>
+                                    <th class="sortable" data-sort="tokens">Tokens</th>
+                                    <th class="sortable" data-sort="rent">Rent</th>
+                                    <th class="sortable" data-sort="balance">Balance</th>
+                                    <th>Group</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wallet-table-body">
+                                <tr>
+                                    <td colspan="9" class="loading">Loading wallets...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Total Balance Footer -->
+                    <div class="table-footer">
+                        <div class="footer-stat">
+                            <span class="footer-label">Total Balance:</span>
+                            <span class="footer-value" id="footer-total-balance">0.00 SOL</span>
+                        </div>
+                        <div class="footer-stat">
+                            <span class="footer-label">Displayed Wallets:</span>
+                            <span class="footer-value" id="footer-wallet-count">0</span>
+                        </div>
+                        <div class="footer-stat">
+                            <span class="footer-label">Reclaimable Rent:</span>
+                            <span class="footer-value" id="footer-rent">0.000 SOL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other views will be added here -->
+                <div id="tokens-view" class="view">
+                    <div class="coming-soon">
+                        <div class="soon-icon">🪙</div>
+                        <h3>Token Manager</h3>
+                        <p>Launch, copy, and manage tokens</p>
+                    </div>
+                </div>
+
+                <div id="tasks-view" class="view">
+                    <div class="coming-soon">
+                        <div class="soon-icon">⚡</div>
+                        <h3>Trading Tasks</h3>
+                        <p>Volume, Bulk Sell, Bump, Sell/Buyback</p>
+                    </div>
+                </div>
+
+                <div id="pnl-view" class="view">
+                    <div class="coming-soon">
+                        <div class="soon-icon">💰</div>
+                        <h3>Profit & Loss Dashboard</h3>
+                        <p>Track your trading performance</p>
+                    </div>
+                </div>
+
+                <div id="console-view" class="view">
+                    <div class="console-container">
+                        <div class="console-header">
+                            <h3>Live Transaction Console</h3>
+                            <div class="console-controls">
+                                <button class="console-btn" id="clear-console">Clear</button>
+                                <button class="console-btn" id="toggle-auto-scroll">Auto-scroll: ON</button>
+                            </div>
+                        </div>
+                        <div class="console-output" id="console-output">
+                            <div class="console-line">
+                                <span class="console-time">[00:00:00]</span>
+                                <span class="console-type info">INFO</span>
+                                <span class="console-message">System initialized - Ready for trading</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    
+    <!-- Fund Wallets Modal -->
+    <div class="modal" id="fund-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💰 Fund Wallets</h2>
+                <button class="modal-close" data-modal="fund-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Funding Mode</label>
+                    <div class="button-group">
+                        <button class="mode-btn active" data-mode="standard">
+                            <div class="mode-title">Standard</div>
+                            <div class="mode-desc">Immediate transfer</div>
+                        </button>
+                        <button class="mode-btn" data-mode="mixer">
+                            <div class="mode-title">Mixer</div>
+                            <div class="mode-desc">Hopped (bubble map safe)</div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Funder Wallet Private Key</label>
+                    <input type="password" id="fund-private-key" placeholder="Enter private key..." class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>Distribution Method</label>
+                    <div class="button-group">
+                        <button class="dist-btn active" data-dist="uniform">Uniform Amount</button>
+                        <button class="dist-btn" data-dist="specific">Specific Amounts</button>
+                    </div>
+                </div>
+
+                <div id="uniform-amount-section">
+                    <div class="form-group">
+                        <label>Amount per Wallet (SOL)</label>
+                        <input type="number" id="fund-amount" placeholder="0.1" step="0.001" class="form-input" />
+                    </div>
+                </div>
+
+                <div id="specific-amount-section" style="display: none;">
+                    <div class="form-group">
+                        <label>Wallet-Specific Amounts</label>
+                        <div id="specific-amounts-list" class="specific-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <span class="info-icon">ℹ️</span>
+                    <div class="info-text">
+                        <strong>Mixer Mode:</strong> Transfers are hopped to avoid bubble map detection. Takes longer but safer for operations.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="fund-modal">Cancel</button>
+                <button class="btn primary" id="execute-fund">Fund Wallets</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdraw Modal -->
+    <div class="modal" id="withdraw-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💸 Withdraw Funds</h2>
+                <button class="modal-close" data-modal="withdraw-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Destination Wallet Address</label>
+                    <input type="text" id="withdraw-destination" placeholder="Enter Solana address..." class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>Withdrawal Method</label>
+                    <div class="button-group">
+                        <button class="withdraw-method-btn active" data-method="uniform-percent">
+                            <div class="mode-title">Uniform %</div>
+                            <div class="mode-desc">% from each wallet</div>
+                        </button>
+                        <button class="withdraw-method-btn" data-method="uniform-amount">
+                            <div class="mode-title">Uniform Amount</div>
+                            <div class="mode-desc">Fixed SOL amount</div>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="withdraw-uniform-section">
+                    <div class="form-group">
+                        <label id="withdraw-input-label">Percentage (%)</label>
+                        <input type="number" id="withdraw-value" placeholder="50" step="1" min="1" max="100" class="form-input" />
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <span class="info-icon">ℹ️</span>
+                    <div class="info-text">
+                        <strong>Fee Consideration:</strong> Network fees will be deducted from each transaction. Ensure wallets have sufficient balance.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="withdraw-modal">Cancel</button>
+                <button class="btn primary" id="execute-withdraw">Withdraw Funds</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tag Wallets Modal -->
+    <div class="modal" id="tag-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🏷️ Tag Wallets</h2>
+                <button class="modal-close" data-modal="tag-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Executor</label>
+                    <div class="button-group">
+                        <button class="executor-btn active" data-executor="jito">
+                            <div class="mode-title">Jito</div>
+                            <div class="mode-desc">Recommended</div>
+                        </button>
+                        <button class="executor-btn" data-executor="rpc">
+                            <div class="mode-title">RPC</div>
+                            <div class="mode-desc">Staked nodes</div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Select Platform Tags</label>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="photon" />
+                            <span>🔷 Photon</span>
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="bullx" />
+                            <span>🟢 BullX</span>
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="trojan" />
+                            <span>🔴 Trojan</span>
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="axiom" />
+                            <span>🟣 Axiom</span>
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="gmgn" />
+                            <span>🟡 GMGN</span>
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" value="pepeboost" />
+                            <span>🐸 PepeBoost</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Buy Amount Range (SOL)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <input type="number" id="tag-min-amount" placeholder="Min: 0.01" step="0.001" class="form-input" />
+                        <input type="number" id="tag-max-amount" placeholder="Max: 0.05" step="0.001" class="form-input" />
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <span class="info-icon">ℹ️</span>
+                    <div class="info-text">
+                        <strong>Tagging Process:</strong> Performs a small buy/sell on selected platforms to establish wallet identity. Check gmgn.ai to verify tags.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="tag-modal">Cancel</button>
+                <button class="btn primary" id="execute-tag">Tag Wallets</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Warm Wallets Modal -->
+    <div class="modal" id="warm-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔥 Warm Wallets</h2>
+                <button class="modal-close" data-modal="warm-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Number of Swaps (per wallet)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <input type="number" id="warm-min-swaps" placeholder="Min: 3" min="1" class="form-input" />
+                        <input type="number" id="warm-max-swaps" placeholder="Max: 10" min="1" class="form-input" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Buy Amount Range (SOL)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <input type="number" id="warm-min-buy" placeholder="Min: 0.01" step="0.001" class="form-input" />
+                        <input type="number" id="warm-max-buy" placeholder="Max: 0.05" step="0.001" class="form-input" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Delay Between Swaps (seconds)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <input type="number" id="warm-min-delay" placeholder="Min: 5" min="1" class="form-input" />
+                        <input type="number" id="warm-max-delay" placeholder="Max: 30" min="1" class="form-input" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Token Selection</label>
+                    <div class="button-group">
+                        <button class="token-select-btn active" data-token="auto">Auto (Random)</button>
+                        <button class="token-select-btn" data-token="custom">Custom Mint</button>
+                    </div>
+                </div>
+
+                <div id="custom-mint-section" style="display: none;">
+                    <div class="form-group">
+                        <label>Custom Token Address</label>
+                        <input type="text" id="warm-custom-mint" placeholder="Enter token mint address..." class="form-input" />
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <span class="info-icon">ℹ️</span>
+                    <div class="info-text">
+                        <strong>Warming:</strong> Simulates natural trading activity to make wallets appear as legitimate traders. Check gmgn.ai for results.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="warm-modal">Cancel</button>
+                <button class="btn primary" id="execute-warm">Start Warming</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Wallets Modal -->
+    <div class="modal" id="generate-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Generate Wallets</h2>
+                <button class="modal-close" data-modal="generate-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Number of Wallets to Generate</label>
+                    <input type="number" id="generate-count" placeholder="Enter number (1-100)" min="1" max="100" class="form-input" />
+                </div>
+
+                <div class="form-group">
+                    <label>Assign to Group (Optional)</label>
+                    <select id="generate-group" class="form-input">
+                        <option value="">No Group</option>
+                        <option value="Volume">Volume Trading</option>
+                        <option value="VolumePump">Pump.fun Launch</option>
+                        <option value="custom">Create New Group...</option>
+                    </select>
+                </div>
+
+                <div id="new-group-section" style="display: none;">
+                    <div class="form-group">
+                        <label>New Group Name</label>
+                        <input type="text" id="new-group-name" placeholder="Enter group name..." class="form-input" />
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <span class="info-icon">⚠️</span>
+                    <div class="info-text">
+                        <strong>Security:</strong> Generated wallets will be stored securely. Export and backup your wallets immediately after generation.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn secondary" data-modal="generate-modal">Cancel</button>
+                <button class="btn primary" id="execute-generate">Generate Wallets</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="trading-ui.js"></script>
+</body>
+</html>
+

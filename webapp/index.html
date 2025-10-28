@@ -2,402 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a0e27">
-    <title>Chaos Bot - Professional Solana Trading Terminal</title>
-    <link rel="stylesheet" href="auth.css">
-    <link rel="stylesheet" href="terminal.css">
-    <script src="secure-auth.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to Chaos Bot Trading Platform...</title>
+    <meta http-equiv="refresh" content="0;url=trading-ui.html">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .redirect-message {
+            text-align: center;
+        }
+        .redirect-message h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        .redirect-message p {
+            color: #9ca3af;
+            margin-bottom: 1.5rem;
+        }
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #232330;
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        a {
+            color: #8b5cf6;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
-    <div class="terminal-app">
-        <!-- Top Bar -->
-        <div class="top-bar">
-            <div class="logo-section">
-                <span class="logo-icon">⚡</span>
-                <span class="logo-text">CHAOS BOT</span>
-                <span class="version-tag">v2.0 MAINNET</span>
-            </div>
-            <div class="status-section">
-                <div class="live-indicator">
-                    <span class="pulse-dot"></span>
-                    <span>LIVE TRADING</span>
-                </div>
-                <div class="network-pill">
-                    <span>🌐 Solana Mainnet-β</span>
-                </div>
-                <div class="rpc-status">
-                    <span>RPC: 1,500 RPS</span>
-                    <span class="status-bar">
-                        <span class="status-fill"></span>
-                    </span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Terminal -->
-        <div class="terminal-body">
-            <!-- Left Sidebar - Systems -->
-            <div class="sidebar-left">
-                <div class="sidebar-header">TRADING ENGINES</div>
-                
-                <div class="system-card">
-                    <div class="system-header">
-                        <span class="system-icon">📊</span>
-                        <span class="system-name">Volume Engine</span>
-                        <span class="system-status status-ready">READY</span>
-                    </div>
-                    <div class="system-metrics">
-                        <div class="metric">
-                            <span class="metric-label">Jupiter V6</span>
-                            <span class="metric-value">INTEGRATED</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Wallets</span>
-                            <span class="metric-value">20 Active</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Mode</span>
-                            <span class="metric-value">Coordinated</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="system-card">
-                    <div class="system-header">
-                        <span class="system-icon">🧠</span>
-                        <span class="system-name">Smart Sell AI</span>
-                        <span class="system-status status-standby">STANDBY</span>
-                    </div>
-                    <div class="system-metrics">
-                        <div class="metric">
-                            <span class="metric-label">Algorithm</span>
-                            <span class="metric-value">Bubble Detection</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Profit Target</span>
-                            <span class="metric-value">+30%</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Stop Loss</span>
-                            <span class="metric-value">-15%</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="system-card">
-                    <div class="system-header">
-                        <span class="system-icon">⚡</span>
-                        <span class="system-name">Instant Trading</span>
-                        <span class="system-status status-active">ACTIVE</span>
-                    </div>
-                    <div class="system-metrics">
-                        <div class="metric">
-                            <span class="metric-label">Detection</span>
-                            <span class="metric-value">10s Interval</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Min Profit</span>
-                            <span class="metric-value">20%</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Auto-Dump</span>
-                            <span class="metric-value">Enabled</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="system-card">
-                    <div class="system-header">
-                        <span class="system-icon">🚀</span>
-                        <span class="system-name">Pump.fun Sniper</span>
-                        <span class="system-status status-ready">READY</span>
-                    </div>
-                    <div class="system-metrics">
-                        <div class="metric">
-                            <span class="metric-label">Strategy</span>
-                            <span class="metric-value">Post-Sniper</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Wallets</span>
-                            <span class="metric-value">20 Active</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Execution</span>
-                            <span class="metric-value">Simultaneous</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Center - Main Display -->
-            <div class="main-display">
-                <!-- Portfolio Overview -->
-                <div class="portfolio-section">
-                    <div class="section-header">
-                        <h2>PORTFOLIO OVERVIEW</h2>
-                        <div class="sol-price-display">
-                            <span class="price-label">SOL/USD</span>
-                            <span class="price-value" id="sol-price">$180.00</span>
-                            <span class="price-change positive">+2.4%</span>
-                        </div>
-                    </div>
-
-                    <div class="portfolio-grid">
-                        <div class="portfolio-card">
-                            <div class="card-icon">👛</div>
-                            <div class="card-content">
-                                <div class="card-value">40</div>
-                                <div class="card-label">Total Wallets</div>
-                                <div class="card-sub">40 Active • 0 Inactive</div>
-                            </div>
-                        </div>
-
-                        <div class="portfolio-card">
-                            <div class="card-icon">💰</div>
-                            <div class="card-content">
-                                <div class="card-value">-- SOL</div>
-                                <div class="card-label">Total Balance</div>
-                                <div class="card-sub" id="total-usd">$0.00 USD</div>
-                            </div>
-                        </div>
-
-                        <div class="portfolio-card">
-                            <div class="card-icon">📊</div>
-                            <div class="card-content">
-                                <div class="card-value">2</div>
-                                <div class="card-label">Wallet Groups</div>
-                                <div class="card-sub">Volume • Pump.fun</div>
-                            </div>
-                        </div>
-
-                        <div class="portfolio-card">
-                            <div class="card-icon">🔥</div>
-                            <div class="card-content">
-                                <div class="card-value">--</div>
-                                <div class="card-label">Total Trades</div>
-                                <div class="card-sub">This Session</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Wallet Groups -->
-                <div class="groups-section">
-                    <div class="section-header">
-                        <h2>WALLET GROUPS</h2>
-                    </div>
-
-                    <div class="groups-container">
-                        <div class="group-card">
-                            <div class="group-header">
-                                <div class="group-info">
-                                    <div class="group-icon">📊</div>
-                                    <div>
-                                        <div class="group-name">Volume Trading Group</div>
-                                        <div class="group-desc">Coordinated volume generation</div>
-                                    </div>
-                                </div>
-                                <div class="group-stats-mini">
-                                    <div class="stat-mini">
-                                        <span class="label">Wallets</span>
-                                        <span class="value">20</span>
-                                    </div>
-                                    <div class="stat-mini">
-                                        <span class="label">Balance</span>
-                                        <span class="value">-- SOL</span>
-                                    </div>
-                                    <div class="stat-mini">
-                                        <span class="label">Strategy</span>
-                                        <span class="value">Simultaneous</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="group-actions">
-                                <button class="action-btn btn-primary">Start Volume</button>
-                                <button class="action-btn">View Wallets</button>
-                                <button class="action-btn">Configure</button>
-                            </div>
-                        </div>
-
-                        <div class="group-card">
-                            <div class="group-header">
-                                <div class="group-info">
-                                    <div class="group-icon">🚀</div>
-                                    <div>
-                                        <div class="group-name">Pump.fun Launch Group</div>
-                                        <div class="group-desc">20-wallet post-sniper coordination</div>
-                                    </div>
-                                </div>
-                                <div class="group-stats-mini">
-                                    <div class="stat-mini">
-                                        <span class="label">Wallets</span>
-                                        <span class="value">20</span>
-                                    </div>
-                                    <div class="stat-mini">
-                                        <span class="label">Balance</span>
-                                        <span class="value">-- SOL</span>
-                                    </div>
-                                    <div class="stat-mini">
-                                        <span class="label">Strategy</span>
-                                        <span class="value">Round-Robin</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="group-actions">
-                                <button class="action-btn btn-primary">Deploy</button>
-                                <button class="action-btn">View Wallets</button>
-                                <button class="action-btn">Configure</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Activity Feed -->
-                <div class="activity-section">
-                    <div class="section-header">
-                        <h2>SYSTEM ACTIVITY</h2>
-                        <div class="activity-controls">
-                            <button class="control-btn">Auto-Scroll</button>
-                            <button class="control-btn">Clear</button>
-                        </div>
-                    </div>
-                    <div class="activity-feed">
-                        <div class="activity-item status-success">
-                            <span class="activity-time">14:32:15</span>
-                            <span class="activity-icon">✓</span>
-                            <span class="activity-text">System initialized - All engines ready</span>
-                        </div>
-                        <div class="activity-item status-info">
-                            <span class="activity-time">14:32:16</span>
-                            <span class="activity-icon">●</span>
-                            <span class="activity-text">Connected to Solana RPC - 1,500 RPS capacity</span>
-                        </div>
-                        <div class="activity-item status-success">
-                            <span class="activity-time">14:32:17</span>
-                            <span class="activity-icon">✓</span>
-                            <span class="activity-text">Loaded 40 wallets across 2 groups</span>
-                        </div>
-                        <div class="activity-item status-info">
-                            <span class="activity-time">14:32:18</span>
-                            <span class="activity-icon">●</span>
-                            <span class="activity-text">Instant Trading System active - Monitoring enabled</span>
-                        </div>
-                        <div class="activity-item status-success">
-                            <span class="activity-time">14:32:19</span>
-                            <span class="activity-icon">✓</span>
-                            <span class="activity-text">Jupiter V6 integration verified</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Sidebar - Info -->
-            <div class="sidebar-right">
-                <div class="sidebar-header">INFRASTRUCTURE</div>
-
-                <div class="info-card">
-                    <div class="info-header">
-                        <span class="info-icon">🔗</span>
-                        <span>RPC Connection</span>
-                    </div>
-                    <div class="info-content">
-                        <div class="info-row">
-                            <span class="label">Provider</span>
-                            <span class="value">Ankr Premium</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Capacity</span>
-                            <span class="value">1,500 RPS</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Plan</span>
-                            <span class="value">Pay-as-you-go</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Status</span>
-                            <span class="value status-active">Connected</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <div class="info-header">
-                        <span class="info-icon">⚡</span>
-                        <span>Trading Features</span>
-                    </div>
-                    <div class="info-content">
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Jupiter V6 Integration</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Smart Sell Algorithm</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Bubble Detection AI</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Volume Coordination</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Instant Auto-Dump</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Pump.fun Sniping</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Multi-Wallet Groups</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-check">✓</span>
-                            <span>Slippage Protection</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card">
-                    <div class="info-header">
-                        <span class="info-icon">📈</span>
-                        <span>Performance</span>
-                    </div>
-                    <div class="info-content">
-                        <div class="info-row">
-                            <span class="label">Uptime</span>
-                            <span class="value">99.9%</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Avg Exec</span>
-                            <span class="value">~100ms</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Success Rate</span>
-                            <span class="value">--</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="info-card highlight">
-                    <div class="info-header">
-                        <span class="info-icon">⚠️</span>
-                        <span>Live Trading</span>
-                    </div>
-                    <div class="info-content">
-                        <p class="warning-text">This system executes REAL transactions on Solana mainnet. All trades are final and irreversible.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="redirect-message">
+        <h1>⚡ Chaos Bot</h1>
+        <p>Redirecting to Professional Trading Platform...</p>
+        <div class="loader"></div>
+        <p style="margin-top: 2rem; font-size: 0.9rem;">
+            If you're not redirected, <a href="trading-ui.html">click here</a>
+        </p>
     </div>
-
-    <script src="terminal.js"></script>
+    <script>
+        // Immediate redirect
+        window.location.href = 'trading-ui.html';
+    </script>
 </body>
 </html>

@@ -13,6 +13,9 @@ let stats = null;
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('⚡ Chaos Bot Control Panel Loading...');
+    console.log('🌐 Location:', window.location.href);
+    console.log('🔧 API Base:', API_BASE);
+    
     initializeNav();
     await checkBackendConnection();
     await loadDashboard();
@@ -115,14 +118,26 @@ async function loadViewData(viewName) {
 async function loadDashboard() {
     try {
         const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        console.log('🔄 Loading dashboard from:', endpoint);
+        
         const response = await fetch(endpoint);
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ API Error:', errorText);
+            throw new Error(`API returned ${response.status}`);
+        }
+        
         stats = await response.json();
+        console.log('✅ Stats loaded:', stats);
         
         updateDashboardStats();
         await updateSystemStatus();
         
     } catch (error) {
-        console.error('Dashboard load error:', error);
+        console.error('❌ Dashboard load error:', error);
+        console.error('Error details:', error.message);
         // Fallback to demo data
         stats = {
             wallets: { total: 40, active: 40 },
@@ -131,7 +146,9 @@ async function loadDashboard() {
             solPrice: 180,
             network: 'mainnet-beta'
         };
+        console.log('⚠️ Using fallback demo data');
         updateDashboardStats();
+        showToast('Using demo data - check console for errors', 'error');
     }
 }
 

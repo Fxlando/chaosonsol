@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Chaos Bot</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #0a0a0f;
+            color: #fff;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        pre {
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 8px;
+            overflow: auto;
+            max-height: 600px;
+        }
+        .error { color: #ef4444; }
+        .success { color: #10b981; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Chaos Bot API Debug</h1>
+    
+    <div>
+        <button onclick="testNetlifyStats()">Test Netlify Stats</button>
+        <button onclick="testNetlifyWallets()">Test Netlify Wallets</button>
+        <button onclick="testDirect()">Test Direct Balance</button>
+        <button onclick="checkConsole()">Show Console Logs</button>
+    </div>
+
+    <h2>Results:</h2>
+    <pre id="output">Click a button to test...</pre>
+
+    <script>
+        const output = document.getElementById('output');
+
+        function log(msg, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            output.innerHTML += `<div class="${color}">[${timestamp}] ${msg}</div>`;
+        }
+
+        async function testNetlifyStats() {
+            output.innerHTML = '';
+            log('Testing /.netlify/functions/stats...');
+            
+            try {
+                log('Fetching...');
+                const response = await fetch('/.netlify/functions/stats');
+                log(`Status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const text = await response.text();
+                log('Raw response:');
+                log(text);
+                
+                try {
+                    const data = JSON.parse(text);
+                    log('Parsed JSON:', 'success');
+                    log(JSON.stringify(data, null, 2));
+                } catch (e) {
+                    log('Failed to parse JSON: ' + e.message, 'error');
+                }
+            } catch (error) {
+                log('Fetch error: ' + error.message, 'error');
+                log('Error details: ' + JSON.stringify(error, null, 2));
+            }
+        }
+
+        async function testNetlifyWallets() {
+            output.innerHTML = '';
+            log('Testing /.netlify/functions/wallets...');
+            
+            try {
+                const response = await fetch('/.netlify/functions/wallets');
+                log(`Status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const text = await response.text();
+                log('Raw response (first 500 chars):');
+                log(text.substring(0, 500));
+                
+                try {
+                    const data = JSON.parse(text);
+                    log('Parsed JSON:', 'success');
+                    log(`Got ${data.length} wallets`);
+                    if (data.length > 0) {
+                        log('First wallet: ' + JSON.stringify(data[0], null, 2));
+                    }
+                } catch (e) {
+                    log('Failed to parse JSON: ' + e.message, 'error');
+                }
+            } catch (error) {
+                log('Fetch error: ' + error.message, 'error');
+            }
+        }
+
+        async function testDirect() {
+            output.innerHTML = '';
+            log('Testing direct RPC call...');
+            
+            try {
+                const testWallet = 'DdnWMnp7t7tiqtMe4WC22veXqb6uuE5Lacqbz5bSkaj6';
+                log('Test wallet: ' + testWallet);
+                
+                const response = await fetch('https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getBalance',
+                        params: [testWallet]
+                    })
+                });
+                
+                const data = await response.json();
+                log('RPC Response:', 'success');
+                log(JSON.stringify(data, null, 2));
+                
+                if (data.result && data.result.value !== undefined) {
+                    const sol = data.result.value / 1000000000;
+                    log(`Balance: ${sol} SOL`, 'success');
+                } else {
+                    log('No balance data in response', 'error');
+                }
+            } catch (error) {
+                log('Direct RPC error: ' + error.message, 'error');
+            }
+        }
+
+        function checkConsole() {
+            output.innerHTML = '';
+            log('Check browser console (F12) for errors');
+            log('Also check Network tab to see if functions are being called');
+            console.log('=== CHAOS BOT DEBUG ===');
+            console.log('Location:', window.location.href);
+            console.log('Origin:', window.location.origin);
+            console.log('Hostname:', window.location.hostname);
+        }
+
+        // Log on page load
+        window.addEventListener('load', () => {
+            console.log('Debug page loaded');
+            console.log('API Base should be:', window.location.hostname === 'localhost' ? 'http://localhost:3000' : '/.netlify/functions');
+        });
+    </script>
+</body>
+</html>
+

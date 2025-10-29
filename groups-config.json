@@ -1,0 +1,22 @@
+{
+  "test": {
+    "name": "Test Wallets",
+    "description": "Development wallets for testing",
+    "settings": {
+      "enabled": true,
+      "maxWallets": 10,
+      "autoTrade": false
+    }
+  },
+  "VolumePump": {
+    "name": "Pump.Fun Launch Group",
+    "description": "20-wallet pump group for volume trading",
+    "settings": {
+      "enabled": true,
+      "maxWallets": 20,
+      "autoTrade": true,
+      "slippage": 1.0,
+      "priorityFee": 1000
+    }
+  }
+}

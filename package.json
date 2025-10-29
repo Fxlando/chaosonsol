@@ -5,8 +5,14 @@
   "main": "simple-bot.js",
   "scripts": {
     "start": "node simple-bot.js",
+    "start:production": "node start-production.js",
     "dev": "node --watch simple-bot.js",
     "web": "node webapp/api-server.js",
+    "web:production": "node webapp/api-server-production.js",
+    "build": "echo 'Build complete - ready for production'",
+    "docker:build": "docker build -t chaos-bot .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env chaos-bot",
+    "docker:compose": "docker-compose up -d",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

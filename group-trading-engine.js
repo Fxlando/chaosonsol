@@ -1,697 +1,502 @@
+/**
+ * Group Trading Engine
+ * Coordinates trading operations across wallet groups
+ */
+
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+const { JupiterV6Integration } = require('./jupiter-v6-integration');
+const { RaydiumDEXIntegration } = require('./raydium-dex-integration');
+const { SmartSellEngine } = require('./smart-sell-engine');
 const { WalletGroupManager } = require('./wallet-group-manager');
-const { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+const RateLimitManager = require('./rate-limit-manager');
 
 class GroupTradingEngine {
-  constructor(connection, walletGroupManager, jupiterIntegration = null, smartSellEngine = null) {
+  constructor(connection, walletGroupManager, jupiter, smartSell) {
     this.connection = connection;
     this.walletGroupManager = walletGroupManager;
-    this.jupiterIntegration = jupiterIntegration;
-    this.smartSellEngine = smartSellEngine;
-    this.executionHistory = [];
+    this.jupiter = jupiter;
+    this.raydium = new RaydiumDEXIntegration(connection);
+    this.smartSell = smartSell;
+    this.rateLimitManager = new RateLimitManager();
+    
+    this.isActive = false;
+    this.activeSessions = new Map();
+    this.sessionStats = new Map();
   }
 
-  // ===========================================
-  // GROUP TRADING OPERATIONS
-  // ===========================================
+  /**
+   * Start volume trading session for a group
+   */
+  async startVolumeSession(groupId, tokenMint, config = {}) {
+    try {
+      console.log(`🚀 Starting volume session for group ${groupId}`);
+      
+      const group = this.walletGroupManager.getGroup(groupId);
+      if (!group) {
+        throw new Error(`Group ${groupId} not found`);
+      }
 
-  async executeGroupBuy(groupName, tokenAddress, options = {}) {
-    const groupConfig = this.walletGroupManager.groupsConfig[groupName];
-    if (!groupConfig) {
-      throw new Error(`Group '${groupName}' not found`);
+      const sessionId = `vol_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      
+      const sessionConfig = {
+        groupId,
+        tokenMint,
+        cycles: config.cycles || 10,
+        buyAmount: config.buyAmount || 0.01,
+        sellAmount: config.sellAmount || 0.005,
+        delayBetween: config.delayBetween || 3000,
+        randomizeAmounts: config.randomizeAmounts || true,
+        randomizeDelay: config.randomizeDelay || true,
+        continuous: config.continuous || false,
+        mode: config.mode || 'standard',
+        ...config
+      };
+
+      const sessionData = {
+        id: sessionId,
+        groupId,
+        tokenMint,
+        config: sessionConfig,
+        startTime: Date.now(),
+        isActive: true,
+        stats: {
+          cyclesCompleted: 0,
+          totalTrades: 0,
+          successfulTrades: 0,
+          failedTrades: 0,
+          totalVolume: 0
+        }
+      };
+
+      this.activeSessions.set(sessionId, sessionData);
+      this.isActive = true;
+
+      // Start volume trading
+      this.executeVolumeSession(sessionId, group.wallets, tokenMint, sessionConfig);
+
+      console.log(`✅ Volume session started: ${sessionId}`);
+      return { sessionId, success: true };
+    } catch (error) {
+      console.error('❌ Error starting volume session:', error.message);
+      return { success: false, error: error.message };
     }
+  }
 
-    if (groupConfig.status !== 'active') {
-      throw new Error(`Group '${groupName}' is not active`);
-    }
-
-    const {
-      strategy = groupConfig.strategy,
-      maxWallets = null,
-      buyAmount = groupConfig.settings.buyAmount,
-      slippage = groupConfig.settings.slippage,
-      priorityFee = groupConfig.settings.priorityFee,
-      delayBetweenTrades = 0,
-      simultaneousLimit = null
-    } = options;
-
-    const walletsToExecute = this.walletGroupManager.getWalletsForExecution(
-      groupName, 
-      strategy, 
-      maxWallets
-    );
-
-    if (walletsToExecute.length === 0) {
-      throw new Error(`No active wallets found in group '${groupName}'`);
-    }
-
-    const executionId = this.generateExecutionId();
-    const execution = {
-      id: executionId,
-      type: 'buy',
-      groupName,
-      tokenAddress,
-      strategy,
-      buyAmount,
-      slippage,
-      priorityFee,
-      walletsCount: walletsToExecute.length,
-      startTime: Date.now(),
-      status: 'executing',
-      results: []
-    };
-
-    this.executionHistory.push(execution);
+  /**
+   * Execute volume trading session
+   */
+  async executeVolumeSession(sessionId, wallets, tokenMint, config) {
+    const sessionData = this.activeSessions.get(sessionId);
+    if (!sessionData) return;
 
     try {
-      let results = [];
+      console.log(`📊 Executing volume session ${sessionId} with ${wallets.length} wallets`);
 
-      if (strategy === 'simultaneous' || (simultaneousLimit && walletsToExecute.length <= simultaneousLimit)) {
-        // Execute all wallets simultaneously
-        results = await this.executeSimultaneousBuys(walletsToExecute, tokenAddress, {
-          buyAmount, slippage, priorityFee
+      let cycle = 0;
+      const maxCycles = config.continuous ? Number.MAX_SAFE_INTEGER : config.cycles;
+
+      while (cycle < maxCycles && sessionData.isActive) {
+        cycle++;
+        console.log(`🔄 Volume Cycle ${cycle}/${config.cycles || '∞'}`);
+
+        // Execute buys across all wallets
+        for (let i = 0; i < wallets.length; i++) {
+          if (!sessionData.isActive) break;
+
+          try {
+            const wallet = wallets[i];
+            const buyAmount = this.calculateBuyAmount(config);
+            
+            // Check wallet balance
+            const balance = await this.connection.getBalance(new PublicKey(wallet.publicKey));
+            const requiredBalance = (buyAmount * LAMPORTS_PER_SOL) + (0.002 * LAMPORTS_PER_SOL);
+            
+            if (balance < requiredBalance) {
+              console.log(`⚠️ Wallet ${i + 1}: Insufficient balance for ${buyAmount} SOL trade`);
+              sessionData.stats.failedTrades++;
+              continue;
+            }
+
+            console.log(`💳 Wallet ${i + 1}: Buying ${buyAmount} SOL worth of tokens`);
+            
+            // Execute buy
+            const buyResult = await this.executeBuy(wallet, tokenMint, buyAmount, sessionId);
+            
+            if (buyResult.success) {
+              sessionData.stats.successfulTrades++;
+              sessionData.stats.totalVolume += buyAmount;
+            } else {
+              sessionData.stats.failedTrades++;
+            }
+            
+            sessionData.stats.totalTrades++;
+
+            // Wait before next operation
+            const delay = this.calculateDelay(config);
+            if (delay > 0) {
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+
+            // Immediate sell to create volume
+            if (buyResult.success) {
+              await this.executeImmediateSell(wallet, tokenMint, sessionId);
+            }
+
+          } catch (error) {
+            console.error(`❌ Volume trade failed for wallet ${i + 1}:`, error.message);
+            sessionData.stats.failedTrades++;
+          }
+        }
+
+        sessionData.stats.cyclesCompleted = cycle;
+
+        // Wait between cycles
+        if (sessionData.isActive && cycle < maxCycles) {
+          const cycleDelay = this.calculateDelay(config);
+          console.log(`⏰ Waiting ${Math.round(cycleDelay/1000)}s before next cycle...`);
+          await new Promise(resolve => setTimeout(resolve, cycleDelay));
+        }
+      }
+
+      // Session completed
+      sessionData.isActive = false;
+      sessionData.endTime = Date.now();
+      sessionData.duration = sessionData.endTime - sessionData.startTime;
+
+      console.log(`✅ Volume session ${sessionId} completed`);
+      console.log(`📊 Final stats: ${sessionData.stats.successfulTrades}/${sessionData.stats.totalTrades} successful trades`);
+
+    } catch (error) {
+      console.error(`❌ Volume session ${sessionId} error:`, error.message);
+      sessionData.isActive = false;
+    }
+  }
+
+  /**
+   * Execute buy trade
+   */
+  async executeBuy(wallet, tokenMint, amount, sessionId) {
+    try {
+      const keypair = this.getWalletKeypair(wallet);
+      if (!keypair) {
+        throw new Error('Could not get wallet keypair');
+      }
+
+      // Try Jupiter first, fallback to Raydium
+      let result;
+      try {
+        result = await this.jupiter.buyToken(keypair, tokenMint, amount, {
+          source: 'volume',
+          session: sessionId
         });
-      } else {
-        // Execute wallets sequentially with optional delay
-        results = await this.executeSequentialBuys(walletsToExecute, tokenAddress, {
-          buyAmount, slippage, priorityFee, delayBetweenTrades
+      } catch (jupiterError) {
+        console.log(`⚠️ Jupiter buy failed, trying Raydium: ${jupiterError.message}`);
+        result = await this.raydium.buyToken(keypair, tokenMint, amount, {
+          source: 'volume',
+          session: sessionId
         });
       }
 
-      execution.status = 'completed';
-      execution.endTime = Date.now();
-      execution.duration = execution.endTime - execution.startTime;
-      execution.results = results;
-      execution.successCount = results.filter(r => r.success).length;
-      execution.failureCount = results.filter(r => !r.success).length;
-
-      // Update wallet execution timestamps
-      this.updateWalletExecutionTimestamps(walletsToExecute);
-
-      return execution;
-
+      return result;
     } catch (error) {
-      execution.status = 'failed';
-      execution.error = error.message;
-      execution.endTime = Date.now();
-      throw error;
+      console.error(`❌ Buy failed:`, error.message);
+      return { success: false, error: error.message };
     }
   }
 
-  async executeGroupSell(groupName, tokenAddress, options = {}) {
-    const groupConfig = this.walletGroupManager.groupsConfig[groupName];
-    if (!groupConfig) {
-      throw new Error(`Group '${groupName}' not found`);
-    }
-
-    if (groupConfig.status !== 'active') {
-      throw new Error(`Group '${groupName}' is not active`);
-    }
-
-    const {
-      strategy = groupConfig.strategy,
-      maxWallets = null,
-      sellAmount = groupConfig.settings.sellAmount,
-      sellPercentage = null, // Sell percentage of holdings instead of fixed amount
-      slippage = groupConfig.settings.slippage,
-      priorityFee = groupConfig.settings.priorityFee,
-      delayBetweenTrades = 0,
-      simultaneousLimit = null,
-      onlyIfProfit = false,
-      minProfitPercentage = 0
-    } = options;
-
-    const walletsToExecute = this.walletGroupManager.getWalletsForExecution(
-      groupName, 
-      strategy, 
-      maxWallets
-    );
-
-    if (walletsToExecute.length === 0) {
-      throw new Error(`No active wallets found in group '${groupName}'`);
-    }
-
-    // Filter wallets that have the token to sell
-    const walletsWithToken = await this.getWalletsWithToken(walletsToExecute, tokenAddress);
-    
-    if (walletsWithToken.length === 0) {
-      throw new Error(`No wallets in group '${groupName}' hold token ${tokenAddress}`);
-    }
-
-    const executionId = this.generateExecutionId();
-    const execution = {
-      id: executionId,
-      type: 'sell',
-      groupName,
-      tokenAddress,
-      strategy,
-      sellAmount,
-      sellPercentage,
-      slippage,
-      priorityFee,
-      walletsCount: walletsWithToken.length,
-      startTime: Date.now(),
-      status: 'executing',
-      results: []
-    };
-
-    this.executionHistory.push(execution);
-
+  /**
+   * Execute immediate sell for volume
+   */
+  async executeImmediateSell(wallet, tokenMint, sessionId) {
     try {
-      let results = [];
+      const keypair = this.getWalletKeypair(wallet);
+      if (!keypair) return { success: false, error: 'No keypair' };
 
-      if (strategy === 'simultaneous' || (simultaneousLimit && walletsWithToken.length <= simultaneousLimit)) {
-        // Execute all wallets simultaneously
-        results = await this.executeSimultaneousSells(walletsWithToken, tokenAddress, {
-          sellAmount, sellPercentage, slippage, priorityFee, onlyIfProfit, minProfitPercentage
+      // Get token balance
+      const tokenAccount = await this.connection.getTokenAccountsByOwner(
+        keypair.publicKey,
+        { mint: new PublicKey(tokenMint) }
+      );
+
+      if (tokenAccount.value.length === 0) {
+        return { success: false, error: 'No token account' };
+      }
+
+      const balance = await this.connection.getTokenAccountBalance(tokenAccount.value[0].pubkey);
+      if (!balance.value.uiAmount || balance.value.uiAmount <= 0) {
+        return { success: false, error: 'No tokens to sell' };
+      }
+
+      // Sell 50-90% of tokens
+      const sellPercentage = 0.5 + Math.random() * 0.4;
+      const sellAmount = Math.floor(balance.value.amount * sellPercentage);
+
+      console.log(`💳 Selling ${(balance.value.uiAmount * sellPercentage).toFixed(2)} tokens`);
+
+      // Try Jupiter first, fallback to Raydium
+      let result;
+      try {
+        result = await this.jupiter.sellToken(keypair, tokenMint, sellAmount, {
+          source: 'volume',
+          session: sessionId
         });
-      } else {
-        // Execute wallets sequentially with optional delay
-        results = await this.executeSequentialSells(walletsWithToken, tokenAddress, {
-          sellAmount, sellPercentage, slippage, priorityFee, delayBetweenTrades, onlyIfProfit, minProfitPercentage
+      } catch (jupiterError) {
+        console.log(`⚠️ Jupiter sell failed, trying Raydium: ${jupiterError.message}`);
+        result = await this.raydium.sellToken(keypair, tokenMint, sellAmount, {
+          source: 'volume',
+          session: sessionId
         });
       }
 
-      execution.status = 'completed';
-      execution.endTime = Date.now();
-      execution.duration = execution.endTime - execution.startTime;
-      execution.results = results;
-      execution.successCount = results.filter(r => r.success).length;
-      execution.failureCount = results.filter(r => !r.success).length;
-
-      // Update wallet execution timestamps
-      this.updateWalletExecutionTimestamps(walletsWithToken);
-
-      return execution;
-
+      return result;
     } catch (error) {
-      execution.status = 'failed';
-      execution.error = error.message;
-      execution.endTime = Date.now();
-      throw error;
+      console.error(`❌ Immediate sell failed:`, error.message);
+      return { success: false, error: error.message };
     }
   }
 
-  // ===========================================
-  // VOLUME GENERATION
-  // ===========================================
+  /**
+   * Calculate buy amount based on config
+   */
+  calculateBuyAmount(config) {
+    if (config.randomizeAmounts) {
+      const min = config.buyAmount * 0.5;
+      const max = config.buyAmount * 1.5;
+      return min + Math.random() * (max - min);
+    }
+    return config.buyAmount;
+  }
 
-  async generateVolume(groupName, tokenAddress, options = {}) {
-    const {
-      volumeTarget = 1000, // Target volume in SOL
-      duration = 300, // Duration in seconds (5 minutes)
-      buyPercentage = 50, // Percentage of operations that should be buys
-      minTradeSize = 0.001,
-      maxTradeSize = 0.01,
-      randomDelay = { min: 1000, max: 5000 }, // Random delay between trades in ms
-      spreadTrades = true // Whether to spread trades evenly across duration
-    } = options;
+  /**
+   * Calculate delay between operations
+   */
+  calculateDelay(config) {
+    if (config.randomizeDelay) {
+      const baseDelay = config.delayBetween || 3000;
+      return baseDelay + Math.random() * 2000; // Add up to 2 seconds random delay
+    }
+    return config.delayBetween || 3000;
+  }
 
-    const walletsToUse = this.walletGroupManager.getWalletsForExecution(groupName, 'random');
+  /**
+   * Get wallet keypair
+   */
+  getWalletKeypair(wallet) {
+    try {
+      if (wallet.keypair) {
+        return wallet.keypair;
+      } else if (wallet.privateKey) {
+        const { Keypair } = require('@solana/web3.js');
+        return Keypair.fromSecretKey(new Uint8Array(wallet.privateKey));
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting wallet keypair:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Stop a specific session
+   */
+  stopSession(sessionId) {
+    const sessionData = this.activeSessions.get(sessionId);
+    if (sessionData) {
+      sessionData.isActive = false;
+      console.log(`🛑 Stopped session: ${sessionId}`);
+      return { success: true, sessionId };
+    }
+    return { success: false, error: 'Session not found' };
+  }
+
+  /**
+   * Stop all sessions
+   */
+  stopAllSessions() {
+    let stoppedCount = 0;
+    for (const [sessionId, sessionData] of this.activeSessions) {
+      if (sessionData.isActive) {
+        sessionData.isActive = false;
+        stoppedCount++;
+      }
+    }
     
-    if (walletsToUse.length === 0) {
-      throw new Error(`No wallets available in group '${groupName}' for volume generation`);
+    this.isActive = false;
+    console.log(`🛑 Stopped ${stoppedCount} active sessions`);
+    return { success: true, stoppedCount };
+  }
+
+  /**
+   * Get session status
+   */
+  getSessionStatus(sessionId) {
+    const sessionData = this.activeSessions.get(sessionId);
+    if (!sessionData) {
+      return null;
     }
 
-    const executionId = this.generateExecutionId();
-    const execution = {
-      id: executionId,
-      type: 'volume_generation',
-      groupName,
-      tokenAddress,
-      volumeTarget,
-      duration,
-      walletsCount: walletsToUse.length,
-      startTime: Date.now(),
-      status: 'executing',
-      results: [],
-      volumeGenerated: 0
+    return {
+      id: sessionData.id,
+      groupId: sessionData.groupId,
+      tokenMint: sessionData.tokenMint,
+      isActive: sessionData.isActive,
+      startTime: sessionData.startTime,
+      endTime: sessionData.endTime,
+      duration: sessionData.isActive ? Date.now() - sessionData.startTime : sessionData.duration,
+      stats: sessionData.stats,
+      config: sessionData.config
     };
+  }
 
-    this.executionHistory.push(execution);
+  /**
+   * Get all active sessions
+   */
+  getActiveSessions() {
+    const sessions = [];
+    for (const [sessionId, sessionData] of this.activeSessions) {
+      sessions.push(this.getSessionStatus(sessionId));
+    }
+    return sessions.filter(s => s !== null);
+  }
 
+  /**
+   * Get engine status
+   */
+  getStatus() {
+    const activeSessions = this.getActiveSessions().filter(s => s.isActive);
+    
+    return {
+      isActive: this.isActive,
+      totalSessions: this.activeSessions.size,
+      activeSessions: activeSessions.length,
+      sessions: activeSessions
+    };
+  }
+
+  /**
+   * Start smart sell for a group
+   */
+  async startSmartSell(groupId, tokenMint, settings = {}) {
     try {
-      const trades = this.planVolumeGeneration(walletsToUse, {
-        volumeTarget,
-        duration,
-        buyPercentage,
-        minTradeSize,
-        maxTradeSize,
-        spreadTrades
-      });
+      const group = this.walletGroupManager.getGroup(groupId);
+      if (!group) {
+        throw new Error(`Group ${groupId} not found`);
+      }
+
+      const wallets = group.wallets.map(w => ({
+        ...w,
+        keypair: this.getWalletKeypair(w)
+      }));
+
+      const result = await this.smartSell.enable(tokenMint, wallets, settings);
+      
+      if (result) {
+        console.log(`🧠 Smart Sell enabled for group ${groupId}`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error starting smart sell:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Stop smart sell
+   */
+  async stopSmartSell() {
+    try {
+      await this.smartSell.disable();
+      console.log('🧠 Smart Sell disabled');
+      return true;
+    } catch (error) {
+      console.error('❌ Error stopping smart sell:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Get smart sell status
+   */
+  getSmartSellStatus() {
+    return this.smartSell.getStatus();
+  }
+
+  /**
+   * Execute bulk operation on group
+   */
+  async executeBulkOperation(groupId, operation, params = {}) {
+    try {
+      const group = this.walletGroupManager.getGroup(groupId);
+      if (!group) {
+        throw new Error(`Group ${groupId} not found`);
+      }
 
       const results = [];
-      let totalVolume = 0;
-
-      for (const trade of trades) {
-        // Wait for the scheduled time
-        const now = Date.now();
-        if (trade.executeAt > now) {
-          await this.sleep(trade.executeAt - now);
-        }
-
+      
+      for (const wallet of group.wallets) {
         try {
+          const keypair = this.getWalletKeypair(wallet);
+          if (!keypair) {
+            results.push({ wallet: wallet.publicKey, success: false, error: 'No keypair' });
+            continue;
+          }
+
           let result;
-          if (trade.type === 'buy') {
-            result = await this.executeSingleBuy(trade.wallet, tokenAddress, {
-              buyAmount: trade.amount,
-              slippage: trade.slippage,
-              priorityFee: trade.priorityFee
-            });
-          } else {
-            result = await this.executeSingleSell(trade.wallet, tokenAddress, {
-              sellAmount: trade.amount,
-              slippage: trade.slippage,
-              priorityFee: trade.priorityFee
-            });
+          switch (operation) {
+            case 'buy':
+              result = await this.executeBuy(wallet, params.tokenMint, params.amount, 'bulk');
+              break;
+            case 'sell':
+              result = await this.executeSell(wallet, params.tokenMint, params.amount, 'bulk');
+              break;
+            default:
+              result = { success: false, error: 'Unknown operation' };
           }
 
-          if (result.success) {
-            totalVolume += trade.amount;
-          }
-
-          results.push({
-            ...result,
-            tradeType: trade.type,
-            plannedAmount: trade.amount,
-            executeAt: trade.executeAt
-          });
-
+          results.push({ wallet: wallet.publicKey, ...result });
         } catch (error) {
-          results.push({
-            wallet: trade.wallet.name,
-            tradeType: trade.type,
-            plannedAmount: trade.amount,
-            success: false,
-            error: error.message,
-            executeAt: trade.executeAt
-          });
-        }
-
-        // Add random delay between trades if specified
-        if (randomDelay && randomDelay.min > 0) {
-          const delay = Math.random() * (randomDelay.max - randomDelay.min) + randomDelay.min;
-          await this.sleep(delay);
+          results.push({ wallet: wallet.publicKey, success: false, error: error.message });
         }
       }
 
-      execution.status = 'completed';
-      execution.endTime = Date.now();
-      execution.duration = execution.endTime - execution.startTime;
-      execution.results = results;
-      execution.volumeGenerated = totalVolume;
-      execution.volumePercentage = (totalVolume / volumeTarget) * 100;
-      execution.successCount = results.filter(r => r.success).length;
-      execution.failureCount = results.filter(r => !r.success).length;
-
-      return execution;
-
+      return results;
     } catch (error) {
-      execution.status = 'failed';
-      execution.error = error.message;
-      execution.endTime = Date.now();
-      throw error;
+      console.error('❌ Error executing bulk operation:', error.message);
+      return [];
     }
   }
 
-  planVolumeGeneration(wallets, options) {
-    const {
-      volumeTarget,
-      duration,
-      buyPercentage,
-      minTradeSize,
-      maxTradeSize,
-      spreadTrades
-    } = options;
-
-    const trades = [];
-    const startTime = Date.now();
-    const endTime = startTime + (duration * 1000);
-
-    let remainingVolume = volumeTarget;
-    let tradeIndex = 0;
-
-    while (remainingVolume > minTradeSize && trades.length < 1000) { // Safety limit
-      const wallet = wallets[tradeIndex % wallets.length];
-      
-      // Determine if this should be a buy or sell
-      const isBuy = Math.random() * 100 < buyPercentage;
-      
-      // Calculate trade amount
-      const maxPossibleTrade = Math.min(maxTradeSize, remainingVolume);
-      const tradeAmount = Math.random() * (maxPossibleTrade - minTradeSize) + minTradeSize;
-      
-      // Calculate execution time
-      let executeAt;
-      if (spreadTrades) {
-        executeAt = startTime + (trades.length / 1000) * duration * 1000;
-      } else {
-        executeAt = startTime + Math.random() * duration * 1000;
+  /**
+   * Execute sell trade
+   */
+  async executeSell(wallet, tokenMint, amount, sessionId) {
+    try {
+      const keypair = this.getWalletKeypair(wallet);
+      if (!keypair) {
+        throw new Error('Could not get wallet keypair');
       }
 
-      trades.push({
-        wallet,
-        type: isBuy ? 'buy' : 'sell',
-        amount: tradeAmount,
-        executeAt,
-        slippage: 1.0 + Math.random() * 0.5, // Random slippage between 1.0-1.5%
-        priorityFee: 10000 + Math.random() * 5000 // Random priority fee
-      });
-
-      remainingVolume -= tradeAmount;
-      tradeIndex++;
-    }
-
-    // Sort trades by execution time
-    trades.sort((a, b) => a.executeAt - b.executeAt);
-
-    return trades;
-  }
-
-  // ===========================================
-  // EXECUTION HELPERS
-  // ===========================================
-
-  async executeSimultaneousBuys(wallets, tokenAddress, options) {
-    const promises = wallets.map(wallet => 
-      this.executeSingleBuy(wallet, tokenAddress, options)
-    );
-
-    const results = await Promise.allSettled(promises);
-    
-    return results.map((result, index) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      } else {
-        return {
-          wallet: wallets[index].name,
-          success: false,
-          error: result.reason.message || 'Unknown error',
-          amount: options.buyAmount
-        };
-      }
-    });
-  }
-
-  async executeSequentialBuys(wallets, tokenAddress, options) {
-    const results = [];
-    
-    for (const wallet of wallets) {
+      // Try Jupiter first, fallback to Raydium
+      let result;
       try {
-        const result = await this.executeSingleBuy(wallet, tokenAddress, options);
-        results.push(result);
-        
-        if (options.delayBetweenTrades > 0) {
-          await this.sleep(options.delayBetweenTrades);
-        }
-      } catch (error) {
-        results.push({
-          wallet: wallet.name,
-          success: false,
-          error: error.message,
-          amount: options.buyAmount
+        result = await this.jupiter.sellToken(keypair, tokenMint, amount, {
+          source: 'bulk',
+          session: sessionId
+        });
+      } catch (jupiterError) {
+        console.log(`⚠️ Jupiter sell failed, trying Raydium: ${jupiterError.message}`);
+        result = await this.raydium.sellToken(keypair, tokenMint, amount, {
+          source: 'bulk',
+          session: sessionId
         });
       }
-    }
-    
-    return results;
-  }
 
-  async executeSimultaneousSells(wallets, tokenAddress, options) {
-    const promises = wallets.map(wallet => 
-      this.executeSingleSell(wallet, tokenAddress, options)
-    );
-
-    const results = await Promise.allSettled(promises);
-    
-    return results.map((result, index) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      } else {
-        return {
-          wallet: wallets[index].name,
-          success: false,
-          error: result.reason.message || 'Unknown error',
-          amount: options.sellAmount
-        };
-      }
-    });
-  }
-
-  async executeSequentialSells(wallets, tokenAddress, options) {
-    const results = [];
-    
-    for (const wallet of wallets) {
-      try {
-        const result = await this.executeSingleSell(wallet, tokenAddress, options);
-        results.push(result);
-        
-        if (options.delayBetweenTrades > 0) {
-          await this.sleep(options.delayBetweenTrades);
-        }
-      } catch (error) {
-        results.push({
-          wallet: wallet.name,
-          success: false,
-          error: error.message,
-          amount: options.sellAmount || options.sellPercentage
-        });
-      }
-    }
-    
-    return results;
-  }
-
-  async executeSingleBuy(wallet, tokenAddress, options) {
-    const { buyAmount, slippage, priorityFee } = options;
-    const startTime = Date.now();
-
-    try {
-      // This would integrate with your Jupiter/trading engine
-      if (this.jupiterIntegration) {
-        const keypair = this.walletGroupManager.getKeypairFromAddress(wallet.pubkey);
-        const result = await this.jupiterIntegration.swapSOLToToken(
-          keypair,
-          tokenAddress,
-          buyAmount,
-          { slippage, priorityFee }
-        );
-
-        return {
-          wallet: wallet.name,
-          success: true,
-          amount: buyAmount,
-          tokenAddress,
-          txHash: result.txHash,
-          tokensReceived: result.tokensReceived,
-          duration: Date.now() - startTime,
-          executedAt: Date.now()
-        };
-      } else {
-        // Simulated buy for testing
-        await this.sleep(Math.random() * 2000 + 1000); // Simulate network delay
-        
-        return {
-          wallet: wallet.name,
-          success: true,
-          amount: buyAmount,
-          tokenAddress,
-          txHash: 'simulated_buy_' + Math.random().toString(36).substr(2, 9),
-          tokensReceived: buyAmount * 1000000, // Simulated tokens received
-          duration: Date.now() - startTime,
-          executedAt: Date.now(),
-          simulated: true
-        };
-      }
+      return result;
     } catch (error) {
-      return {
-        wallet: wallet.name,
-        success: false,
-        amount: buyAmount,
-        tokenAddress,
-        error: error.message,
-        duration: Date.now() - startTime,
-        executedAt: Date.now()
-      };
+      console.error(`❌ Sell failed:`, error.message);
+      return { success: false, error: error.message };
     }
-  }
-
-  async executeSingleSell(wallet, tokenAddress, options) {
-    const { sellAmount, sellPercentage, slippage, priorityFee, onlyIfProfit, minProfitPercentage } = options;
-    const startTime = Date.now();
-
-    try {
-      // This would integrate with your Jupiter/trading engine
-      if (this.jupiterIntegration) {
-        const keypair = this.walletGroupManager.getKeypairFromAddress(wallet.pubkey);
-        
-        let actualSellAmount = sellAmount;
-        if (sellPercentage) {
-          const tokenBalance = await this.getTokenBalance(wallet.pubkey, tokenAddress);
-          actualSellAmount = (tokenBalance * sellPercentage) / 100;
-        }
-
-        if (onlyIfProfit && minProfitPercentage > 0) {
-          const profitCheck = await this.checkProfitability(wallet.pubkey, tokenAddress, actualSellAmount);
-          if (profitCheck.profitPercentage < minProfitPercentage) {
-            throw new Error(`Profit check failed: ${profitCheck.profitPercentage}% < ${minProfitPercentage}%`);
-          }
-        }
-
-        const result = await this.jupiterIntegration.swapTokenToSOL(
-          keypair,
-          tokenAddress,
-          actualSellAmount,
-          { slippage, priorityFee }
-        );
-
-        return {
-          wallet: wallet.name,
-          success: true,
-          amount: actualSellAmount,
-          tokenAddress,
-          txHash: result.txHash,
-          solReceived: result.solReceived,
-          duration: Date.now() - startTime,
-          executedAt: Date.now()
-        };
-      } else {
-        // Simulated sell for testing
-        await this.sleep(Math.random() * 2000 + 1000); // Simulate network delay
-        
-        const actualSellAmount = sellAmount || (sellPercentage ? sellPercentage + '% of holdings' : 'unknown');
-        
-        return {
-          wallet: wallet.name,
-          success: true,
-          amount: actualSellAmount,
-          tokenAddress,
-          txHash: 'simulated_sell_' + Math.random().toString(36).substr(2, 9),
-          solReceived: 0.005, // Simulated SOL received
-          duration: Date.now() - startTime,
-          executedAt: Date.now(),
-          simulated: true
-        };
-      }
-    } catch (error) {
-      const actualSellAmount = sellAmount || (sellPercentage ? sellPercentage + '% of holdings' : 'unknown');
-      
-      return {
-        wallet: wallet.name,
-        success: false,
-        amount: actualSellAmount,
-        tokenAddress,
-        error: error.message,
-        duration: Date.now() - startTime,
-        executedAt: Date.now()
-      };
-    }
-  }
-
-  // ===========================================
-  // HELPER METHODS
-  // ===========================================
-
-  async getWalletsWithToken(wallets, tokenAddress) {
-    // This would check which wallets actually hold the token
-    // For now, return all wallets (simulated)
-    return wallets;
-  }
-
-  async getTokenBalance(walletAddress, tokenAddress) {
-    // This would get the actual token balance
-    // For now, return simulated balance
-    return Math.random() * 1000000; // Simulated token amount
-  }
-
-  async checkProfitability(walletAddress, tokenAddress, amount) {
-    // This would check if selling would be profitable
-    // For now, return simulated profitability
-    return {
-      profitPercentage: Math.random() * 200 - 50, // Random profit between -50% and +150%
-      breakEven: false
-    };
-  }
-
-  updateWalletExecutionTimestamps(wallets) {
-    const now = Date.now();
-    wallets.forEach(wallet => {
-      const walletIndex = this.walletGroupManager.wallets.findIndex(w => w.pubkey === wallet.pubkey);
-      if (walletIndex !== -1) {
-        this.walletGroupManager.wallets[walletIndex].lastExecuted = now;
-      }
-    });
-    this.walletGroupManager.saveWallets();
-  }
-
-  generateExecutionId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-  }
-
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // ===========================================
-  // EXECUTION HISTORY & ANALYTICS
-  // ===========================================
-
-  getExecutionHistory(limit = 50) {
-    return this.executionHistory
-      .slice(-limit)
-      .reverse(); // Most recent first
-  }
-
-  getGroupExecutionStats(groupName) {
-    const groupExecutions = this.executionHistory.filter(e => e.groupName === groupName);
-    
-    if (groupExecutions.length === 0) {
-      return {
-        totalExecutions: 0,
-        successfulExecutions: 0,
-        failedExecutions: 0,
-        averageDuration: 0,
-        totalVolume: 0,
-        lastExecution: null
-      };
-    }
-
-    const successful = groupExecutions.filter(e => e.status === 'completed');
-    const failed = groupExecutions.filter(e => e.status === 'failed');
-    
-    const totalDuration = successful.reduce((sum, e) => sum + (e.duration || 0), 0);
-    const averageDuration = successful.length > 0 ? totalDuration / successful.length : 0;
-    
-    const totalVolume = groupExecutions.reduce((sum, e) => {
-      if (e.type === 'volume_generation') {
-        return sum + (e.volumeGenerated || 0);
-      } else if (e.results) {
-        return sum + e.results.reduce((subSum, r) => {
-          return subSum + (r.success ? (r.amount || 0) : 0);
-        }, 0);
-      }
-      return sum;
-    }, 0);
-
-    return {
-      totalExecutions: groupExecutions.length,
-      successfulExecutions: successful.length,
-      failedExecutions: failed.length,
-      successRate: groupExecutions.length > 0 ? (successful.length / groupExecutions.length) * 100 : 0,
-      averageDuration,
-      totalVolume,
-      lastExecution: groupExecutions[groupExecutions.length - 1]
-    };
-  }
-
-  getAllGroupStats() {
-    const allGroups = Object.keys(this.walletGroupManager.groupsConfig);
-    const stats = {};
-
-    for (const groupName of allGroups) {
-      stats[groupName] = this.getGroupExecutionStats(groupName);
-    }
-
-    return stats;
   }
 }
 

@@ -1,342 +1,542 @@
-const { WalletGroupManager } = require('./wallet-group-manager');
-const { PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
-const fs = require('fs');
+/**
+ * Wallet Analytics
+ * Comprehensive analytics and performance tracking for wallets
+ */
+
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+const { getAssociatedTokenAddress } = require('@solana/spl-token');
+const tradeTracker = require('./trade-tracker');
+const smartCacheManager = require('./smart-cache-manager');
+const RateLimitManager = require('./rate-limit-manager');
 
 class WalletAnalytics {
   constructor(walletGroupManager) {
     this.walletGroupManager = walletGroupManager;
-    this.connection = walletGroupManager.connection;
-    this.metricsFilePath = './wallet-metrics.json';
-    this.performanceHistory = this.loadPerformanceHistory();
+    this.rateLimitManager = new RateLimitManager();
+    this.analyticsCache = new Map();
   }
 
-  // ===========================================
-  // PERFORMANCE TRACKING
-  // ===========================================
-
-  loadPerformanceHistory() {
-    try {
-      if (fs.existsSync(this.metricsFilePath)) {
-        return JSON.parse(fs.readFileSync(this.metricsFilePath, 'utf8'));
-      }
-    } catch (error) {
-      console.error('Error loading performance history:', error);
-    }
-    return {
-      groups: {},
-      wallets: {},
-      trades: [],
-      lastUpdated: new Date().toISOString()
-    };
-  }
-
-  savePerformanceHistory() {
-    try {
-      this.performanceHistory.lastUpdated = new Date().toISOString();
-      fs.writeFileSync(this.metricsFilePath, JSON.stringify(this.performanceHistory, null, 2));
-    } catch (error) {
-      console.error('Error saving performance history:', error);
-    }
-  }
-
-  // Record trade execution
-  recordTrade(groupName, walletAddress, operation, tokenAddress, amount, success, txSignature = null, error = null) {
-    const trade = {
-      id: this.generateTradeId(),
-      timestamp: new Date().toISOString(),
-      groupName,
-      walletAddress,
-      operation, // 'buy', 'sell', 'transfer'
-      tokenAddress,
-      amount,
-      success,
-      txSignature,
-      error,
-      executionTime: Date.now()
-    };
-
-    this.performanceHistory.trades.push(trade);
-
-    // Update group metrics
-    if (!this.performanceHistory.groups[groupName]) {
-      this.performanceHistory.groups[groupName] = {
-        totalTrades: 0,
-        successfulTrades: 0,
-        failedTrades: 0,
-        totalVolume: 0,
-        averageExecutionTime: 0,
-        lastActivity: null
-      };
-    }
-
-    const groupMetrics = this.performanceHistory.groups[groupName];
-    groupMetrics.totalTrades++;
-    if (success) {
-      groupMetrics.successfulTrades++;
-      groupMetrics.totalVolume += amount;
-    } else {
-      groupMetrics.failedTrades++;
-    }
-    groupMetrics.lastActivity = trade.timestamp;
-
-    // Update wallet metrics
-    if (!this.performanceHistory.wallets[walletAddress]) {
-      this.performanceHistory.wallets[walletAddress] = {
-        totalTrades: 0,
-        successfulTrades: 0,
-        failedTrades: 0,
-        totalVolume: 0,
-        lastActivity: null,
-        groupName: groupName
-      };
-    }
-
-    const walletMetrics = this.performanceHistory.wallets[walletAddress];
-    walletMetrics.totalTrades++;
-    if (success) {
-      walletMetrics.successfulTrades++;
-      walletMetrics.totalVolume += amount;
-    } else {
-      walletMetrics.failedTrades++;
-    }
-    walletMetrics.lastActivity = trade.timestamp;
-
-    this.savePerformanceHistory();
-    return trade.id;
-  }
-
-  // ===========================================
-  // GROUP ANALYTICS
-  // ===========================================
-
-  async getGroupAnalytics(groupName) {
-    const wallets = this.walletGroupManager.getWalletsByGroup(groupName);
-    const groupConfig = this.walletGroupManager.getGroupConfig(groupName);
-    const metrics = this.performanceHistory.groups[groupName] || this.createEmptyGroupMetrics();
-
-    // Calculate real-time balances
-    const balances = await this.calculateGroupBalances(groupName);
+  /**
+   * Get comprehensive wallet analytics
+   */
+  async getWalletAnalytics(walletAddress, options = {}) {
+    const cacheKey = `analytics_${walletAddress}_${JSON.stringify(options)}`;
     
-    return {
-      groupName,
-      config: groupConfig,
-      walletCount: wallets.length,
-      totalBalance: balances.totalSOL,
-      averageBalance: balances.averageSOL,
-      metrics: {
-        ...metrics,
-        successRate: metrics.totalTrades > 0 ? (metrics.successfulTrades / metrics.totalTrades * 100).toFixed(2) + '%' : '0%',
-        failureRate: metrics.totalTrades > 0 ? (metrics.failedTrades / metrics.totalTrades * 100).toFixed(2) + '%' : '0%'
-      },
-      balances,
-      recentTrades: this.getRecentTradesForGroup(groupName, 10),
-      performance: this.calculateGroupPerformance(groupName)
-    };
-  }
-
-  async calculateGroupBalances(groupName) {
-    const wallets = this.walletGroupManager.getWalletsByGroup(groupName);
-    let totalSOL = 0;
-    const walletBalances = [];
-
-    for (const wallet of wallets) {
+    return await smartCacheManager.getOrFetch('wallet-analytics', cacheKey, async () => {
       try {
-        const balance = await this.connection.getBalance(new PublicKey(wallet.pubkey));
-        const solBalance = balance / LAMPORTS_PER_SOL;
-        totalSOL += solBalance;
-        walletBalances.push({
-          address: wallet.pubkey,
-          name: wallet.name,
-          balance: solBalance,
-          lastUpdated: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error(`Error getting balance for ${wallet.name}:`, error);
-        walletBalances.push({
-          address: wallet.pubkey,
-          name: wallet.name,
-          balance: 0,
-          error: error.message,
-          lastUpdated: new Date().toISOString()
-        });
-      }
-    }
+        const wallet = this.walletGroupManager.getWalletByPublicKey(walletAddress);
+        if (!wallet) {
+          throw new Error(`Wallet ${walletAddress} not found`);
+        }
 
+        // Get basic wallet info
+        const basicInfo = await this.getBasicWalletInfo(walletAddress);
+        
+        // Get trading history
+        const tradingHistory = tradeTracker.getWalletTrades(walletAddress, options.limit || 100);
+        
+        // Get P&L data
+        const pnlData = this.calculateWalletPnL(walletAddress, tradingHistory);
+        
+        // Get performance metrics
+        const performanceMetrics = this.calculatePerformanceMetrics(tradingHistory);
+        
+        // Get token holdings
+        const tokenHoldings = await this.getTokenHoldings(walletAddress);
+        
+        // Get risk metrics
+        const riskMetrics = this.calculateRiskMetrics(tradingHistory);
+        
+        // Get activity summary
+        const activitySummary = this.calculateActivitySummary(tradingHistory);
+
+        return {
+          wallet: {
+            address: walletAddress,
+            name: wallet.name,
+            groupId: wallet.groupId,
+            status: wallet.status,
+            createdAt: wallet.createdAt
+          },
+          basicInfo,
+          tradingHistory: tradingHistory.slice(0, options.limit || 50),
+          pnlData,
+          performanceMetrics,
+          tokenHoldings,
+          riskMetrics,
+          activitySummary,
+          lastUpdated: Date.now()
+        };
+      } catch (error) {
+        console.error(`❌ Error getting wallet analytics for ${walletAddress}:`, error.message);
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Get basic wallet information
+   */
+  async getBasicWalletInfo(walletAddress) {
+    try {
+      const publicKey = new PublicKey(walletAddress);
+      
+      // Get SOL balance
+      const solBalance = await this.rateLimitManager.makeRequest('solana-rpc', async () => {
+        const balance = await this.connection.getBalance(publicKey);
+        return balance / LAMPORTS_PER_SOL;
+      });
+
+      // Get account info
+      const accountInfo = await this.rateLimitManager.makeRequest('solana-rpc', async () => {
+        return await this.connection.getAccountInfo(publicKey);
+      });
+
+      return {
+        solBalance,
+        isExecutable: accountInfo?.executable || false,
+        owner: accountInfo?.owner?.toString(),
+        lamports: accountInfo?.lamports || 0,
+        dataLength: accountInfo?.data?.length || 0
+      };
+    } catch (error) {
+      console.error(`❌ Error getting basic wallet info for ${walletAddress}:`, error.message);
+      return {
+        solBalance: 0,
+        isExecutable: false,
+        owner: null,
+        lamports: 0,
+        dataLength: 0
+      };
+    }
+  }
+
+  /**
+   * Calculate wallet P&L
+   */
+  calculateWalletPnL(walletAddress, trades) {
+    const buyTrades = trades.filter(t => t.type === 'buy');
+    const sellTrades = trades.filter(t => t.type === 'sell');
+    
+    let totalSolSpent = 0;
+    let totalSolReceived = 0;
+    let totalTokensBought = 0;
+    let totalTokensSold = 0;
+    
+    for (const trade of buyTrades) {
+      totalSolSpent += trade.solAmount || 0;
+      totalTokensBought += trade.tokensReceived || 0;
+    }
+    
+    for (const trade of sellTrades) {
+      totalSolReceived += trade.solReceived || 0;
+      totalTokensSold += trade.tokensSold || 0;
+    }
+    
+    const netPnL = totalSolReceived - totalSolSpent;
+    const roi = totalSolSpent > 0 ? (netPnL / totalSolSpent) * 100 : 0;
+    
     return {
-      totalSOL,
-      averageSOL: wallets.length > 0 ? totalSOL / wallets.length : 0,
-      walletBalances
+      totalSolSpent,
+      totalSolReceived,
+      netPnL,
+      roi,
+      totalTokensBought,
+      totalTokensSold,
+      currentTokens: totalTokensBought - totalTokensSold,
+      totalTrades: trades.length,
+      buyTrades: buyTrades.length,
+      sellTrades: sellTrades.length
     };
   }
 
-  getRecentTradesForGroup(groupName, limit = 10) {
-    return this.performanceHistory.trades
-      .filter(trade => trade.groupName === groupName)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
-  }
-
-  calculateGroupPerformance(groupName) {
-    const trades = this.performanceHistory.trades.filter(trade => trade.groupName === groupName);
-    
+  /**
+   * Calculate performance metrics
+   */
+  calculatePerformanceMetrics(trades) {
     if (trades.length === 0) {
       return {
-        totalTrades: 0,
-        profitLoss: 0,
         winRate: 0,
-        avgTradeSize: 0
+        avgWin: 0,
+        avgLoss: 0,
+        profitFactor: 0,
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+        totalVolume: 0
       };
     }
 
-    const successfulTrades = trades.filter(trade => trade.success);
-    const avgTradeSize = trades.reduce((sum, trade) => sum + trade.amount, 0) / trades.length;
+    const sellTrades = trades.filter(t => t.type === 'sell');
+    const pnlValues = [];
+    let totalVolume = 0;
+    let totalWins = 0;
+    let totalLosses = 0;
+    let maxDrawdown = 0;
+    let peak = 0;
+    let currentPnL = 0;
+
+    for (const trade of trades) {
+      totalVolume += trade.usdValue || 0;
+      
+      if (trade.type === 'sell') {
+        const pnl = (trade.solReceived || 0) - (trade.solAmount || 0);
+        pnlValues.push(pnl);
+        currentPnL += pnl;
+        
+        if (pnl > 0) {
+          totalWins += pnl;
+        } else {
+          totalLosses += Math.abs(pnl);
+        }
+        
+        if (currentPnL > peak) {
+          peak = currentPnL;
+        }
+        
+        const drawdown = peak - currentPnL;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
+    }
+
+    const winRate = sellTrades.length > 0 ? (totalWins > 0 ? (totalWins / sellTrades.length) * 100 : 0) : 0;
+    const avgWin = totalWins > 0 ? totalWins / sellTrades.filter(t => (t.solReceived || 0) > (t.solAmount || 0)).length : 0;
+    const avgLoss = totalLosses > 0 ? totalLosses / sellTrades.filter(t => (t.solReceived || 0) < (t.solAmount || 0)).length : 0;
+    const profitFactor = totalLosses > 0 ? totalWins / totalLosses : 0;
+    
+    // Calculate Sharpe ratio (simplified)
+    const avgReturn = pnlValues.length > 0 ? pnlValues.reduce((a, b) => a + b, 0) / pnlValues.length : 0;
+    const variance = pnlValues.length > 1 ? pnlValues.reduce((sum, val) => sum + Math.pow(val - avgReturn, 2), 0) / (pnlValues.length - 1) : 0;
+    const sharpeRatio = variance > 0 ? avgReturn / Math.sqrt(variance) : 0;
+
+    return {
+      winRate,
+      avgWin,
+      avgLoss,
+      profitFactor,
+      sharpeRatio,
+      maxDrawdown,
+      totalVolume,
+      totalTrades: trades.length,
+      profitableTrades: sellTrades.filter(t => (t.solReceived || 0) > (t.solAmount || 0)).length
+    };
+  }
+
+  /**
+   * Get token holdings for wallet
+   */
+  async getTokenHoldings(walletAddress) {
+    try {
+      const publicKey = new PublicKey(walletAddress);
+      
+      // Get all token accounts
+      const tokenAccounts = await this.rateLimitManager.makeRequest('solana-rpc', async () => {
+        return await this.connection.getTokenAccountsByOwner(publicKey, {
+          programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+        });
+      });
+
+      const holdings = [];
+      
+      for (const account of tokenAccounts.value) {
+        try {
+          const balance = await this.connection.getTokenAccountBalance(account.pubkey);
+          const accountInfo = await this.connection.getParsedAccountInfo(account.pubkey);
+          
+          if (balance.value.uiAmount > 0) {
+            holdings.push({
+              mint: account.account.data.parsed.info.mint,
+              balance: balance.value.uiAmount,
+              decimals: balance.value.decimals,
+              amount: balance.value.amount,
+              owner: account.account.data.parsed.info.owner
+            });
+          }
+        } catch (error) {
+          // Skip invalid accounts
+        }
+      }
+
+      return holdings;
+    } catch (error) {
+      console.error(`❌ Error getting token holdings for ${walletAddress}:`, error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate risk metrics
+   */
+  calculateRiskMetrics(trades) {
+    if (trades.length === 0) {
+      return {
+        volatility: 0,
+        maxLoss: 0,
+        maxGain: 0,
+        riskScore: 0,
+        concentration: 0
+      };
+    }
+
+    const pnlValues = trades
+      .filter(t => t.type === 'sell')
+      .map(t => (t.solReceived || 0) - (t.solAmount || 0));
+
+    if (pnlValues.length === 0) {
+      return {
+        volatility: 0,
+        maxLoss: 0,
+        maxGain: 0,
+        riskScore: 0,
+        concentration: 0
+      };
+    }
+
+    const avgReturn = pnlValues.reduce((a, b) => a + b, 0) / pnlValues.length;
+    const variance = pnlValues.reduce((sum, val) => sum + Math.pow(val - avgReturn, 2), 0) / pnlValues.length;
+    const volatility = Math.sqrt(variance);
+    
+    const maxLoss = Math.min(...pnlValues);
+    const maxGain = Math.max(...pnlValues);
+    
+    // Risk score (0-100, higher = riskier)
+    const riskScore = Math.min(100, Math.max(0, (volatility * 10) + (Math.abs(maxLoss) * 5)));
+    
+    // Concentration (based on token diversity)
+    const tokenCounts = {};
+    for (const trade of trades) {
+      tokenCounts[trade.tokenMint] = (tokenCounts[trade.tokenMint] || 0) + 1;
+    }
+    const totalTrades = trades.length;
+    const maxTokenTrades = Math.max(...Object.values(tokenCounts));
+    const concentration = totalTrades > 0 ? (maxTokenTrades / totalTrades) * 100 : 0;
+
+    return {
+      volatility,
+      maxLoss,
+      maxGain,
+      riskScore,
+      concentration,
+      tokenDiversity: Object.keys(tokenCounts).length
+    };
+  }
+
+  /**
+   * Calculate activity summary
+   */
+  calculateActivitySummary(trades) {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const oneWeek = 7 * oneDay;
+    const oneMonth = 30 * oneDay;
+
+    const recentTrades = trades.filter(t => now - t.timestamp < oneDay);
+    const weeklyTrades = trades.filter(t => now - t.timestamp < oneWeek);
+    const monthlyTrades = trades.filter(t => now - t.timestamp < oneMonth);
+
+    const buyTrades = trades.filter(t => t.type === 'buy');
+    const sellTrades = trades.filter(t => t.type === 'sell');
 
     return {
       totalTrades: trades.length,
-      winRate: (successfulTrades.length / trades.length * 100).toFixed(2) + '%',
-      avgTradeSize: avgTradeSize.toFixed(6),
-      lastTradeTime: trades[0]?.timestamp
+      recentTrades: recentTrades.length,
+      weeklyTrades: weeklyTrades.length,
+      monthlyTrades: monthlyTrades.length,
+      buyTrades: buyTrades.length,
+      sellTrades: sellTrades.length,
+      firstTrade: trades.length > 0 ? Math.min(...trades.map(t => t.timestamp)) : null,
+      lastTrade: trades.length > 0 ? Math.max(...trades.map(t => t.timestamp)) : null,
+      avgTradesPerDay: monthlyTrades.length / 30,
+      mostActiveToken: this.getMostActiveToken(trades),
+      tradingSources: this.getTradingSources(trades)
     };
   }
 
-  // ===========================================
-  // SYSTEM-WIDE ANALYTICS
-  // ===========================================
-
-  async getSystemAnalytics() {
-    const allGroups = Object.keys(this.walletGroupManager.groupsConfig);
-    const systemStats = {
-      totalGroups: allGroups.length,
-      totalWallets: 0,
-      totalBalance: 0,
-      groupAnalytics: {},
-      systemMetrics: {
-        totalTrades: this.performanceHistory.trades.length,
-        successfulTrades: this.performanceHistory.trades.filter(t => t.success).length,
-        failedTrades: this.performanceHistory.trades.filter(t => !t.success).length,
-        totalVolume: this.performanceHistory.trades.reduce((sum, t) => sum + (t.success ? t.amount : 0), 0)
-      }
-    };
-
-    // Get analytics for each group
-    for (const groupName of allGroups) {
-      try {
-        const groupAnalytics = await this.getGroupAnalytics(groupName);
-        systemStats.groupAnalytics[groupName] = groupAnalytics;
-        systemStats.totalWallets += groupAnalytics.walletCount;
-        systemStats.totalBalance += groupAnalytics.totalBalance;
-      } catch (error) {
-        console.error(`Error getting analytics for group ${groupName}:`, error);
-      }
+  /**
+   * Get most active token
+   */
+  getMostActiveToken(trades) {
+    const tokenCounts = {};
+    for (const trade of trades) {
+      tokenCounts[trade.tokenMint] = (tokenCounts[trade.tokenMint] || 0) + 1;
     }
 
-    return systemStats;
+    const mostActive = Object.entries(tokenCounts)
+      .sort(([,a], [,b]) => b - a)[0];
+
+    return mostActive ? {
+      tokenMint: mostActive[0],
+      tradeCount: mostActive[1]
+    } : null;
   }
 
-  // ===========================================
-  // REPORTING
-  // ===========================================
+  /**
+   * Get trading sources
+   */
+  getTradingSources(trades) {
+    const sourceCounts = {};
+    for (const trade of trades) {
+      sourceCounts[trade.source] = (sourceCounts[trade.source] || 0) + 1;
+    }
 
-  generatePerformanceReport(groupName = null) {
-    const report = {
-      generatedAt: new Date().toISOString(),
-      reportType: groupName ? 'Group Report' : 'System Report'
-    };
+    return Object.entries(sourceCounts)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+  }
 
-    if (groupName) {
-      // Group-specific report
-      const groupMetrics = this.performanceHistory.groups[groupName];
-      const recentTrades = this.getRecentTradesForGroup(groupName, 50);
-      
-      report.groupName = groupName;
-      report.metrics = groupMetrics;
-      report.recentActivity = recentTrades;
-      report.summary = this.generateGroupSummary(groupName);
-    } else {
-      // System-wide report
-      report.systemMetrics = {
-        totalTrades: this.performanceHistory.trades.length,
-        totalGroups: Object.keys(this.performanceHistory.groups).length,
-        totalWallets: Object.keys(this.performanceHistory.wallets).length
+  /**
+   * Get group analytics
+   */
+  async getGroupAnalytics(groupId, options = {}) {
+    try {
+      const group = this.walletGroupManager.getGroup(groupId);
+      if (!group) {
+        throw new Error(`Group ${groupId} not found`);
+      }
+
+      const walletAnalytics = await Promise.all(
+        group.wallets.map(wallet => 
+          this.getWalletAnalytics(wallet.publicKey, options)
+        )
+      );
+
+      // Aggregate group metrics
+      const groupMetrics = this.aggregateGroupMetrics(walletAnalytics);
+
+      return {
+        groupId,
+        groupName: group.name,
+        walletCount: group.wallets.length,
+        walletAnalytics,
+        groupMetrics,
+        lastUpdated: Date.now()
       };
-      report.groupSummaries = {};
+    } catch (error) {
+      console.error(`❌ Error getting group analytics for ${groupId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggregate group metrics
+   */
+  aggregateGroupMetrics(walletAnalytics) {
+    const totalWallets = walletAnalytics.length;
+    const activeWallets = walletAnalytics.filter(w => w.basicInfo.solBalance > 0).length;
+
+    let totalPnL = 0;
+    let totalVolume = 0;
+    let totalTrades = 0;
+    let totalWins = 0;
+    let totalLosses = 0;
+
+    for (const wallet of walletAnalytics) {
+      totalPnL += wallet.pnlData.netPnL;
+      totalVolume += wallet.performanceMetrics.totalVolume;
+      totalTrades += wallet.pnlData.totalTrades;
+      totalWins += wallet.performanceMetrics.avgWin * wallet.pnlData.buyTrades;
+      totalLosses += wallet.performanceMetrics.avgLoss * wallet.pnlData.sellTrades;
+    }
+
+    const avgPnL = totalWallets > 0 ? totalPnL / totalWallets : 0;
+    const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+
+    return {
+      totalWallets,
+      activeWallets,
+      totalPnL,
+      avgPnL,
+      totalVolume,
+      totalTrades,
+      winRate,
+      avgTradesPerWallet: totalWallets > 0 ? totalTrades / totalWallets : 0
+    };
+  }
+
+  /**
+   * Get top performing wallets
+   */
+  getTopPerformingWallets(limit = 10) {
+    const allWallets = this.walletGroupManager.getAllWallets();
+    const walletPerformance = [];
+
+    for (const wallet of allWallets) {
+      const trades = tradeTracker.getWalletTrades(wallet.publicKey);
+      const pnlData = this.calculateWalletPnL(wallet.publicKey, trades);
       
-      Object.keys(this.performanceHistory.groups).forEach(group => {
-        report.groupSummaries[group] = this.generateGroupSummary(group);
+      walletPerformance.push({
+        wallet: wallet.publicKey,
+        name: wallet.name,
+        groupId: wallet.groupId,
+        netPnL: pnlData.netPnL,
+        roi: pnlData.roi,
+        totalTrades: pnlData.totalTrades
       });
     }
 
-    return report;
+    return walletPerformance
+      .sort((a, b) => b.netPnL - a.netPnL)
+      .slice(0, limit);
   }
 
-  generateGroupSummary(groupName) {
-    const metrics = this.performanceHistory.groups[groupName];
-    if (!metrics) return null;
+  /**
+   * Get performance comparison
+   */
+  getPerformanceComparison(walletAddresses) {
+    const comparisons = [];
 
-    return {
-      totalTrades: metrics.totalTrades,
-      successRate: metrics.totalTrades > 0 ? ((metrics.successfulTrades / metrics.totalTrades) * 100).toFixed(2) + '%' : '0%',
-      totalVolume: metrics.totalVolume.toFixed(6),
-      lastActivity: metrics.lastActivity,
-      status: this.determineGroupStatus(groupName)
-    };
-  }
+    for (const walletAddress of walletAddresses) {
+      const trades = tradeTracker.getWalletTrades(walletAddress);
+      const pnlData = this.calculateWalletPnL(walletAddress, trades);
+      const performanceMetrics = this.calculatePerformanceMetrics(trades);
 
-  determineGroupStatus(groupName) {
-    const metrics = this.performanceHistory.groups[groupName];
-    if (!metrics || !metrics.lastActivity) return 'inactive';
-    
-    const lastActivity = new Date(metrics.lastActivity);
-    const now = new Date();
-    const hoursSinceActivity = (now - lastActivity) / (1000 * 60 * 60);
-    
-    if (hoursSinceActivity < 1) return 'very_active';
-    if (hoursSinceActivity < 24) return 'active';
-    if (hoursSinceActivity < 168) return 'moderate';
-    return 'inactive';
-  }
-
-  // ===========================================
-  // UTILITY FUNCTIONS
-  // ===========================================
-
-  generateTradeId() {
-    return `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  createEmptyGroupMetrics() {
-    return {
-      totalTrades: 0,
-      successfulTrades: 0,
-      failedTrades: 0,
-      totalVolume: 0,
-      averageExecutionTime: 0,
-      lastActivity: null
-    };
-  }
-
-  // Export analytics data
-  exportAnalytics(format = 'json') {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `wallet-analytics-${timestamp}.${format}`;
-    
-    if (format === 'json') {
-      const data = {
-        exportedAt: new Date().toISOString(),
-        performanceHistory: this.performanceHistory,
-        systemStats: this.getSystemAnalytics()
-      };
-      fs.writeFileSync(filename, JSON.stringify(data, null, 2));
-    } else if (format === 'csv') {
-      // Convert trades to CSV format
-      const csvHeaders = 'Timestamp,Group,Wallet,Operation,Token,Amount,Success,TxSignature\n';
-      const csvData = this.performanceHistory.trades.map(trade => 
-        `${trade.timestamp},${trade.groupName},${trade.walletAddress},${trade.operation},${trade.tokenAddress},${trade.amount},${trade.success},${trade.txSignature || ''}`
-      ).join('\n');
-      fs.writeFileSync(filename, csvHeaders + csvData);
+      comparisons.push({
+        wallet: walletAddress,
+        netPnL: pnlData.netPnL,
+        roi: pnlData.roi,
+        totalTrades: pnlData.totalTrades,
+        winRate: performanceMetrics.winRate,
+        avgWin: performanceMetrics.avgWin,
+        avgLoss: performanceMetrics.avgLoss
+      });
     }
 
-    return filename;
+    return comparisons.sort((a, b) => b.netPnL - a.netPnL);
+  }
+
+  /**
+   * Export analytics data
+   */
+  exportAnalytics(walletAddresses, format = 'json') {
+    const data = walletAddresses.map(address => {
+      const trades = tradeTracker.getWalletTrades(address);
+      return {
+        wallet: address,
+        pnlData: this.calculateWalletPnL(address, trades),
+        performanceMetrics: this.calculatePerformanceMetrics(trades),
+        activitySummary: this.calculateActivitySummary(trades)
+      };
+    });
+
+    if (format === 'csv') {
+      const csv = [
+        ['Wallet', 'Net P&L', 'ROI', 'Total Trades', 'Win Rate', 'Avg Win', 'Avg Loss'],
+        ...data.map(d => [
+          d.wallet,
+          d.pnlData.netPnL.toFixed(6),
+          d.pnlData.roi.toFixed(2),
+          d.pnlData.totalTrades,
+          d.performanceMetrics.winRate.toFixed(2),
+          d.performanceMetrics.avgWin.toFixed(6),
+          d.performanceMetrics.avgLoss.toFixed(6)
+        ])
+      ].map(row => row.join(',')).join('\n');
+      
+      return csv;
+    }
+
+    return data;
   }
 }
 

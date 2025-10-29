@@ -423,12 +423,22 @@ function switchView(viewName) {
 
 // Token Launch with Automations
 let pumpFunTrading;
+let multiWalletManager;
 
 // Initialize PumpFun Trading
 function initializePumpFun() {
     if (!pumpFunTrading && solana) {
         pumpFunTrading = new PumpFunTrading(solana);
         console.log('✅ PumpFun Trading initialized');
+    }
+}
+
+// Initialize Multi-Wallet Manager
+function initializeMultiWallet() {
+    if (!multiWalletManager && solana) {
+        multiWalletManager = new MultiWalletManager(solana);
+        multiWalletManager.loadBlueprints();
+        console.log('✅ Multi-Wallet Manager initialized');
     }
 }
 
@@ -605,6 +615,119 @@ function stopAutomation(botId) {
     }
 }
 
+// ==================== BLUEPRINT FUNCTIONS ====================
+
+// Create blueprint
+async function createBlueprint(type) {
+    initializeMultiWallet();
+    
+    const name = prompt('Blueprint Name:');
+    if (!name) return;
+    
+    const blueprint = multiWalletManager.createBlueprint({
+        name,
+        type,
+        wallets: solana.wallets || [],
+        settings: {
+            // Default settings based on type
+            tokenMint: '',
+            buyAmount: 0.01,
+            slippage: 1,
+            cycles: 10,
+            sellDelay: 30
+        }
+    });
+    
+    addConsoleLog(`✅ Blueprint created: ${blueprint.name}`, 'success');
+    alert(`Blueprint "${name}" created successfully!`);
+}
+
+// Execute blueprint
+async function executeBlueprint(blueprintId) {
+    initializeMultiWallet();
+    
+    addConsoleLog(`🚀 Executing blueprint: ${blueprintId}`, 'info');
+    
+    const result = await multiWalletManager.executeBlueprint(blueprintId);
+    
+    if (result.success) {
+        addConsoleLog(`✅ ${result.message}`, 'success');
+    } else {
+        addConsoleLog(`❌ Blueprint failed: ${result.error}`, 'error');
+    }
+}
+
+// Stop blueprint
+function stopBlueprint(blueprintId) {
+    if (multiWalletManager) {
+        multiWalletManager.stopBlueprint(blueprintId);
+        addConsoleLog(`🛑 Blueprint stopped: ${blueprintId}`, 'info');
+    }
+}
+
+// ==================== FEE COLLECTION FUNCTIONS ====================
+
+// Collect all fees
+async function collectAllFees() {
+    initializeMultiWallet();
+    
+    if (!solana.wallets || solana.wallets.length === 0) {
+        addConsoleLog('❌ No wallets found!', 'error');
+        alert('No wallets to collect from. Add wallets first.');
+        return;
+    }
+    
+    // Ask for target wallet
+    const targetWallet = prompt('Enter target wallet address to collect fees to:');
+    if (!targetWallet) return;
+    
+    // Confirm
+    const confirm = window.confirm(
+        `Collect SOL from ${solana.wallets.length} wallets to ${targetWallet}?\n\nThis will transfer all available SOL (minus rent) to the target wallet.`
+    );
+    
+    if (!confirm) return;
+    
+    addConsoleLog('💎 Starting fee collection...', 'info');
+    
+    const result = await multiWalletManager.collectFees(targetWallet);
+    
+    if (result.success) {
+        addConsoleLog(`✅ Fee collection complete!`, 'success');
+        addConsoleLog(`   Total collected: ${result.totalCollected.toFixed(4)} SOL`, 'success');
+        addConsoleLog(`   Wallets processed: ${result.walletsProcessed}`, 'info');
+        addConsoleLog(`   Successful: ${result.successful}`, 'info');
+        
+        alert(`✅ Collected ${result.totalCollected.toFixed(4)} SOL from ${result.successful} wallets!`);
+        
+        // Refresh wallets
+        await loadRealData();
+    } else {
+        addConsoleLog(`❌ Fee collection failed: ${result.error}`, 'error');
+        alert(`Fee collection failed: ${result.error}`);
+    }
+}
+
+// Collect trading fees
+async function collectTradingFees() {
+    addConsoleLog('💰 Collecting trading fees...', 'info');
+    // TODO: Implement specific trading fee collection
+    await collectAllFees();
+}
+
+// Collect rent fees
+async function collectRentFees() {
+    addConsoleLog('🏠 Collecting rent fees...', 'info');
+    // TODO: Implement specific rent fee collection
+    await collectAllFees();
+}
+
+// Toggle auto-collect
+function toggleAutoCollect() {
+    addConsoleLog('⚙️ Auto-collect feature coming soon', 'info');
+    // TODO: Implement auto-collect scheduling
+}
+
 // Export functions for inline onclick handlers
 window.connectWalletHandler = connectWalletHandler;
 window.createNewWallet = createNewWallet;
@@ -619,6 +742,13 @@ window.toggleVolumeBotConfig = toggleVolumeBotConfig;
 window.executeCreateAndLaunchToken = executeCreateAndLaunchToken;
 window.viewActiveAutomations = viewActiveAutomations;
 window.stopAutomation = stopAutomation;
+window.createBlueprint = createBlueprint;
+window.executeBlueprint = executeBlueprint;
+window.stopBlueprint = stopBlueprint;
+window.collectAllFees = collectAllFees;
+window.collectTradingFees = collectTradingFees;
+window.collectRentFees = collectRentFees;
+window.toggleAutoCollect = toggleAutoCollect;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 

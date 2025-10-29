@@ -147,6 +147,37 @@
         .floating-window.minimized .floating-window-footer {
             display: none;
         }
+
+        /* Method Selection Buttons */
+        .method-btn {
+            flex: 1;
+            padding: 8px 16px;
+            border: 1px solid #404040;
+            background-color: #1a1a1a;
+            color: #999;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .method-btn:hover {
+            background-color: #2a2a2a;
+            color: #fff;
+            border-color: #555;
+        }
+
+        .method-btn.active {
+            background-color: #7c3aed;
+            color: #fff;
+            border-color: #7c3aed;
+        }
+
+        .method-btn.active:hover {
+            background-color: #8b5cf6;
+            border-color: #8b5cf6;
+        }
     </style>
 </head>
 <body class="flex h-screen bg-black text-gray-200 font-sans">
@@ -1685,8 +1716,11 @@
                 </div>
                 <div class="floating-window-body">
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="volume-task-name" value="Volume Generation" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <label class="block mb-2 text-sm font-medium">Method</label>
+                        <div class="flex gap-2">
+                            <button id="volume-method-jito" class="method-btn active" onclick="selectMethod('volume', 'jito')">Jito</button>
+                            <button id="volume-method-rpc" class="method-btn" onclick="selectMethod('volume', 'rpc')">RPC</button>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-3 mb-4">
@@ -1748,8 +1782,11 @@
                 </div>
                 <div class="floating-window-body">
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="bulk-sell-task-name" value="Bulk Sell" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <label class="block mb-2 text-sm font-medium">Method</label>
+                        <div class="flex gap-2">
+                            <button id="bulk-sell-method-jito" class="method-btn active" onclick="selectMethod('bulk-sell', 'jito')">Jito</button>
+                            <button id="bulk-sell-method-rpc" class="method-btn" onclick="selectMethod('bulk-sell', 'rpc')">RPC</button>
+                        </div>
                     </div>
                     
                     <div class="mb-4">
@@ -1806,8 +1843,11 @@
                 </div>
                 <div class="floating-window-body">
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="bump-task-name" value="Bump" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <label class="block mb-2 text-sm font-medium">Method</label>
+                        <div class="flex gap-2">
+                            <button id="bump-method-jito" class="method-btn active" onclick="selectMethod('bump', 'jito')">Jito</button>
+                            <button id="bump-method-rpc" class="method-btn" onclick="selectMethod('bump', 'rpc')">RPC</button>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-3 mb-4">
@@ -1869,8 +1909,11 @@
                 </div>
                 <div class="floating-window-body">
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="sell-buyback-task-name" value="Sell/Buyback" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <label class="block mb-2 text-sm font-medium">Method</label>
+                        <div class="flex gap-2">
+                            <button id="sell-buyback-method-jito" class="method-btn active" onclick="selectMethod('sell-buyback', 'jito')">Jito</button>
+                            <button id="sell-buyback-method-rpc" class="method-btn" onclick="selectMethod('sell-buyback', 'rpc')">RPC</button>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-3 mb-4">
@@ -3583,118 +3626,122 @@
         }
 
         function executeAddVolumeTask() {
-            const taskName = document.getElementById('volume-task-name').value;
+            const method = getSelectedMethod('volume');
             const minAmount = document.getElementById('volume-min-amount').value;
             const maxAmount = document.getElementById('volume-max-amount').value;
             const minDelay = document.getElementById('volume-min-delay').value;
             const maxDelay = document.getElementById('volume-max-delay').value;
             
-            if (!taskName || !minAmount || !maxAmount) {
+            if (!minAmount || !maxAmount) {
                 showToast('Please fill in all required fields', 'error');
                 return;
             }
             
             const task = {
                 id: 'volume-' + Date.now(),
-                name: taskName,
+                name: `Volume Generation (${method.toUpperCase()})`,
                 type: 'Volume Generation',
+                method: method,
                 status: 'Running',
                 icon: 'activity',
                 color: 'blue',
-                details: `Min: ${minAmount} SOL • Max: ${maxAmount} SOL • Delay: ${minDelay}-${maxDelay}s`,
+                details: `Method: ${method.toUpperCase()} • Min: ${minAmount} SOL • Max: ${maxAmount} SOL • Delay: ${minDelay}-${maxDelay}s`,
                 wallets: '2/5 wallets'
             };
             
             addTaskToList(task);
             closeFloatingWindow('add-volume-window');
-            showToast(`Started ${taskName} task`, 'success');
-            addConsoleLog(`Volume task started: ${taskName}`, 'success');
+            showToast(`Started Volume Generation (${method.toUpperCase()}) task`, 'success');
+            addConsoleLog(`Volume task started: ${method.toUpperCase()}`, 'success');
         }
 
         function executeBulkSellTask() {
-            const taskName = document.getElementById('bulk-sell-task-name').value;
+            const method = getSelectedMethod('bulk-sell');
             const percentage = document.getElementById('bulk-sell-percentage').value;
             const minAmount = document.getElementById('bulk-sell-min-amount').value;
             const maxAmount = document.getElementById('bulk-sell-max-amount').value;
             
-            if (!taskName || !percentage || !minAmount || !maxAmount) {
+            if (!percentage || !minAmount || !maxAmount) {
                 showToast('Please fill in all required fields', 'error');
                 return;
             }
             
             const task = {
                 id: 'bulk-sell-' + Date.now(),
-                name: taskName,
+                name: `Bulk Sell (${method.toUpperCase()})`,
                 type: 'Bulk Sell',
+                method: method,
                 status: 'Queued',
                 icon: 'trash-2',
                 color: 'red',
-                details: `Sell ${percentage}% • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
+                details: `Method: ${method.toUpperCase()} • Sell ${percentage}% • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
                 wallets: '3 wallets'
             };
             
             addTaskToList(task);
             closeFloatingWindow('bulk-sell-window');
-            showToast(`Started ${taskName} task`, 'success');
-            addConsoleLog(`Bulk sell task started: ${taskName}`, 'success');
+            showToast(`Started Bulk Sell (${method.toUpperCase()}) task`, 'success');
+            addConsoleLog(`Bulk sell task started: ${method.toUpperCase()}`, 'success');
         }
 
         function executeBumpTask() {
-            const taskName = document.getElementById('bump-task-name').value;
+            const method = getSelectedMethod('bump');
             const amount = document.getElementById('bump-amount').value;
             const count = document.getElementById('bump-count').value;
             const minDelay = document.getElementById('bump-min-delay').value;
             const maxDelay = document.getElementById('bump-max-delay').value;
             
-            if (!taskName || !amount || !count) {
+            if (!amount || !count) {
                 showToast('Please fill in all required fields', 'error');
                 return;
             }
             
             const task = {
                 id: 'bump-' + Date.now(),
-                name: taskName,
+                name: `Bump (${method.toUpperCase()})`,
                 type: 'Bump',
+                method: method,
                 status: 'Running',
                 icon: 'trending-up',
                 color: 'orange',
-                details: `Amount: ${amount} SOL • Count: ${count} • Delay: ${minDelay}-${maxDelay}s`,
+                details: `Method: ${method.toUpperCase()} • Amount: ${amount} SOL • Count: ${count} • Delay: ${minDelay}-${maxDelay}s`,
                 wallets: '2 wallets'
             };
             
             addTaskToList(task);
             closeFloatingWindow('bump-window');
-            showToast(`Started ${taskName} task`, 'success');
-            addConsoleLog(`Bump task started: ${taskName}`, 'success');
+            showToast(`Started Bump (${method.toUpperCase()}) task`, 'success');
+            addConsoleLog(`Bump task started: ${method.toUpperCase()}`, 'success');
         }
 
         function executeSellBuybackTask() {
-            const taskName = document.getElementById('sell-buyback-task-name').value;
+            const method = getSelectedMethod('sell-buyback');
             const sellPercentage = document.getElementById('sell-buyback-sell-percentage').value;
             const delay = document.getElementById('sell-buyback-delay').value;
             const minAmount = document.getElementById('sell-buyback-min-amount').value;
             const maxAmount = document.getElementById('sell-buyback-max-amount').value;
             
-            if (!taskName || !sellPercentage || !delay || !minAmount || !maxAmount) {
+            if (!sellPercentage || !delay || !minAmount || !maxAmount) {
                 showToast('Please fill in all required fields', 'error');
                 return;
             }
             
             const task = {
                 id: 'sell-buyback-' + Date.now(),
-                name: taskName,
+                name: `Sell/Buyback (${method.toUpperCase()})`,
                 type: 'Sell/Buyback',
+                method: method,
                 status: 'Running',
                 icon: 'refresh-cw',
                 color: 'blue',
-                details: `Sell ${sellPercentage}% • Delay: ${delay}s • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
+                details: `Method: ${method.toUpperCase()} • Sell ${sellPercentage}% • Delay: ${delay}s • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
                 wallets: '2 wallets'
             };
             
             addTaskToList(task);
             closeFloatingWindow('sell-buyback-window');
-            showToast(`Started ${taskName} task`, 'success');
-            addConsoleLog(`Sell/Buyback task started: ${taskName}`, 'success');
+            showToast(`Started Sell/Buyback (${method.toUpperCase()}) task`, 'success');
+            addConsoleLog(`Sell/Buyback task started: ${method.toUpperCase()}`, 'success');
         }
 
         function addTaskToList(task) {
@@ -3760,6 +3807,30 @@
             updateTasksList();
             showToast('Task cancelled', 'info');
             addConsoleLog(`Task cancelled: ${taskId}`, 'info');
+        }
+
+        // Method Selection Functions
+        function selectMethod(taskType, method) {
+            // Remove active class from both buttons
+            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+            const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
+            
+            jitoBtn.classList.remove('active');
+            rpcBtn.classList.remove('active');
+            
+            // Add active class to selected button
+            if (method === 'jito') {
+                jitoBtn.classList.add('active');
+            } else {
+                rpcBtn.classList.add('active');
+            }
+            
+            addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
+        }
+
+        function getSelectedMethod(taskType) {
+            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+            return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
         }
 
         // Floating Window Management Functions

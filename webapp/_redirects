@@ -1,4 +1,10 @@
-# Netlify redirects
-/dashboard  /dashboard.html  200
-/*          /index.html       404
+# API redirects
+/api/* /.netlify/functions/:splat 200
 
+# Main redirect
+/ /index.html 200
+
+# Specific file redirects
+/debug /debug.html 200
+/simple-selector /simple-selector.html 200
+/production /production-trading-platform.html 200

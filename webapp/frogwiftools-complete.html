@@ -2761,36 +2761,406 @@
 
         <div id="settings-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <h1 class="text-2xl font-semibold">Settings</h1>
+                <div class="flex items-center gap-3">
+                    <i data-lucide="settings" class="w-8 h-8"></i>
+                    <h1 class="text-2xl font-semibold">Settings</h1>
+                </div>
             </div>
-            <div class="flex-1 p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <h3 class="text-lg font-semibold mb-4">RPC Configuration</h3>
-                        <div class="space-y-4">
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-4xl space-y-8">
+                    <!-- Solana Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Solana</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure your Solana settings. Make sure to use a private RPC endpoint that will not rate limit you. Do not use the default RPC.
+                            </p>
+                            <button class="mt-3 bg-red-900 hover:bg-red-800 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2">
+                                <span>🚨</span>
+                                <span class="font-semibold">SHYFT Free Trial</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">RPC URL</label>
-                                <input type="text" value="https://rpc.ankr.com/solana/..." class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                                <label class="block mb-2 text-sm font-medium">Solana RPC HTTP Endpoint</label>
+                                <input
+                                    type="text"
+                                    value="https://rpc.va.shyft.to?api_key=<key here>"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">The HTTP endpoint URL for your Solana RPC.</p>
                             </div>
+
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">WebSocket URL</label>
-                                <input type="text" value="wss://rpc.ankr.com/solana/..." class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                                <label class="block mb-2 text-sm font-medium">Solana RPC Websocket Endpoint</label>
+                                <input
+                                    type="text"
+                                    value="wss://rpc.va.shyft.to?api_key=<key here>"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">The WebSocket endpoint URL for your Solana RPC.</p>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
-                        <h3 class="text-lg font-semibold mb-4">Trading Settings</h3>
-                        <div class="space-y-4">
+
+                        <div class="mt-6 flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                id="skipPreflight"
+                                class="rounded"
+                            />
+                            <label for="skipPreflight" class="text-sm cursor-pointer">Skip Preflight</label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1 ml-6">
+                            Skip preflight checks before sending transactions. This can speed up transaction sending but may result in failed transactions. Some RPCs do not support preflight checks.
+                        </p>
+
+                        <div class="mt-6">
+                            <label class="block mb-2 text-sm font-medium">Priority Fee</label>
+                            <input
+                                type="number"
+                                value="0.0005"
+                                step="0.0001"
+                                class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">The priority fee (SOL) for transactions. If you set this too low transactions may not land.</p>
+                        </div>
+                    </section>
+
+                    <!-- Jito Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Jito</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure your Jito settings. Jito is used for token launches and all buys and sells (individual and bundle).
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Default Slippage</label>
-                                <input type="number" value="5" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Max Gas Price</label>
-                                <input type="number" value="5000" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                                <label class="block mb-2 text-sm font-medium">Jito Location</label>
+                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                    <option>New York</option>
+                                    <option>Amsterdam</option>
+                                    <option>Frankfurt</option>
+                                    <option>Tokyo</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    The Jito location for validating transactions. Select the closest location to you for optimal performance.
+                                </p>
                             </div>
                         </div>
+
+                        <div class="grid grid-cols-2 gap-6 mt-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Jito Bundle Max Tip</label>
+                                <input
+                                    type="number"
+                                    value="0.001"
+                                    step="0.0001"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    The maximum allowed tip (SOL) for Jito bundles. If you set this too low bundles may not land.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Jito Transaction Max Tip</label>
+                                <input
+                                    type="number"
+                                    value="0.001"
+                                    step="0.0001"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    The maximum allowed tip (SOL) for Jito transactions. If you set this too low transactions may not land.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block mb-2 text-sm font-medium">Jito Forwarder</label>
+                            <select class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                <option>Astralane</option>
+                                <option>Direct</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Choose an optional Jito forwarder for optimal performance.</p>
+                        </div>
+                    </section>
+
+                    <!-- Astralane Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Astralane</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure your Astralane settings. Astralane is a Jito forwarder that optimizes for speed and fees.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Astralane Location</label>
+                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                    <option>New York</option>
+                                    <option>Amsterdam</option>
+                                    <option>Frankfurt</option>
+                                    <option>Tokyo</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    The Astralane location for sending transactions. Select the closest location to you for optimal performance.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Astralane API Key</label>
+                                <input
+                                    type="text"
+                                    placeholder="Optional"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Optionally provide your API key for Astralane. This is not required, but it can improve performance and reliability since you won't have to share the rate limit with other users.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6 mt-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Astralane Min Priority Fee</label>
+                                <input
+                                    type="number"
+                                    value="0.0001"
+                                    step="0.0001"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">The min priority fee (SOL) for Astralane transactions.</p>
+                            </div>
+
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Astralane Max Priority Fee</label>
+                                <input
+                                    type="number"
+                                    value="0.0005"
+                                    step="0.0001"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">The max priority fee (SOL) for Astralane transactions.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Proxies Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Proxies</h2>
+                            <p class="text-sm text-gray-400">Proxies are not required.</p>
+                        </div>
+
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Proxy Endpoints</label>
+                            <textarea
+                                rows="4"
+                                placeholder="host:port:username:password"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 font-mono"
+                            ></textarea>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Add each proxy in the format: host:port:username:password. Separate each proxy with a new line.
+                            </p>
+                        </div>
+                    </section>
+
+                    <!-- Launchpad Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Launchpad</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure your slippage settings for buys and sells for tokens that have not yet bonded, and are still on the launchpad (Pump.fun, Bonk, etc.).
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
+                                <input
+                                    type="number"
+                                    value="20"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Allowed slippage for launchpad buy orders (i.e. 50 = 50% slippage). If you set this too low, orders may not fill due to price volatility.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
+                                <input
+                                    type="number"
+                                    value="20"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Allowed slippage for launchpad sell orders (i.e. 50 = 50% slippage). If you set this too low, orders may not fill due to price volatility.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- DEX Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">DEX</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure your slippage settings for buys and sells on decentralized exchanges after your token has bonded and migrated (Pumpswap, Raydium, etc.).
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
+                                <input
+                                    type="number"
+                                    value="5"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Allowed slippage for DEX buy orders (i.e. 5 = 5% slippage). You typically want this to be set low because you need to have x + (x * slippage) to fill the order.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
+                                <input
+                                    type="number"
+                                    value="50"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-1">Allowed slippage for DEX sell orders (i.e. 50 = 50% slippage).</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Customization Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Customization</h2>
+                            <p class="text-sm text-gray-400">Customize your experience to help you launch better and faster.</p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-3 text-sm font-medium">Default Executor</label>
+                            <div class="flex gap-3">
+                                <button id="default-executor-jito" class="px-4 py-2 rounded text-sm font-medium transition bg-purple-700 text-white" onclick="selectDefaultExecutor('jito')">
+                                    Jito
+                                </button>
+                                <button id="default-executor-rpc" class="px-4 py-2 rounded text-sm font-medium transition bg-neutral-800 text-gray-300 hover:bg-neutral-700" onclick="selectDefaultExecutor('rpc')">
+                                    RPC
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Choose the default transaction executor. You can override this on a per-task basis.
+                            </p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-3 text-sm font-medium">Quick Buy Options</label>
+                            <div class="flex gap-3">
+                                <input
+                                    type="number"
+                                    value="0.1"
+                                    step="0.1"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <input
+                                    type="number"
+                                    value="0.5"
+                                    step="0.1"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <input
+                                    type="number"
+                                    value="1"
+                                    step="0.1"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Customize the quick buy options on the token holdings menu.</p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-3 text-sm font-medium">Quick Sell Options</label>
+                            <div class="flex gap-3">
+                                <input
+                                    type="number"
+                                    value="25"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <input
+                                    type="number"
+                                    value="50"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <input
+                                    type="number"
+                                    value="100"
+                                    class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Customize the quick sell options on the token holdings menu.</p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-3 text-sm font-medium">Automatically Open Links On Launch</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">Solscan</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">Axiom</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">GMGN</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">Pumpfun</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">Raydium</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="rounded" />
+                                    <span class="text-sm">Bonk</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Select which links to automatically open in your default browser after every token launch.
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-3 mb-6">
+                            <input
+                                type="checkbox"
+                                id="hideAddresses"
+                                class="rounded"
+                            />
+                            <label for="hideAddresses" class="text-sm cursor-pointer">Hide Addresses</label>
+                        </div>
+                        <p class="text-xs text-gray-500 -mt-3 ml-6">
+                            Hide wallet addresses across the application. This is good when you are screen sharing/recording.
+                        </p>
+                    </section>
+
+                    <!-- Save Button -->
+                    <div class="pb-8">
+                        <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="saveSettings()">
+                            Save
+                        </button>
                     </div>
                 </div>
             </div>
@@ -3805,29 +4175,117 @@
             addConsoleLog(`Task cancelled: ${taskId}`, 'info');
         }
 
-        // Method Selection Functions
-        function selectMethod(taskType, method) {
-            // Remove active class from both buttons
-            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
-            const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
-            
-            jitoBtn.classList.remove('active');
-            rpcBtn.classList.remove('active');
-            
-            // Add active class to selected button
-            if (method === 'jito') {
-                jitoBtn.classList.add('active');
-            } else {
-                rpcBtn.classList.add('active');
-            }
-            
-            addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
+    // Method Selection Functions
+    function selectMethod(taskType, method) {
+        // Remove active class from both buttons
+        const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+        const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
+        
+        jitoBtn.classList.remove('active');
+        rpcBtn.classList.remove('active');
+        
+        // Add active class to selected button
+        if (method === 'jito') {
+            jitoBtn.classList.add('active');
+        } else {
+            rpcBtn.classList.add('active');
         }
+        
+        addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
+    }
 
-        function getSelectedMethod(taskType) {
-            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
-            return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
+    function getSelectedMethod(taskType) {
+        const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+        return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
+    }
+
+    // Settings Functions
+    function selectDefaultExecutor(executor) {
+        const jitoBtn = document.getElementById('default-executor-jito');
+        const rpcBtn = document.getElementById('default-executor-rpc');
+        
+        // Remove active class from both buttons
+        jitoBtn.classList.remove('bg-purple-700', 'text-white');
+        jitoBtn.classList.add('bg-neutral-800', 'text-gray-300');
+        rpcBtn.classList.remove('bg-purple-700', 'text-white');
+        rpcBtn.classList.add('bg-neutral-800', 'text-gray-300');
+        
+        // Add active class to selected button
+        if (executor === 'jito') {
+            jitoBtn.classList.remove('bg-neutral-800', 'text-gray-300');
+            jitoBtn.classList.add('bg-purple-700', 'text-white');
+        } else {
+            rpcBtn.classList.remove('bg-neutral-800', 'text-gray-300');
+            rpcBtn.classList.add('bg-purple-700', 'text-white');
         }
+        
+        addConsoleLog(`Selected ${executor.toUpperCase()} as default executor`, 'info');
+    }
+
+    function saveSettings() {
+        // Collect all settings values
+        const settings = {
+            solana: {
+                rpcHttp: document.querySelector('input[value*="rpc.va.shyft.to"]').value,
+                rpcWebsocket: document.querySelector('input[value*="wss://rpc.va.shyft.to"]').value,
+                skipPreflight: document.getElementById('skipPreflight').checked,
+                priorityFee: document.querySelector('input[value="0.0005"]').value
+            },
+            jito: {
+                location: document.querySelector('select option:checked').textContent,
+                bundleMaxTip: document.querySelector('input[value="0.001"]').value,
+                transactionMaxTip: document.querySelectorAll('input[value="0.001"]')[1].value,
+                forwarder: document.querySelectorAll('select')[1].value
+            },
+            astralane: {
+                location: document.querySelectorAll('select')[2].value,
+                apiKey: document.querySelector('input[placeholder="Optional"]').value,
+                minPriorityFee: document.querySelector('input[value="0.0001"]').value,
+                maxPriorityFee: document.querySelector('input[value="0.0005"]').value
+            },
+            proxies: {
+                endpoints: document.querySelector('textarea').value
+            },
+            launchpad: {
+                buySlippage: document.querySelector('input[value="20"]').value,
+                sellSlippage: document.querySelectorAll('input[value="20"]')[1].value
+            },
+            dex: {
+                buySlippage: document.querySelector('input[value="5"]').value,
+                sellSlippage: document.querySelector('input[value="50"]').value
+            },
+            customization: {
+                defaultExecutor: document.querySelector('#default-executor-jito').classList.contains('bg-purple-700') ? 'jito' : 'rpc',
+                quickBuyOptions: [
+                    document.querySelectorAll('input[value="0.1"]')[0].value,
+                    document.querySelectorAll('input[value="0.5"]')[0].value,
+                    document.querySelectorAll('input[value="1"]')[0].value
+                ],
+                quickSellOptions: [
+                    document.querySelectorAll('input[value="25"]')[0].value,
+                    document.querySelectorAll('input[value="50"]')[0].value,
+                    document.querySelectorAll('input[value="100"]')[0].value
+                ],
+                autoOpenLinks: {
+                    solscan: document.querySelectorAll('input[type="checkbox"]')[1].checked,
+                    axiom: document.querySelectorAll('input[type="checkbox"]')[2].checked,
+                    gmgn: document.querySelectorAll('input[type="checkbox"]')[3].checked,
+                    pumpfun: document.querySelectorAll('input[type="checkbox"]')[4].checked,
+                    raydium: document.querySelectorAll('input[type="checkbox"]')[5].checked,
+                    bonk: document.querySelectorAll('input[type="checkbox"]')[6].checked
+                },
+                hideAddresses: document.getElementById('hideAddresses').checked
+            }
+        };
+        
+        // Save to localStorage (in a real app, this would be sent to the backend)
+        localStorage.setItem('frogwiftools-settings', JSON.stringify(settings));
+        
+        addConsoleLog('Settings saved successfully!', 'success');
+        
+        // Show success message
+        showToast('Settings saved successfully!', 'success');
+    }
 
         // Floating Window Management Functions
         let isDragging = false;

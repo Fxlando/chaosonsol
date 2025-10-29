@@ -1339,6 +1339,88 @@
                     </div>
                     
                     <div class="col-span-2">
+                        <!-- Task Management Section -->
+                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Tasks</h3>
+                                <div class="flex gap-2">
+                                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm px-3 py-1 rounded transition" onclick="showAddVolumeTask()">
+                                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>
+                                        Add Volume
+                                    </button>
+                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showBulkSellTask()">
+                                        <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>
+                                        Bulk Sell
+                                    </button>
+                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showBumpTask()">
+                                        <i data-lucide="trending-up" class="w-4 h-4 inline mr-1"></i>
+                                        Bump
+                                    </button>
+                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showSellBuybackTask()">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>
+                                        Sell/Buyback
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Active Tasks List -->
+                            <div class="space-y-3" id="active-tasks-list">
+                                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 bg-blue-900 rounded-lg flex items-center justify-center">
+                                                <i data-lucide="activity" class="w-4 h-4 text-blue-200"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-semibold text-sm">Volume Generation</h4>
+                                                <p class="text-xs text-gray-400">Active • 2/5 wallets</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs bg-green-900 text-green-200 px-2 py-1 rounded">Running</span>
+                                            <button class="text-gray-400 hover:text-white" onclick="stopTask('volume-1')">
+                                                <i data-lucide="square" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        Min: 0.001 SOL • Max: 0.005 SOL • Delay: 15-30s
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 bg-red-900 rounded-lg flex items-center justify-center">
+                                                <i data-lucide="trash-2" class="w-4 h-4 text-red-200"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-semibold text-sm">Bulk Sell</h4>
+                                                <p class="text-xs text-gray-400">Queued • 3 wallets</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs bg-yellow-900 text-yellow-200 px-2 py-1 rounded">Queued</span>
+                                            <button class="text-gray-400 hover:text-white" onclick="cancelTask('bulk-sell-1')">
+                                                <i data-lucide="x" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        Sell 50% • Min: 0.1 SOL • Max: 0.5 SOL
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- No Tasks State -->
+                            <div id="no-tasks-state" class="text-center py-8 text-gray-500 hidden">
+                                <i data-lucide="clipboard-list" class="w-12 h-12 mx-auto mb-3 text-gray-600"></i>
+                                <p class="text-sm">No active tasks for this token</p>
+                                <p class="text-xs text-gray-600 mt-1">Add a task to get started</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Holdings Section -->
                         <div class="bg-neutral-900 rounded-lg p-6 mb-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="text-lg font-semibold">Holdings</h3>
@@ -1500,6 +1582,242 @@
                     <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
                         Launch Token
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Modals -->
+        <!-- Add Volume Task Modal -->
+        <div id="add-volume-modal" class="modal hidden">
+            <div class="modal-content max-w-2xl">
+                <div class="modal-header">
+                    <h2 class="text-xl font-semibold">Add Volume Task</h2>
+                    <button class="modal-close" onclick="closeModal('add-volume-modal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Task Name</label>
+                        <input type="text" id="volume-task-name" value="Volume Generation" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Buy Amount (SOL)</label>
+                            <input type="number" id="volume-min-amount" value="0.001" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Buy Amount (SOL)</label>
+                            <input type="number" id="volume-max-amount" value="0.005" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Delay (seconds)</label>
+                            <input type="number" id="volume-min-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Delay (seconds)</label>
+                            <input type="number" id="volume-max-delay" value="30" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
+                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" class="rounded" />
+                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('add-volume-modal')">Cancel</button>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition" onclick="executeAddVolumeTask()">Start Task</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Sell Task Modal -->
+        <div id="bulk-sell-modal" class="modal hidden">
+            <div class="modal-content max-w-2xl">
+                <div class="modal-header">
+                    <h2 class="text-xl font-semibold">Bulk Sell Task</h2>
+                    <button class="modal-close" onclick="closeModal('bulk-sell-modal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Task Name</label>
+                        <input type="text" id="bulk-sell-task-name" value="Bulk Sell" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Sell Percentage</label>
+                        <input type="number" id="bulk-sell-percentage" value="50" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <p class="text-xs text-gray-500 mt-1">Percentage of token holdings to sell</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Sell Amount (SOL)</label>
+                            <input type="number" id="bulk-sell-min-amount" value="0.1" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Sell Amount (SOL)</label>
+                            <input type="number" id="bulk-sell-max-amount" value="0.5" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
+                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" class="rounded" />
+                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('bulk-sell-modal')">Cancel</button>
+                    <button class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition" onclick="executeBulkSellTask()">Start Task</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bump Task Modal -->
+        <div id="bump-modal" class="modal hidden">
+            <div class="modal-content max-w-2xl">
+                <div class="modal-header">
+                    <h2 class="text-xl font-semibold">Bump Task</h2>
+                    <button class="modal-close" onclick="closeModal('bump-modal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Task Name</label>
+                        <input type="text" id="bump-task-name" value="Bump" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Bump Amount (SOL)</label>
+                            <input type="number" id="bump-amount" value="0.01" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Bump Count</label>
+                            <input type="number" id="bump-count" value="3" min="1" max="10" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Delay (seconds)</label>
+                            <input type="number" id="bump-min-delay" value="5" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Delay (seconds)</label>
+                            <input type="number" id="bump-max-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
+                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" class="rounded" />
+                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('bump-modal')">Cancel</button>
+                    <button class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition" onclick="executeBumpTask()">Start Task</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sell/Buyback Task Modal -->
+        <div id="sell-buyback-modal" class="modal hidden">
+            <div class="modal-content max-w-2xl">
+                <div class="modal-header">
+                    <h2 class="text-xl font-semibold">Sell/Buyback Task</h2>
+                    <button class="modal-close" onclick="closeModal('sell-buyback-modal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Task Name</label>
+                        <input type="text" id="sell-buyback-task-name" value="Sell/Buyback" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Sell Percentage</label>
+                            <input type="number" id="sell-buyback-sell-percentage" value="30" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Buyback Delay (seconds)</label>
+                            <input type="number" id="sell-buyback-delay" value="60" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Amount (SOL)</label>
+                            <input type="number" id="sell-buyback-min-amount" value="0.05" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Amount (SOL)</label>
+                            <input type="number" id="sell-buyback-max-amount" value="0.2" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
+                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" checked class="rounded" />
+                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" class="rounded" />
+                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('sell-buyback-modal')">Cancel</button>
+                    <button class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition" onclick="executeSellBuybackTask()">Start Task</button>
                 </div>
             </div>
         </div>
@@ -3141,6 +3459,209 @@
                 addConsoleLog('Token launch completed', 'success');
                 navigateToPage('tokens');
             }, 4000);
+        }
+
+        // Task Management Functions
+        let activeTasks = [];
+
+        function showAddVolumeTask() {
+            openModal('add-volume-modal');
+            addConsoleLog('Opening Add Volume task modal', 'info');
+        }
+
+        function showBulkSellTask() {
+            openModal('bulk-sell-modal');
+            addConsoleLog('Opening Bulk Sell task modal', 'info');
+        }
+
+        function showBumpTask() {
+            openModal('bump-modal');
+            addConsoleLog('Opening Bump task modal', 'info');
+        }
+
+        function showSellBuybackTask() {
+            openModal('sell-buyback-modal');
+            addConsoleLog('Opening Sell/Buyback task modal', 'info');
+        }
+
+        function executeAddVolumeTask() {
+            const taskName = document.getElementById('volume-task-name').value;
+            const minAmount = document.getElementById('volume-min-amount').value;
+            const maxAmount = document.getElementById('volume-max-amount').value;
+            const minDelay = document.getElementById('volume-min-delay').value;
+            const maxDelay = document.getElementById('volume-max-delay').value;
+            
+            if (!taskName || !minAmount || !maxAmount) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const task = {
+                id: 'volume-' + Date.now(),
+                name: taskName,
+                type: 'Volume Generation',
+                status: 'Running',
+                icon: 'activity',
+                color: 'blue',
+                details: `Min: ${minAmount} SOL • Max: ${maxAmount} SOL • Delay: ${minDelay}-${maxDelay}s`,
+                wallets: '2/5 wallets'
+            };
+            
+            addTaskToList(task);
+            closeModal('add-volume-modal');
+            showToast(`Started ${taskName} task`, 'success');
+            addConsoleLog(`Volume task started: ${taskName}`, 'success');
+        }
+
+        function executeBulkSellTask() {
+            const taskName = document.getElementById('bulk-sell-task-name').value;
+            const percentage = document.getElementById('bulk-sell-percentage').value;
+            const minAmount = document.getElementById('bulk-sell-min-amount').value;
+            const maxAmount = document.getElementById('bulk-sell-max-amount').value;
+            
+            if (!taskName || !percentage || !minAmount || !maxAmount) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const task = {
+                id: 'bulk-sell-' + Date.now(),
+                name: taskName,
+                type: 'Bulk Sell',
+                status: 'Queued',
+                icon: 'trash-2',
+                color: 'red',
+                details: `Sell ${percentage}% • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
+                wallets: '3 wallets'
+            };
+            
+            addTaskToList(task);
+            closeModal('bulk-sell-modal');
+            showToast(`Started ${taskName} task`, 'success');
+            addConsoleLog(`Bulk sell task started: ${taskName}`, 'success');
+        }
+
+        function executeBumpTask() {
+            const taskName = document.getElementById('bump-task-name').value;
+            const amount = document.getElementById('bump-amount').value;
+            const count = document.getElementById('bump-count').value;
+            const minDelay = document.getElementById('bump-min-delay').value;
+            const maxDelay = document.getElementById('bump-max-delay').value;
+            
+            if (!taskName || !amount || !count) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const task = {
+                id: 'bump-' + Date.now(),
+                name: taskName,
+                type: 'Bump',
+                status: 'Running',
+                icon: 'trending-up',
+                color: 'orange',
+                details: `Amount: ${amount} SOL • Count: ${count} • Delay: ${minDelay}-${maxDelay}s`,
+                wallets: '2 wallets'
+            };
+            
+            addTaskToList(task);
+            closeModal('bump-modal');
+            showToast(`Started ${taskName} task`, 'success');
+            addConsoleLog(`Bump task started: ${taskName}`, 'success');
+        }
+
+        function executeSellBuybackTask() {
+            const taskName = document.getElementById('sell-buyback-task-name').value;
+            const sellPercentage = document.getElementById('sell-buyback-sell-percentage').value;
+            const delay = document.getElementById('sell-buyback-delay').value;
+            const minAmount = document.getElementById('sell-buyback-min-amount').value;
+            const maxAmount = document.getElementById('sell-buyback-max-amount').value;
+            
+            if (!taskName || !sellPercentage || !delay || !minAmount || !maxAmount) {
+                showToast('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const task = {
+                id: 'sell-buyback-' + Date.now(),
+                name: taskName,
+                type: 'Sell/Buyback',
+                status: 'Running',
+                icon: 'refresh-cw',
+                color: 'blue',
+                details: `Sell ${sellPercentage}% • Delay: ${delay}s • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
+                wallets: '2 wallets'
+            };
+            
+            addTaskToList(task);
+            closeModal('sell-buyback-modal');
+            showToast(`Started ${taskName} task`, 'success');
+            addConsoleLog(`Sell/Buyback task started: ${taskName}`, 'success');
+        }
+
+        function addTaskToList(task) {
+            activeTasks.push(task);
+            updateTasksList();
+        }
+
+        function updateTasksList() {
+            const tasksList = document.getElementById('active-tasks-list');
+            const noTasksState = document.getElementById('no-tasks-state');
+            
+            if (activeTasks.length === 0) {
+                tasksList.innerHTML = '';
+                noTasksState.classList.remove('hidden');
+                return;
+            }
+            
+            noTasksState.classList.add('hidden');
+            
+            tasksList.innerHTML = activeTasks.map(task => `
+                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-${task.color}-900 rounded-lg flex items-center justify-center">
+                                <i data-lucide="${task.icon}" class="w-4 h-4 text-${task.color}-200"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm">${task.name}</h4>
+                                <p class="text-xs text-gray-400">${task.status} • ${task.wallets}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs bg-${task.status === 'Running' ? 'green' : 'yellow'}-900 text-${task.status === 'Running' ? 'green' : 'yellow'}-200 px-2 py-1 rounded">${task.status}</span>
+                            <button class="text-gray-400 hover:text-white" onclick="${task.status === 'Running' ? 'stopTask' : 'cancelTask'}('${task.id}')">
+                                <i data-lucide="${task.status === 'Running' ? 'square' : 'x'}" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        ${task.details}
+                    </div>
+                </div>
+            `).join('');
+            
+            // Re-initialize Lucide icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function stopTask(taskId) {
+            const task = activeTasks.find(t => t.id === taskId);
+            if (task) {
+                task.status = 'Stopped';
+                updateTasksList();
+                showToast(`Stopped ${task.name} task`, 'info');
+                addConsoleLog(`Task stopped: ${task.name}`, 'info');
+            }
+        }
+
+        function cancelTask(taskId) {
+            activeTasks = activeTasks.filter(t => t.id !== taskId);
+            updateTasksList();
+            showToast('Task cancelled', 'info');
+            addConsoleLog(`Task cancelled: ${taskId}`, 'info');
         }
 
         // Initialize all features when DOM loads

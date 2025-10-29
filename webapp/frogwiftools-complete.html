@@ -214,47 +214,47 @@
                 </div>
                 
                 <div class="flex items-center gap-3 flex-wrap">
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-purple-700 hover:bg-purple-600 text-white" onclick="openModal('generate-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-purple-700 hover:bg-purple-600 text-white" onclick="navigateToPage('generate')">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                         <span>Generate</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('import-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('import')">
                         <i data-lucide="download" class="w-4 h-4"></i>
                         <span>Import</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('fund-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('fund')">
                         <i data-lucide="dollar-sign" class="w-4 h-4"></i>
                         <span>Fund</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('withdraw-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('withdraw')">
                         <i data-lucide="upload" class="w-4 h-4"></i>
                         <span>Withdraw</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('tag-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('tag')">
                         <i data-lucide="tag" class="w-4 h-4"></i>
                         <span>Tag</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('warm-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('warm')">
                         <i data-lucide="flame" class="w-4 h-4"></i>
                         <span>Warm</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('reclaim-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('reclaim')">
                         <i data-lucide="gift" class="w-4 h-4"></i>
                         <span>Reclaim Rent</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('export-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('export')">
                         <i data-lucide="share-2" class="w-4 h-4"></i>
                         <span>Export</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('redistribute-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('redistribute')">
                         <i data-lucide="shuffle" class="w-4 h-4"></i>
                         <span>Redistribute</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('activate-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('activate')">
                         <i data-lucide="power" class="w-4 h-4"></i>
                         <span>Activate/Deactivate</span>
                     </button>
-                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('grouping-modal')">
+                    <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="navigateToPage('grouping')">
                         <i data-lucide="users" class="w-4 h-4"></i>
                         <span>Grouping</span>
                     </button>
@@ -321,6 +321,475 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Generate Page -->
+        <div id="generate-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Generate</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🔮</span>
+                    <h1 class="text-2xl font-semibold">Generate Wallets</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-md">
+                    <label class="block mb-2 text-sm font-medium">Number of Wallets</label>
+                    <input
+                        type="number"
+                        id="generate-count-input"
+                        value="3"
+                        class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                    />
+                    <p class="text-xs text-gray-500 mb-6">The number of wallets to generate.</p>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeGenerateWallets()">
+                        Generate
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fund Page -->
+        <div id="fund-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Fund</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">💵</span>
+                    <h1 class="text-2xl font-semibold">Fund <span id="fund-selected-count">1</span> Wallets</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div id="fund-standard-mode" class="border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition" onclick="selectFundMode('standard')">
+                            <h3 class="font-semibold mb-1">Standard Mode</h3>
+                            <p class="text-xs text-gray-400">Quick funding. May be detected by bubble maps.</p>
+                        </div>
+                        <div id="fund-mixer-mode" class="border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition" onclick="selectFundMode('mixer')">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-2xl">🌀</span>
+                                <h3 class="font-semibold">Mixer Mode</h3>
+                            </div>
+                            <p class="text-xs text-purple-300">Avoid bubble maps detection.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Funding Wallet Private Key</label>
+                        <input
+                            type="text"
+                            id="fund-private-key"
+                            value="2P9FUckSohxUUDGr9Y5QMcFvYVycQZn+WxXpeU3sDuKyADDvXDenXNeF"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The private key of the wallet containing the SOL which will be used to fund the wallets.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-3 text-sm font-medium">Funding Method</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="fund-method" value="uniform" checked class="text-purple-600" />
+                                <span class="text-sm">Uniform Amount</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="fund-method" value="specific" class="text-purple-600" />
+                                <span class="text-sm">Specific Amounts</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Funding Amount</label>
+                        <input
+                            type="number"
+                            id="fund-amount-input"
+                            value="1"
+                            step="0.01"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The amount of SOL each wallet should be funded.</p>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeFundWallets()">
+                        Fund
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Withdraw Page -->
+        <div id="withdraw-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Withdraw</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">😊</span>
+                    <h1 class="text-2xl font-semibold">Withdraw <span id="withdraw-selected-count">1</span> Wallet</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-md">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Destination Wallet Address</label>
+                        <input
+                            type="text"
+                            id="withdraw-destination"
+                            value="3QCUSoFeTErn43b93tF78qQrfqQtvaSCr7hPz7XCQRCTn"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The address of the wallet to send the funds to.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-3 text-sm font-medium">Withdrawal Method</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="withdraw-method" value="uniform-percentage" checked class="text-purple-600" />
+                                <span class="text-sm">Uniform Percentage</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="withdraw-method" value="uniform-amount" class="text-purple-600" />
+                                <span class="text-sm">Uniform Amount</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="withdraw-method" value="specific-percentages" class="text-purple-600" />
+                                <span class="text-sm">Specific Percentages</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="withdraw-method" value="specific-amount" class="text-purple-600" />
+                                <span class="text-sm">Specific Amount</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Withdrawal Percentage</label>
+                        <input
+                            type="number"
+                            id="withdraw-percentage"
+                            value="100"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The percentage of the total amount to withdraw from each wallet.</p>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeWithdrawWallets()">
+                        Withdraw
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tag Page -->
+        <div id="tag-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Tag</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🏷️</span>
+                    <h1 class="text-2xl font-semibold">Tag <span id="tag-selected-count">1</span> Wallet</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-6">
+                        <div class="flex items-start gap-3">
+                            <span class="text-yellow-500 text-xl">⚠️</span>
+                            <div>
+                                <h3 class="font-semibold text-yellow-200 mb-1">Heads up!</h3>
+                                <p class="text-sm text-yellow-300">
+                                    The amount you enter is not how much the tag will cost, but rather the amount of SOL that will be used to buy a random token. The token will then be sold 10-15 seconds later for approximately the same amount of SOL minus the transaction fees. Tags may take a few minutes to show up on some sites.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Executor</label>
+                        <div class="flex gap-2">
+                            <button id="tag-jito-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectTagExecutor('jito')">
+                                Jito
+                            </button>
+                            <button id="tag-rpc-btn" class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectTagExecutor('rpc')">
+                                RPC
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-3 text-sm font-medium">Tagging Method</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="tag-method" value="uniform" class="text-purple-600" />
+                                <span class="text-sm">Uniform Tags</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="tag-method" value="specific" checked class="text-purple-600" />
+                                <span class="text-sm">Specific Tags</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="tag-wallet-info" class="mb-6 bg-neutral-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">🐘</span>
+                                <span class="font-mono text-sm">sour-elephant</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-400">Address</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xs font-mono text-gray-400">xVX...yaSp</span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-sm text-gray-400">Platforms</span>
+                            <span class="text-sm text-gray-400">Auto Assign</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition" onclick="toggleTag('home')">🏠</button>
+                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('chart')">📊</button>
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition" onclick="toggleTag('blue')">🔵</button>
+                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('warning')">⚠️</button>
+                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('seed')">🌱</button>
+                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('crown')">👑</button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Buy Amount</label>
+                            <input
+                                type="number"
+                                id="tag-min-amount"
+                                value="0.2"
+                                step="0.01"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The minimum amount to buy in SOL for each swap.</p>
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Buy Amount</label>
+                            <input
+                                type="number"
+                                id="tag-max-amount"
+                                value="0.3"
+                                step="0.01"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The maximum amount to buy in SOL for each swap.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-3 text-sm font-medium">Mint Selection Mode</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="mint-selection" value="auto" checked class="text-purple-600" />
+                                <span class="text-sm">Auto (Random)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="mint-selection" value="custom" class="text-purple-600" />
+                                <span class="text-sm">Custom</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTagWallets()">
+                        Tag
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warm Page -->
+        <div id="warm-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Warm</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🔥</span>
+                    <h1 class="text-2xl font-semibold">Warm <span id="warm-selected-count">1</span> Wallets</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-6">
+                        <div class="flex items-start gap-3">
+                            <span class="text-yellow-500 text-xl">⚠️</span>
+                            <div>
+                                <h3 class="font-semibold text-yellow-200 mb-1">Heads up!</h3>
+                                <p class="text-sm text-yellow-300">
+                                    Warming uses your RPC to create swap transactions using the priority fee to make the wallet seem more active. We recommend a 15-20 second delay at minimum to simulate real user activity.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Executor</label>
+                        <div class="flex gap-2">
+                            <button id="warm-jito-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectWarmExecutor('jito')">
+                                Jito
+                            </button>
+                            <button id="warm-rpc-btn" class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectWarmExecutor('rpc')">
+                                RPC
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Amount of Swaps</label>
+                            <input
+                                type="number"
+                                id="warm-min-swaps"
+                                value="1"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The minimum number of swaps per wallet.</p>
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Amount of Swaps</label>
+                            <input
+                                type="number"
+                                id="warm-max-swaps"
+                                value="3"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The maximum number of swaps per wallet.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Buy Amount</label>
+                            <input
+                                type="number"
+                                id="warm-min-amount"
+                                value="0.001"
+                                step="0.001"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The minimum amount to buy in SOL for each swap.</p>
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Buy Amount</label>
+                            <input
+                                type="number"
+                                id="warm-max-amount"
+                                value="0.002"
+                                step="0.001"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The maximum amount to buy in SOL for each swap.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Min Delay</label>
+                            <input
+                                type="number"
+                                id="warm-min-delay"
+                                value="15"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The minimum delay between swaps in seconds.</p>
+                        </div>
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Max Delay</label>
+                            <input
+                                type="number"
+                                id="warm-max-delay"
+                                value="20"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The maximum delay between swaps in seconds.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-3 text-sm font-medium">Mint Selection Mode</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="mint-warm" value="auto" checked class="text-purple-600" />
+                                <span class="text-sm">Auto (Random)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="mint-warm" value="custom" class="text-purple-600" />
+                                <span class="text-sm">Custom</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeWarmWallets()">
+                        Warm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Redistribute Page -->
+        <div id="redistribute-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Redistribute</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">♻️</span>
+                    <h1 class="text-2xl font-semibold">Redistribute <span id="redistribute-selected-count">1</span> Wallets</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div id="redistribute-standard-mode" class="border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition" onclick="selectRedistributeMode('standard')">
+                            <h3 class="font-semibold mb-1">Standard Mode</h3>
+                            <p class="text-xs text-gray-400">Quick redistribution. May be detected by bubble maps.</p>
+                        </div>
+                        <div id="redistribute-mixer-mode" class="border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition" onclick="selectRedistributeMode('mixer')">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-2xl">🌀</span>
+                                <h3 class="font-semibold">Mixer Mode</h3>
+                            </div>
+                            <p class="text-xs text-purple-300">Avoid bubble maps detection.</p>
+                        </div>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeRedistributeWallets()">
+                        Redistribute Funds
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1738,6 +2207,176 @@
                         .replace(/\n/g, '<br>');
                 });
             }
+        }
+
+        // Navigation Functions
+        function navigateToPage(page) {
+            // Hide all views
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.classList.add('hidden'));
+            
+            // Show the requested page
+            const targetPage = document.getElementById(page + '-page');
+            if (targetPage) {
+                targetPage.classList.remove('hidden');
+                addConsoleLog(`Navigated to ${page} page`, 'info');
+            } else {
+                // If no dedicated page, show wallets view and open modal
+                document.getElementById('wallets-view').classList.remove('hidden');
+                openModal(page + '-modal');
+            }
+        }
+
+        // Wallet Operation Functions
+        function executeGenerateWallets() {
+            const count = document.getElementById('generate-count-input').value;
+            showToast(`Generating ${count} wallets...`, 'info');
+            addConsoleLog(`Starting generation of ${count} wallets`, 'info');
+            
+            setTimeout(() => {
+                showToast(`${count} wallets generated successfully!`, 'success');
+                addConsoleLog(`Generated ${count} new wallets`, 'success');
+                navigateToPage('wallets');
+            }, 2000);
+        }
+
+        function executeFundWallets() {
+            const mode = document.querySelector('input[name="fund-method"]:checked').value;
+            const amount = document.getElementById('fund-amount-input').value;
+            const privateKey = document.getElementById('fund-private-key').value;
+            
+            showToast(`Funding wallets with ${amount} SOL each...`, 'info');
+            addConsoleLog(`Starting funding process (${mode} mode)`, 'info');
+            
+            setTimeout(() => {
+                showToast('Wallets funded successfully!', 'success');
+                addConsoleLog('Funding completed', 'success');
+                navigateToPage('wallets');
+            }, 3000);
+        }
+
+        function executeWithdrawWallets() {
+            const method = document.querySelector('input[name="withdraw-method"]:checked').value;
+            const percentage = document.getElementById('withdraw-percentage').value;
+            const destination = document.getElementById('withdraw-destination').value;
+            
+            showToast(`Withdrawing ${percentage}% to ${destination.substring(0, 8)}...`, 'info');
+            addConsoleLog(`Starting withdrawal process (${method})`, 'info');
+            
+            setTimeout(() => {
+                showToast('Withdrawal completed successfully!', 'success');
+                addConsoleLog('Withdrawal completed', 'success');
+                navigateToPage('wallets');
+            }, 2500);
+        }
+
+        function executeTagWallets() {
+            const executor = document.querySelector('#tag-jito-btn').classList.contains('bg-purple-600') ? 'jito' : 'rpc';
+            const minAmount = document.getElementById('tag-min-amount').value;
+            const maxAmount = document.getElementById('tag-max-amount').value;
+            
+            showToast(`Tagging wallets with ${executor} executor...`, 'info');
+            addConsoleLog(`Starting tagging process (${executor}, ${minAmount}-${maxAmount} SOL)`, 'info');
+            
+            setTimeout(() => {
+                showToast('Wallets tagged successfully!', 'success');
+                addConsoleLog('Tagging completed', 'success');
+                navigateToPage('wallets');
+            }, 4000);
+        }
+
+        function executeWarmWallets() {
+            const executor = document.querySelector('#warm-jito-btn').classList.contains('bg-purple-600') ? 'jito' : 'rpc';
+            const minSwaps = document.getElementById('warm-min-swaps').value;
+            const maxSwaps = document.getElementById('warm-max-swaps').value;
+            
+            showToast(`Warming wallets with ${executor} executor...`, 'info');
+            addConsoleLog(`Starting warming process (${executor}, ${minSwaps}-${maxSwaps} swaps)`, 'info');
+            
+            setTimeout(() => {
+                showToast('Wallets warmed successfully!', 'success');
+                addConsoleLog('Warming completed', 'success');
+                navigateToPage('wallets');
+            }, 5000);
+        }
+
+        function executeRedistributeWallets() {
+            const mode = document.querySelector('#redistribute-mixer-mode').classList.contains('border-purple-500') ? 'mixer' : 'standard';
+            
+            showToast(`Redistributing funds (${mode} mode)...`, 'info');
+            addConsoleLog(`Starting redistribution process (${mode} mode)`, 'info');
+            
+            setTimeout(() => {
+                showToast('Funds redistributed successfully!', 'success');
+                addConsoleLog('Redistribution completed', 'success');
+                navigateToPage('wallets');
+            }, 3000);
+        }
+
+        // Mode Selection Functions
+        function selectFundMode(mode) {
+            const standardMode = document.getElementById('fund-standard-mode');
+            const mixerMode = document.getElementById('fund-mixer-mode');
+            
+            if (mode === 'standard') {
+                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            } else {
+                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            }
+        }
+
+        function selectRedistributeMode(mode) {
+            const standardMode = document.getElementById('redistribute-standard-mode');
+            const mixerMode = document.getElementById('redistribute-mixer-mode');
+            
+            if (mode === 'standard') {
+                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            } else {
+                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            }
+        }
+
+        function selectTagExecutor(executor) {
+            const jitoBtn = document.getElementById('tag-jito-btn');
+            const rpcBtn = document.getElementById('tag-rpc-btn');
+            
+            if (executor === 'jito') {
+                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+            } else {
+                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+            }
+        }
+
+        function selectWarmExecutor(executor) {
+            const jitoBtn = document.getElementById('warm-jito-btn');
+            const rpcBtn = document.getElementById('warm-rpc-btn');
+            
+            if (executor === 'jito') {
+                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+            } else {
+                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+            }
+        }
+
+        function toggleTag(tagType) {
+            const button = event.target;
+            const isActive = button.classList.contains('bg-blue-600');
+            
+            if (isActive) {
+                button.className = 'bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition';
+            } else {
+                button.className = 'bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition';
+            }
+            
+            addConsoleLog(`Tag ${tagType} ${isActive ? 'removed' : 'added'}`, 'info');
         }
 
         // Initialize all features when DOM loads

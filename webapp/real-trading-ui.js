@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeEventListeners();
     startRealTimeUpdates();
     
+    // Show wallets view by default
+    switchView('wallets');
+    
     // Add console log
     addConsoleLog('✅ System initialized - Real on-chain trading ready', 'success');
     console.log('✅ Real Trading Platform Ready');
@@ -951,6 +954,8 @@ window.updatePriorityFee = updatePriorityFee;
 window.resetSettings = resetSettings;
 window.exportSettings = exportSettings;
 window.importSettings = importSettings;
+window.switchView = switchView;
+window.initializeEventListeners = initializeEventListeners;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 

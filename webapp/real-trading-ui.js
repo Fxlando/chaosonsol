@@ -424,6 +424,8 @@ function switchView(viewName) {
 // Token Launch with Automations
 let pumpFunTrading;
 let multiWalletManager;
+let vanityGenerator;
+let settingsManager;
 
 // Initialize PumpFun Trading
 function initializePumpFun() {
@@ -439,6 +441,23 @@ function initializeMultiWallet() {
         multiWalletManager = new MultiWalletManager(solana);
         multiWalletManager.loadBlueprints();
         console.log('✅ Multi-Wallet Manager initialized');
+    }
+}
+
+// Initialize Vanity Generator
+function initializeVanity() {
+    if (!vanityGenerator) {
+        vanityGenerator = new VanityGenerator();
+        console.log('✅ Vanity Generator initialized');
+    }
+}
+
+// Initialize Settings Manager
+function initializeSettings() {
+    if (!settingsManager && solana) {
+        settingsManager = new SettingsManager(solana);
+        settingsManager.applySettings();
+        console.log('✅ Settings Manager initialized');
     }
 }
 
@@ -728,6 +747,179 @@ function toggleAutoCollect() {
     // TODO: Implement auto-collect scheduling
 }
 
+// ==================== VANITY FUNCTIONS ====================
+
+// Generate vanity address
+async function generateVanity() {
+    initializeVanity();
+    
+    const pattern = prompt('Enter desired pattern (e.g., "CAT", "SOL", "PUMP"):');
+    if (!pattern) return;
+    
+    const position = confirm('Prefix? (OK = Prefix, Cancel = Suffix)') ? 'prefix' : 'suffix';
+    
+    // Show estimate
+    const estimate = vanityGenerator.estimateGeneration(pattern, position);
+    addConsoleLog(`🎯 Pattern: ${pattern} (${position})`, 'info');
+    addConsoleLog(`   Difficulty: ${estimate.difficulty}`, 'info');
+    addConsoleLog(`   Estimated time: ${estimate.estimatedTime}`, 'info');
+    
+    const proceed = confirm(`Generate vanity address with pattern "${pattern}"?\n\nDifficulty: ${estimate.difficulty}\nEstimated time: ${estimate.estimatedTime}\n\nThis may take a while!`);
+    if (!proceed) return;
+    
+    addConsoleLog('🔨 Generating vanity address...', 'info');
+    addConsoleLog('⏳ This may take several minutes...', 'info');
+    
+    const result = await vanityGenerator.generateVanity({
+        pattern: pattern,
+        position: position,
+        caseSensitive: false,
+        maxAttempts: 10000000
+    });
+    
+    if (result.success) {
+        addConsoleLog(`✅ VANITY ADDRESS FOUND!`, 'success');
+        addConsoleLog(`   Address: ${result.vanity.publicKey}`, 'success');
+        addConsoleLog(`   Attempts: ${result.vanity.attempts.toLocaleString()}`, 'info');
+        addConsoleLog(`   Time: ${result.vanity.timeTaken.toFixed(2)}s`, 'info');
+        
+        // Ask to save as wallet
+        const saveName = prompt(`Vanity address found!\n\n${result.vanity.publicKey}\n\nSave as wallet? Enter name:`);
+        if (saveName) {
+            const wallet = vanityGenerator.saveVanityAsWallet(result.vanity, saveName);
+            solana.saveWallet(wallet);
+            addConsoleLog(`✅ Saved as wallet: ${saveName}`, 'success');
+            await loadRealData();
+        }
+        
+    } else {
+        addConsoleLog(`❌ Generation failed: ${result.error}`, 'error');
+    }
+}
+
+// Stop vanity generation
+function stopVanityGeneration() {
+    if (vanityGenerator) {
+        vanityGenerator.stopGeneration();
+        addConsoleLog('🛑 Vanity generation stopped', 'info');
+    }
+}
+
+// ==================== SETTINGS FUNCTIONS ====================
+
+// Update RPC
+async function updateRPCEndpoint(network, customUrl = null) {
+    initializeSettings();
+    
+    addConsoleLog(`🔄 Updating RPC to ${network}...`, 'info');
+    
+    const result = await settingsManager.updateRPC(network, customUrl);
+    
+    if (result.success) {
+        addConsoleLog(`✅ RPC updated to ${network}`, 'success');
+        addConsoleLog(`   URL: ${result.url}`, 'info');
+        addConsoleLog(`   Block height: ${result.health.blockHeight}`, 'info');
+        
+        // Refresh data with new RPC
+        await loadRealData();
+    } else {
+        addConsoleLog(`❌ RPC update failed: ${result.error}`, 'error');
+    }
+}
+
+// Test RPC connection
+async function testRPCConnection() {
+    initializeSettings();
+    
+    const url = prompt('Enter RPC URL to test:');
+    if (!url) return;
+    
+    addConsoleLog(`🔍 Testing RPC: ${url}`, 'info');
+    
+    const result = await settingsManager.testRPC(url);
+    
+    if (result.success) {
+        addConsoleLog(`✅ RPC test successful!`, 'success');
+        addConsoleLog(`   Block height: ${result.blockHeight}`, 'info');
+        addConsoleLog(`   Slot: ${result.slot}`, 'info');
+        addConsoleLog(`   Latency: ${result.latency}`, 'info');
+    } else {
+        addConsoleLog(`❌ RPC test failed: ${result.error}`, 'error');
+    }
+}
+
+// Update Jito settings
+function updateJitoSettings(enabled, tipAmount) {
+    initializeSettings();
+    
+    settingsManager.updateJito({
+        enabled: enabled,
+        tipAmount: tipAmount || 0.001
+    });
+    
+    addConsoleLog(`✅ Jito ${enabled ? 'enabled' : 'disabled'}`, 'success');
+}
+
+// Update slippage
+function updateSlippage(slippage) {
+    initializeSettings();
+    
+    settingsManager.updateTrading({ defaultSlippage: slippage });
+    addConsoleLog(`✅ Slippage set to ${slippage}%`, 'success');
+}
+
+// Update priority fee
+function updatePriorityFee(fee) {
+    initializeSettings();
+    
+    settingsManager.updateTrading({ priorityFee: fee });
+    addConsoleLog(`✅ Priority fee set to ${fee} SOL`, 'success');
+}
+
+// Reset settings to defaults
+function resetSettings() {
+    initializeSettings();
+    
+    const confirm = window.confirm('Reset all settings to defaults?');
+    if (!confirm) return;
+    
+    settingsManager.resetToDefaults();
+    addConsoleLog('✅ Settings reset to defaults', 'success');
+}
+
+// Export settings
+function exportSettings() {
+    initializeSettings();
+    
+    settingsManager.exportSettings();
+    addConsoleLog('✅ Settings exported', 'success');
+}
+
+// Import settings
+async function importSettings() {
+    initializeSettings();
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const result = await settingsManager.importSettings(file);
+        
+        if (result.success) {
+            addConsoleLog('✅ Settings imported successfully', 'success');
+            settingsManager.applySettings();
+        } else {
+            addConsoleLog(`❌ Import failed: ${result.error}`, 'error');
+        }
+    };
+    
+    input.click();
+}
+
 // Export functions for inline onclick handlers
 window.connectWalletHandler = connectWalletHandler;
 window.createNewWallet = createNewWallet;
@@ -749,6 +941,16 @@ window.collectAllFees = collectAllFees;
 window.collectTradingFees = collectTradingFees;
 window.collectRentFees = collectRentFees;
 window.toggleAutoCollect = toggleAutoCollect;
+window.generateVanity = generateVanity;
+window.stopVanityGeneration = stopVanityGeneration;
+window.updateRPCEndpoint = updateRPCEndpoint;
+window.testRPCConnection = testRPCConnection;
+window.updateJitoSettings = updateJitoSettings;
+window.updateSlippage = updateSlippage;
+window.updatePriorityFee = updatePriorityFee;
+window.resetSettings = resetSettings;
+window.exportSettings = exportSettings;
+window.importSettings = importSettings;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 

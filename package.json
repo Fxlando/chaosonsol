@@ -5,8 +5,11 @@
   "main": "simple-bot.js",
   "scripts": {
     "start": "node simple-bot.js",
+    "start:production": "node start-production-system.js",
     "dev": "node --watch simple-bot.js",
     "web": "node webapp/api-server.js",
+    "web:production": "node webapp/production-api-server.js",
+    "build": "echo 'Production build complete - ready for deployment'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

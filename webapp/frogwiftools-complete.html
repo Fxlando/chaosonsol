@@ -57,6 +57,93 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .fade-in { animation: fadeIn 0.3s ease-out; }
+
+        /* Floating Window Styles */
+        .floating-window {
+            position: fixed;
+            background-color: #1a1a1a;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            min-width: 400px;
+            max-width: 500px;
+            z-index: 1000;
+            user-select: none;
+        }
+
+        .floating-window-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .floating-window-header {
+            background-color: #2a2a2a;
+            padding: 12px 16px;
+            border-bottom: 1px solid #404040;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+        }
+
+        .floating-window-header h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .floating-window-minimize,
+        .floating-window-close {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .floating-window-minimize:hover {
+            background-color: #404040;
+            color: #fff;
+        }
+
+        .floating-window-close:hover {
+            background-color: #dc2626;
+            color: #fff;
+        }
+
+        .floating-window-body {
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .floating-window-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #404040;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .floating-window.minimized {
+            height: auto !important;
+        }
+
+        .floating-window.minimized .floating-window-body {
+            display: none;
+        }
+
+        .floating-window.minimized .floating-window-footer {
+            display: none;
+        }
     </style>
 </head>
 <body class="flex h-screen bg-black text-gray-200 font-sans">
@@ -77,10 +164,6 @@
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white" data-view="wallets">
                     <i data-lucide="wallet" class="w-4 h-4"></i>
                     <span class="text-sm">Wallets</span>
-                </div>
-                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="tasks">
-                    <i data-lucide="play-circle" class="w-4 h-4"></i>
-                    <span class="text-sm">Tasks</span>
                 </div>
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="automations">
                     <i data-lucide="zap" class="w-4 h-4"></i>
@@ -1586,238 +1669,250 @@
             </div>
         </div>
 
-        <!-- Task Modals -->
-        <!-- Add Volume Task Modal -->
-        <div id="add-volume-modal" class="modal hidden">
-            <div class="modal-content max-w-2xl">
-                <div class="modal-header">
-                    <h2 class="text-xl font-semibold">Add Volume Task</h2>
-                    <button class="modal-close" onclick="closeModal('add-volume-modal')">&times;</button>
+        <!-- Floating Task Windows -->
+        <!-- Add Volume Task Window -->
+        <div id="add-volume-window" class="floating-window hidden" style="position: fixed; top: 100px; left: 100px; z-index: 1000;">
+            <div class="floating-window-content">
+                <div class="floating-window-header" onmousedown="startDrag(event, 'add-volume-window')">
+                    <h2 class="text-lg font-semibold">Add Volume Task</h2>
+                    <div class="flex gap-2">
+                        <button class="floating-window-minimize" onclick="minimizeWindow('add-volume-window')">_</button>
+                        <button class="floating-window-close" onclick="closeFloatingWindow('add-volume-window')">&times;</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-6">
+                <div class="floating-window-body">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="volume-task-name" value="Volume Generation" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <input type="text" id="volume-task-name" value="Volume Generation" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Min Buy Amount (SOL)</label>
-                            <input type="number" id="volume-min-amount" value="0.001" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Min Buy Amount (SOL)</label>
+                            <input type="number" id="volume-min-amount" value="0.001" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Max Buy Amount (SOL)</label>
-                            <input type="number" id="volume-max-amount" value="0.005" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Min Delay (seconds)</label>
-                            <input type="number" id="volume-min-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Max Delay (seconds)</label>
-                            <input type="number" id="volume-max-delay" value="30" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Max Buy Amount (SOL)</label>
+                            <input type="number" id="volume-max-amount" value="0.005" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Min Delay (seconds)</label>
+                            <input type="number" id="volume-min-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Max Delay (seconds)</label>
+                            <input type="number" id="volume-max-delay" value="30" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                        <div class="space-y-1 max-h-24 overflow-y-auto">
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" class="rounded" />
-                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
                             </label>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('add-volume-modal')">Cancel</button>
-                    <button class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition" onclick="executeAddVolumeTask()">Start Task</button>
+                <div class="floating-window-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 rounded text-sm transition" onclick="closeFloatingWindow('add-volume-window')">Cancel</button>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded text-sm transition" onclick="executeAddVolumeTask()">Start Task</button>
                 </div>
             </div>
         </div>
 
-        <!-- Bulk Sell Task Modal -->
-        <div id="bulk-sell-modal" class="modal hidden">
-            <div class="modal-content max-w-2xl">
-                <div class="modal-header">
-                    <h2 class="text-xl font-semibold">Bulk Sell Task</h2>
-                    <button class="modal-close" onclick="closeModal('bulk-sell-modal')">&times;</button>
+        <!-- Bulk Sell Task Window -->
+        <div id="bulk-sell-window" class="floating-window hidden" style="position: fixed; top: 150px; left: 200px; z-index: 1000;">
+            <div class="floating-window-content">
+                <div class="floating-window-header" onmousedown="startDrag(event, 'bulk-sell-window')">
+                    <h2 class="text-lg font-semibold">Bulk Sell Task</h2>
+                    <div class="flex gap-2">
+                        <button class="floating-window-minimize" onclick="minimizeWindow('bulk-sell-window')">_</button>
+                        <button class="floating-window-close" onclick="closeFloatingWindow('bulk-sell-window')">&times;</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-6">
+                <div class="floating-window-body">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="bulk-sell-task-name" value="Bulk Sell" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <input type="text" id="bulk-sell-task-name" value="Bulk Sell" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Sell Percentage</label>
-                        <input type="number" id="bulk-sell-percentage" value="50" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <input type="number" id="bulk-sell-percentage" value="50" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         <p class="text-xs text-gray-500 mt-1">Percentage of token holdings to sell</p>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Min Sell Amount (SOL)</label>
-                            <input type="number" id="bulk-sell-min-amount" value="0.1" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Min Sell Amount (SOL)</label>
+                            <input type="number" id="bulk-sell-min-amount" value="0.1" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Max Sell Amount (SOL)</label>
-                            <input type="number" id="bulk-sell-max-amount" value="0.5" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Max Sell Amount (SOL)</label>
+                            <input type="number" id="bulk-sell-max-amount" value="0.5" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                        <div class="space-y-1 max-h-24 overflow-y-auto">
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" class="rounded" />
-                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
                             </label>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('bulk-sell-modal')">Cancel</button>
-                    <button class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition" onclick="executeBulkSellTask()">Start Task</button>
+                <div class="floating-window-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 rounded text-sm transition" onclick="closeFloatingWindow('bulk-sell-window')">Cancel</button>
+                    <button class="bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded text-sm transition" onclick="executeBulkSellTask()">Start Task</button>
                 </div>
             </div>
         </div>
 
-        <!-- Bump Task Modal -->
-        <div id="bump-modal" class="modal hidden">
-            <div class="modal-content max-w-2xl">
-                <div class="modal-header">
-                    <h2 class="text-xl font-semibold">Bump Task</h2>
-                    <button class="modal-close" onclick="closeModal('bump-modal')">&times;</button>
+        <!-- Bump Task Window -->
+        <div id="bump-window" class="floating-window hidden" style="position: fixed; top: 200px; left: 300px; z-index: 1000;">
+            <div class="floating-window-content">
+                <div class="floating-window-header" onmousedown="startDrag(event, 'bump-window')">
+                    <h2 class="text-lg font-semibold">Bump Task</h2>
+                    <div class="flex gap-2">
+                        <button class="floating-window-minimize" onclick="minimizeWindow('bump-window')">_</button>
+                        <button class="floating-window-close" onclick="closeFloatingWindow('bump-window')">&times;</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-6">
+                <div class="floating-window-body">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="bump-task-name" value="Bump" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <input type="text" id="bump-task-name" value="Bump" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Bump Amount (SOL)</label>
-                            <input type="number" id="bump-amount" value="0.01" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Bump Amount (SOL)</label>
+                            <input type="number" id="bump-amount" value="0.01" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Bump Count</label>
-                            <input type="number" id="bump-count" value="3" min="1" max="10" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Min Delay (seconds)</label>
-                            <input type="number" id="bump-min-delay" value="5" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Max Delay (seconds)</label>
-                            <input type="number" id="bump-max-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Bump Count</label>
+                            <input type="number" id="bump-count" value="3" min="1" max="10" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Min Delay (seconds)</label>
+                            <input type="number" id="bump-min-delay" value="5" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Max Delay (seconds)</label>
+                            <input type="number" id="bump-max-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                        <div class="space-y-1 max-h-24 overflow-y-auto">
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" class="rounded" />
-                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
                             </label>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('bump-modal')">Cancel</button>
-                    <button class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition" onclick="executeBumpTask()">Start Task</button>
+                <div class="floating-window-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 rounded text-sm transition" onclick="closeFloatingWindow('bump-window')">Cancel</button>
+                    <button class="bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm transition" onclick="executeBumpTask()">Start Task</button>
                 </div>
             </div>
         </div>
 
-        <!-- Sell/Buyback Task Modal -->
-        <div id="sell-buyback-modal" class="modal hidden">
-            <div class="modal-content max-w-2xl">
-                <div class="modal-header">
-                    <h2 class="text-xl font-semibold">Sell/Buyback Task</h2>
-                    <button class="modal-close" onclick="closeModal('sell-buyback-modal')">&times;</button>
+        <!-- Sell/Buyback Task Window -->
+        <div id="sell-buyback-window" class="floating-window hidden" style="position: fixed; top: 250px; left: 400px; z-index: 1000;">
+            <div class="floating-window-content">
+                <div class="floating-window-header" onmousedown="startDrag(event, 'sell-buyback-window')">
+                    <h2 class="text-lg font-semibold">Sell/Buyback Task</h2>
+                    <div class="flex gap-2">
+                        <button class="floating-window-minimize" onclick="minimizeWindow('sell-buyback-window')">_</button>
+                        <button class="floating-window-close" onclick="closeFloatingWindow('sell-buyback-window')">&times;</button>
+                    </div>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-6">
+                <div class="floating-window-body">
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Task Name</label>
-                        <input type="text" id="sell-buyback-task-name" value="Sell/Buyback" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        <input type="text" id="sell-buyback-task-name" value="Sell/Buyback" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Sell Percentage</label>
-                            <input type="number" id="sell-buyback-sell-percentage" value="30" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Sell Percentage</label>
+                            <input type="number" id="sell-buyback-sell-percentage" value="30" min="1" max="100" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Buyback Delay (seconds)</label>
-                            <input type="number" id="sell-buyback-delay" value="60" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Min Amount (SOL)</label>
-                            <input type="number" id="sell-buyback-min-amount" value="0.05" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Max Amount (SOL)</label>
-                            <input type="number" id="sell-buyback-max-amount" value="0.2" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-1 text-sm font-medium">Buyback Delay (seconds)</label>
+                            <input type="number" id="sell-buyback-delay" value="60" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
                         </div>
                     </div>
                     
-                    <div class="mb-6">
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Min Amount (SOL)</label>
+                            <input type="number" id="sell-buyback-min-amount" value="0.05" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                        <div>
+                            <label class="block mb-1 text-sm font-medium">Max Amount (SOL)</label>
+                            <input type="number" id="sell-buyback-max-amount" value="0.2" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-2 max-h-32 overflow-y-auto">
+                        <div class="space-y-1 max-h-24 overflow-y-auto">
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🐘 sour-elephant (0.34 SOL)</span>
+                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" checked class="rounded" />
-                                <span class="text-sm">🦜 decisive-parrot (0.3 SOL)</span>
+                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" class="rounded" />
-                                <span class="text-sm">🦈 unaware-shark (0.01 SOL)</span>
+                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
                             </label>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="closeModal('sell-buyback-modal')">Cancel</button>
-                    <button class="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition" onclick="executeSellBuybackTask()">Start Task</button>
+                <div class="floating-window-footer">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 rounded text-sm transition" onclick="closeFloatingWindow('sell-buyback-window')">Cancel</button>
+                    <button class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm transition" onclick="executeSellBuybackTask()">Start Task</button>
                 </div>
             </div>
         </div>
@@ -3465,23 +3560,23 @@
         let activeTasks = [];
 
         function showAddVolumeTask() {
-            openModal('add-volume-modal');
-            addConsoleLog('Opening Add Volume task modal', 'info');
+            showFloatingWindow('add-volume-window');
+            addConsoleLog('Opening Add Volume task window', 'info');
         }
 
         function showBulkSellTask() {
-            openModal('bulk-sell-modal');
-            addConsoleLog('Opening Bulk Sell task modal', 'info');
+            showFloatingWindow('bulk-sell-window');
+            addConsoleLog('Opening Bulk Sell task window', 'info');
         }
 
         function showBumpTask() {
-            openModal('bump-modal');
-            addConsoleLog('Opening Bump task modal', 'info');
+            showFloatingWindow('bump-window');
+            addConsoleLog('Opening Bump task window', 'info');
         }
 
         function showSellBuybackTask() {
-            openModal('sell-buyback-modal');
-            addConsoleLog('Opening Sell/Buyback task modal', 'info');
+            showFloatingWindow('sell-buyback-window');
+            addConsoleLog('Opening Sell/Buyback task window', 'info');
         }
 
         function executeAddVolumeTask() {
@@ -3508,7 +3603,7 @@
             };
             
             addTaskToList(task);
-            closeModal('add-volume-modal');
+            closeFloatingWindow('add-volume-window');
             showToast(`Started ${taskName} task`, 'success');
             addConsoleLog(`Volume task started: ${taskName}`, 'success');
         }
@@ -3536,7 +3631,7 @@
             };
             
             addTaskToList(task);
-            closeModal('bulk-sell-modal');
+            closeFloatingWindow('bulk-sell-window');
             showToast(`Started ${taskName} task`, 'success');
             addConsoleLog(`Bulk sell task started: ${taskName}`, 'success');
         }
@@ -3565,7 +3660,7 @@
             };
             
             addTaskToList(task);
-            closeModal('bump-modal');
+            closeFloatingWindow('bump-window');
             showToast(`Started ${taskName} task`, 'success');
             addConsoleLog(`Bump task started: ${taskName}`, 'success');
         }
@@ -3594,7 +3689,7 @@
             };
             
             addTaskToList(task);
-            closeModal('sell-buyback-modal');
+            closeFloatingWindow('sell-buyback-window');
             showToast(`Started ${taskName} task`, 'success');
             addConsoleLog(`Sell/Buyback task started: ${taskName}`, 'success');
         }
@@ -3662,6 +3757,81 @@
             updateTasksList();
             showToast('Task cancelled', 'info');
             addConsoleLog(`Task cancelled: ${taskId}`, 'info');
+        }
+
+        // Floating Window Management Functions
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let currentDragWindow = null;
+
+        function showFloatingWindow(windowId) {
+            const window = document.getElementById(windowId);
+            if (window) {
+                window.classList.remove('hidden');
+                // Bring to front
+                const allWindows = document.querySelectorAll('.floating-window:not(.hidden)');
+                allWindows.forEach(w => w.style.zIndex = '1000');
+                window.style.zIndex = '1001';
+                addConsoleLog(`Opened floating window: ${windowId}`, 'info');
+            }
+        }
+
+        function closeFloatingWindow(windowId) {
+            const window = document.getElementById(windowId);
+            if (window) {
+                window.classList.add('hidden');
+                addConsoleLog(`Closed floating window: ${windowId}`, 'info');
+            }
+        }
+
+        function minimizeWindow(windowId) {
+            const window = document.getElementById(windowId);
+            if (window) {
+                window.classList.toggle('minimized');
+                addConsoleLog(`Minimized floating window: ${windowId}`, 'info');
+            }
+        }
+
+        function startDrag(event, windowId) {
+            event.preventDefault();
+            isDragging = true;
+            currentDragWindow = windowId;
+            const window = document.getElementById(windowId);
+            const rect = window.getBoundingClientRect();
+            dragOffset.x = event.clientX - rect.left;
+            dragOffset.y = event.clientY - rect.top;
+            
+            // Bring to front
+            const allWindows = document.querySelectorAll('.floating-window:not(.hidden)');
+            allWindows.forEach(w => w.style.zIndex = '1000');
+            window.style.zIndex = '1001';
+            
+            document.addEventListener('mousemove', dragWindow);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function dragWindow(event) {
+            if (!isDragging || !currentDragWindow) return;
+            
+            const window = document.getElementById(currentDragWindow);
+            if (window) {
+                const newX = event.clientX - dragOffset.x;
+                const newY = event.clientY - dragOffset.y;
+                
+                // Keep window within viewport
+                const maxX = window.innerWidth - window.offsetWidth;
+                const maxY = window.innerHeight - window.offsetHeight;
+                
+                window.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
+                window.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+            }
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            currentDragWindow = null;
+            document.removeEventListener('mousemove', dragWindow);
+            document.removeEventListener('mouseup', stopDrag);
         }
 
         // Initialize all features when DOM loads

@@ -3361,19 +3361,10 @@
         let currentView = 'wallets';
         let autoScroll = true;
 
-        // REMOVED: Fake sample wallet data - Now using real on-chain data
-        // Real data is loaded by real-trading-ui.js
-
-        // OLD Initialize - Now handled by real-trading-ui.js
-        /* document.addEventListener('DOMContentLoaded', () => {
-            wallets = [...sampleWallets];
-            renderWallets();
-            updateTotalBalance();
-            initializeEventListeners();
-            startStatusUpdates();
-            addConsoleLog('System initialized - Ready for trading', 'info');
-        }); */
-
+        // REMOVED: All old JavaScript - Now using real-trading-ui.js
+        // Everything below is commented out and replaced by real-trading-ui.js
+        /* OLD CODE - DO NOT USE
+        
         function initializeEventListeners() {
             // Navigation
             document.querySelectorAll('.nav-item').forEach(item => {
@@ -4537,6 +4528,8 @@
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
+        
+        END OF OLD CODE - DO NOT USE */
     </script>
     
     <!-- Real On-Chain Trading UI - Replaces fake data -->

@@ -6,6 +6,15 @@ console.log('⚡ CHAOS BOT Trading Platform Loading...');
 const IS_NETLIFY = window.location.hostname !== 'localhost';
 const API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
 
+// Production Features
+const PRODUCTION_FEATURES = {
+    pumpfun: true,
+    raydium: true,
+    smartSell: true,
+    walletGroups: true,
+    analytics: true
+};
+
 // State Management
 const state = {
     wallets: [],

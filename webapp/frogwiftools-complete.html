@@ -87,6 +87,9 @@
             align-items: center;
             cursor: move;
             user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
         }
 
         .floating-window-header h2 {
@@ -3794,6 +3797,8 @@
 
         function startDrag(event, windowId) {
             event.preventDefault();
+            event.stopPropagation();
+            
             isDragging = true;
             currentDragWindow = windowId;
             const window = document.getElementById(windowId);
@@ -3806,12 +3811,17 @@
             allWindows.forEach(w => w.style.zIndex = '1000');
             window.style.zIndex = '1001';
             
-            document.addEventListener('mousemove', dragWindow);
+            // Add event listeners
+            document.addEventListener('mousemove', dragWindow, { passive: false });
             document.addEventListener('mouseup', stopDrag);
+            
+            addConsoleLog(`Started dragging window: ${windowId}`, 'info');
         }
 
         function dragWindow(event) {
             if (!isDragging || !currentDragWindow) return;
+            
+            event.preventDefault();
             
             const window = document.getElementById(currentDragWindow);
             if (window) {
@@ -3819,11 +3829,14 @@
                 const newY = event.clientY - dragOffset.y;
                 
                 // Keep window within viewport
-                const maxX = window.innerWidth - window.offsetWidth;
-                const maxY = window.innerHeight - window.offsetHeight;
+                const maxX = document.documentElement.clientWidth - window.offsetWidth;
+                const maxY = document.documentElement.clientHeight - window.offsetHeight;
                 
-                window.style.left = Math.max(0, Math.min(newX, maxX)) + 'px';
-                window.style.top = Math.max(0, Math.min(newY, maxY)) + 'px';
+                const constrainedX = Math.max(0, Math.min(newX, maxX));
+                const constrainedY = Math.max(0, Math.min(newY, maxY));
+                
+                window.style.left = constrainedX + 'px';
+                window.style.top = constrainedY + 'px';
             }
         }
 
@@ -3832,6 +3845,7 @@
             currentDragWindow = null;
             document.removeEventListener('mousemove', dragWindow);
             document.removeEventListener('mouseup', stopDrag);
+            addConsoleLog('Stopped dragging window', 'info');
         }
 
         // Initialize all features when DOM loads

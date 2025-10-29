@@ -801,120 +801,705 @@
                         <span class="text-3xl">🪙</span>
                         <h1 class="text-2xl font-semibold">Tokens</h1>
                     </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
-                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-purple-700 hover:bg-purple-600 text-white" onclick="openModal('new-launch-modal')">
+                        <input
+                            type="text"
+                            placeholder="Search"
+                            class="bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm w-48 focus:outline-none focus:border-neutral-600"
+                            id="token-search"
+                        />
+                        <div class="flex gap-2">
+                            <button class="px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white" id="token-active-tab" onclick="switchTokenTab('Active')">
+                                Active
+                            </button>
+                            <button class="px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white" id="token-archived-tab" onclick="switchTokenTab('Archived')">
+                                Archived
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="navigateToPage('create-token')">
                             <i data-lucide="plus" class="w-4 h-4"></i>
-                            <span>New Launch</span>
+                            <span>Create New</span>
                         </button>
-                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('copy-token-modal')">
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="navigateToPage('copy-token')">
                             <i data-lucide="copy" class="w-4 h-4"></i>
-                            <span>Copy Token</span>
+                            <span>Copy</span>
                         </button>
-                        <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition bg-neutral-800 hover:bg-neutral-700 text-gray-300" onclick="openModal('import-token-modal')">
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="navigateToPage('import-token')">
                             <i data-lucide="download" class="w-4 h-4"></i>
-                            <span>Import Token</span>
+                            <span>Import</span>
                         </button>
                     </div>
                 </div>
             </div>
             
-            <div class="flex-1 p-6">
-                <!-- Token Actions Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-purple-500 transition" onclick="openModal('new-launch-modal')">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="rocket" class="w-6 h-6 text-purple-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">Launch Token</h3>
-                                <p class="text-sm text-gray-400">Create new token</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Custom metadata</li>
-                            <li>• Supply configuration</li>
-                            <li>• Liquidity setup</li>
-                        </ul>
+            <div class="flex-1 overflow-auto">
+                <table class="w-full">
+                    <thead class="bg-neutral-900 sticky top-0">
+                        <tr class="border-b border-neutral-800">
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Token</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Address</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Balance</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Realized Profit</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Launchpad</th>
+                            <th class="text-left p-4 font-medium text-sm text-gray-400">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tokens-table-body">
+                        <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectToken('USDC')">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">💵</div>
+                                    <div>
+                                        <div class="font-semibold">USDC</div>
+                                        <div class="text-xs text-gray-500">United States Debt Coin</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-gray-400">8paR6pAt8GZcKvNn2w2ScZ3x6qQPjwuNPt4NtC43Njpump</span>
+                                    <i data-lucide="copy" class="w-4 h-4 text-gray-500 hover:text-gray-300"></i>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">70529</span>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span>🚀</span>
+                                    <span class="text-sm">Pump.fun</span>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-xs px-3 py-1 rounded-full bg-green-900 text-green-200">LAUNCHED</span>
+                            </td>
+                        </tr>
+                        <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectToken('Goonoween')">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">👻</div>
+                                    <div>
+                                        <div class="font-semibold">Goonoween</div>
+                                        <div class="text-xs text-gray-500">Goonoween</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-gray-400">GAPcgrqvJ4MbaTpzGBAVBFEvChth6ZbeawVPXnGD1bonK</span>
+                                    <i data-lucide="copy" class="w-4 h-4 text-gray-500 hover:text-gray-300"></i>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span>🟠</span>
+                                    <span class="text-sm">Bonk</span>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-xs px-3 py-1 rounded-full bg-neutral-800 text-gray-300">PRE-LAUNCH</span>
+                            </td>
+                        </tr>
+                        <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectToken('mCAP')">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">⚪</div>
+                                    <div>
+                                        <div class="font-semibold">mCAP</div>
+                                        <div class="text-xs text-gray-500">market cap</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-gray-400">bPNjbFyyVpPXUwXGdHCXaYTxJMJh2wDwXnHSzizpump</span>
+                                    <i data-lucide="copy" class="w-4 h-4 text-gray-500 hover:text-gray-300"></i>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span>🚀</span>
+                                    <span class="text-sm">Pump.fun</span>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-xs px-3 py-1 rounded-full bg-neutral-800 text-gray-300">PRE-LAUNCH</span>
+                            </td>
+                        </tr>
+                        <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectToken('SHARE')">
+                            <td class="p-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">💎</div>
+                                    <div>
+                                        <div class="font-semibold">SHARE</div>
+                                        <div class="text-xs text-gray-500">PumpShare</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-gray-400">2ZH7SFVYnPedR0qnpbTDsaz6KCNMgrxuNDXoUfPXpump</span>
+                                    <i data-lucide="copy" class="w-4 h-4 text-gray-500 hover:text-gray-300"></i>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-sm">--</span>
+                            </td>
+                            <td class="p-4">
+                                <div class="flex items-center gap-2">
+                                    <span>🚀</span>
+                                    <span class="text-sm">Pump.fun</span>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="text-xs px-3 py-1 rounded-full bg-blue-900 text-blue-200">IMPORTED</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Create Token Page -->
+        <div id="create-token-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Create</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">✨</span>
+                    <h1 class="text-2xl font-semibold">Create Token</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="flex gap-4 mb-6">
+                        <button id="create-pumpfun-btn" class="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition" onclick="selectTokenPlatform('pumpfun')">
+                            <span>🚀</span>
+                            <span class="font-semibold">Pump.fun</span>
+                        </button>
+                        <button id="create-raydium-btn" class="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition" onclick="selectTokenPlatform('raydium')">
+                            <span>⚡</span>
+                            <span class="font-semibold">Raydium</span>
+                        </button>
                     </div>
                     
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-blue-500 transition" onclick="openModal('copy-token-modal')">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="copy" class="w-6 h-6 text-blue-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">Copy Token</h3>
-                                <p class="text-sm text-gray-400">Clone existing token</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Mirror name & symbol</li>
-                            <li>• Copy image & metadata</li>
-                            <li>• Quick deployment</li>
-                        </ul>
+                    <div class="border-2 border-dashed border-neutral-700 rounded-lg p-12 mb-6 text-center">
+                        <div class="text-4xl mb-4">☁️</div>
+                        <p class="text-sm text-gray-400">
+                            <span class="underline cursor-pointer" onclick="uploadTokenImage()">Click to upload</span> an image or drag and drop
+                        </p>
                     </div>
                     
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-green-500 transition" onclick="openModal('import-token-modal')">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="download" class="w-6 h-6 text-green-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">Import Token</h3>
-                                <p class="text-sm text-gray-400">Add existing token</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Add by address</li>
-                            <li>• Import from file</li>
-                            <li>• Bulk import</li>
-                        </ul>
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Name</label>
+                        <input
+                            type="text"
+                            id="token-name"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The name of the token.</p>
                     </div>
                     
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-yellow-500 transition" onclick="switchView('tokens')">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-yellow-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="bar-chart-3" class="w-6 h-6 text-yellow-200"></i>
-                            </div>
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Symbol</label>
+                        <input
+                            type="text"
+                            id="token-symbol"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">The symbol of the token.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Description</label>
+                        <textarea
+                            rows="4"
+                            id="token-description"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        ></textarea>
+                        <p class="text-xs text-gray-500">The description of the token.</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Website</label>
+                        <input
+                            type="text"
+                            id="token-website"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">Website for the token. (Optional)</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Twitter / X</label>
+                        <input
+                            type="text"
+                            id="token-twitter"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">Twitter / X link for the token. (Optional)</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Telegram</label>
+                        <input
+                            type="text"
+                            id="token-telegram"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">Telegram link for the token. (Optional)</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="use-vanity" class="rounded" />
+                            <span class="text-sm">Use Vanity</span>
+                        </label>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCreateToken()">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Copy Token Page -->
+        <div id="copy-token-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Copy</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">📋</span>
+                    <h1 class="text-2xl font-semibold">Copy Token</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Token Mint Address</label>
+                        <input
+                            type="text"
+                            id="copy-mint-address"
+                            value="yjAiMSEAuwctBvfrDFAh5bDKLuUASsCixPicZiDQsuynp"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">
+                            The public key of the token mint account you would like to copy. Tokens must already be launched on Pump.fun/Raydium. Doesn't work if launched to copy.
+                        </p>
+                    </div>
+                    
+                    <div class="flex gap-4 mb-6">
+                        <button id="copy-pumpfun-btn" class="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition" onclick="selectCopyPlatform('pumpfun')">
+                            <span>🚀</span>
+                            <span class="font-semibold">Pump.fun</span>
+                        </button>
+                        <button id="copy-raydium-btn" class="flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition" onclick="selectCopyPlatform('raydium')">
+                            <span>⚡</span>
+                            <span class="font-semibold">Raydium</span>
+                        </button>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="copy-use-vanity" class="rounded" />
+                            <span class="text-sm">Use Vanity</span>
+                        </label>
+                        <p class="text-xs text-gray-500 mt-2">
+                            If this is checked, the vanity mints will be used to create the token. This only works if 'uninitialized' vanities Supported memes: Tron, Alf, otter. If not checked or if no matching uninitialized vanity is found, default mints will be used.
+                        </p>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCopyToken()">
+                        Copy
+                    </button>
+                    
+                    <p class="text-xs text-gray-400 mt-4">
+                        Don't copy too many mints too quickly. If you abuse this feature, it could get the license rescinded or cease to work for everyone. You can use ~1 paste per hour. Be patient and let the devs do their work.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Token Page -->
+        <div id="import-token-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Import</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🔵</span>
+                    <h1 class="text-2xl font-semibold">Import Token</h1>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-2xl">
+                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-6">
+                        <div class="flex items-start gap-3">
+                            <span class="text-yellow-500 text-xl">⚠️</span>
                             <div>
-                                <h3 class="text-lg font-semibold">Token Analytics</h3>
-                                <p class="text-sm text-gray-400">Track performance</p>
+                                <h3 class="font-semibold text-yellow-200 mb-1">Heads up!</h3>
+                                <p class="text-sm text-yellow-300">
+                                    Please ensure the token you wish to import was launched on a supported launchpad (Pump.fun, Raydium, Bonk). Tokens that were launched by certain wallets may not be supported.
+                                </p>
                             </div>
                         </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Holder statistics</li>
-                            <li>• Trading volume</li>
-                            <li>• Price charts</li>
-                        </ul>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Token Mint Address</label>
+                        <input
+                            type="text"
+                            id="import-mint-address"
+                            value="amsmkZWXUNQMosDNiUcZJgXfqVGkqYhtKxQ7jU4Amcml"
+                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                        />
+                        <p class="text-xs text-gray-500">
+                            The public key of the token mint account you would like to import. You will be able to seli ETH feeds to learn more with your wallets.
+                        </p>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeImportToken()">
+                        Import
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Token Detail Page -->
+        <div id="token-detail-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white" id="selected-token-name">Token</span>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center text-3xl" id="selected-token-icon">🪙</div>
+                        <div>
+                            <h1 class="text-2xl font-semibold mb-1" id="selected-token-title">Token <span class="text-gray-500" id="selected-token-subtitle">Subtitle</span></h1>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="font-mono text-gray-400" id="selected-token-address">Address...</span>
+                                <i data-lucide="copy" class="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-300"></i>
+                            </div>
+                            <div class="flex items-center gap-3 mt-2 text-sm text-gray-400">
+                                <a href="#" class="hover:text-white">🌐</a>
+                                <a href="#" class="hover:text-white">𝕏</a>
+                                <a href="#" class="hover:text-white">📱</a>
+                                <a href="#" class="hover:text-white">📥</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <button id="prepare-launch-btn" class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 hidden" onclick="navigateToPage('launch-token')">
+                            <span>🚀</span>
+                            <span>Prepare Launch</span>
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                            <span>Edit</span>
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
+                            <i data-lucide="file-text" class="w-4 h-4"></i>
+                            <span>Archive</span>
+                        </button>
                     </div>
                 </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <div class="bg-neutral-900 rounded-lg overflow-hidden mb-6">
+                            <table class="w-full text-sm">
+                                <thead class="bg-neutral-800">
+                                    <tr>
+                                        <th class="text-left p-3 text-gray-400">Wallet</th>
+                                        <th class="text-left p-3 text-gray-400">Balance</th>
+                                        <th class="text-left p-3 text-gray-400">Buy Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="token-wallets-table">
+                                    <tr class="border-t border-neutral-800">
+                                        <td class="p-3">
+                                            <div class="flex items-center gap-2">
+                                                <span>🐘</span>
+                                                <span>sour-elephant</span>
+                                            </div>
+                                        </td>
+                                        <td class="p-3">0.34 SOL</td>
+                                        <td class="p-3">
+                                            <input type="number" value="0" class="w-20 bg-black border border-neutral-700 rounded px-2 py-1 text-xs" />
+                                        </td>
+                                    </tr>
+                                    <tr class="border-t border-neutral-800">
+                                        <td class="p-3">
+                                            <div class="flex items-center gap-2">
+                                                <span>🦜</span>
+                                                <span>decisive-parrot</span>
+                                            </div>
+                                        </td>
+                                        <td class="p-3">0.3 SOL</td>
+                                        <td class="p-3">
+                                            <input type="number" value="0" class="w-20 bg-black border border-neutral-700 rounded px-2 py-1 text-xs" />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
+                            <h3 class="text-lg font-semibold mb-4">Tasks</h3>
+                            <div class="space-y-2 text-sm text-gray-400">
+                                <div class="flex items-center justify-between">
+                                    <span>Type</span>
+                                    <span class="text-white">--</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Status</span>
+                                    <span class="text-white" id="token-status">PRE-LAUNCH</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Value of Holdings</span>
+                                    <span class="text-white">--</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>Amount Sold</span>
+                                    <span class="text-white">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-neutral-900 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold mb-4">Activity</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-400">Age</span>
+                                        <span class="text-white">--</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-400">Wallet</span>
+                                        <span class="text-white">--</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-400">Type</span>
+                                        <span class="text-white">--</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-400">Amount</span>
+                                        <span class="text-white">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-2">
+                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Holdings</h3>
+                                <div class="flex gap-2">
+                                    <button class="bg-purple-700 text-white text-xs px-3 py-1 rounded">ALL</button>
+                                    <button class="bg-neutral-800 text-white text-xs px-3 py-1 rounded">RPC</button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-neutral-800">
+                                            <th class="text-left py-2 text-gray-400">Wallet</th>
+                                            <th class="text-left py-2 text-gray-400">Address</th>
+                                            <th class="text-left py-2 text-gray-400">SOL Balance</th>
+                                            <th class="text-left py-2 text-gray-400">Token Balance</th>
+                                            <th class="text-left py-2 text-gray-400">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="border-b border-neutral-800">
+                                            <td class="py-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span>🐘</span>
+                                                    <span>tempting-cat</span>
+                                                </div>
+                                            </td>
+                                            <td class="py-3">
+                                                <span class="font-mono text-xs">66r...NtV?</span>
+                                            </td>
+                                            <td class="py-3">&lt;0.01 SOL</td>
+                                            <td class="py-3">
+                                                <span class="text-gray-400">0.1</span>
+                                                <span class="text-xs ml-2 text-gray-500">0.1</span>
+                                            </td>
+                                            <td class="py-3">
+                                                <button class="bg-green-700 text-white text-xs px-3 py-1 rounded">BUY</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
+                            Launch
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                <!-- Your Tokens Table -->
-                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
-                    <div class="p-4 border-b border-neutral-700">
-                        <h3 class="text-lg font-semibold">Your Tokens</h3>
+        <!-- Launch Token Page -->
+        <div id="launch-token-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="cursor-pointer hover:text-white" id="launch-token-name">Token</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Launch</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🚀</span>
+                        <h1 class="text-2xl font-semibold">Launch Token</h1>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-neutral-900">
-                                <tr class="border-b border-neutral-700">
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Token</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Symbol</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Address</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Supply</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Holders</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Launched</th>
-                                    <th class="text-left p-4 font-medium text-sm text-gray-400">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tokens-table-body">
-                                <tr class="border-b border-neutral-700">
-                                    <td colspan="7" class="p-8 text-center text-gray-500">No tokens launched yet</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition">
+                        Apply Blueprint
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-6">
+                <div class="max-w-4xl">
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold mb-4">Dev</h3>
+                        <p class="text-sm text-gray-400 mb-4">Configure your Dev settings</p>
+                        
+                        <div class="grid grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Dev Wallet</label>
+                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                    <option>🐘 sour-elephant 0.34 SOL</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    The dev wallet you want to use for the token launch. This wallet will be used to pay for the transaction fees.
+                                </p>
+                            </div>
+                            <div>
+                                <label class="block mb-2 text-sm font-medium">Dev Buy Amount</label>
+                                <input
+                                    type="number"
+                                    id="dev-buy-amount"
+                                    value="0.2"
+                                    step="0.01"
+                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-2">
+                                    This is the amount of SOL that the dev wallet will use to buy the token on launch to receive some initial supply of the token.
+                                </p>
+                            </div>
+                        </div>
                     </div>
+                    
+                    <div class="mb-8">
+                        <h3 class="text-lg font-semibold mb-4">Block Zero</h3>
+                        <p class="text-sm text-gray-400 mb-4">
+                            Block Zero allows you to buy the token immediately after token creation, guaranteed to be the first transactions after mint and dev buy. This is done via Jito bundles.
+                        </p>
+                        
+                        <div class="flex items-center gap-2 mb-6">
+                            <input type="checkbox" id="enable-block-zero" class="rounded" checked />
+                            <span class="text-sm font-medium">Enable Block Zero</span>
+                        </div>
+                        
+                        <p class="text-sm text-gray-400 mb-4">
+                            Select which wallets should buy the token in block zero.
+                        </p>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div id="block-zero-safe" class="border-2 rounded-lg p-4 cursor-pointer transition border-neutral-500 bg-neutral-800" onclick="selectBlockZeroMode('safe')">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">🛡️</span>
+                                    <h4 class="font-semibold">Safe Mode</h4>
+                                </div>
+                                <p class="text-xs text-gray-400">Up to 20 wallets. May not look organic.</p>
+                            </div>
+                            <div id="block-zero-quick" class="border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20" onclick="selectBlockZeroMode('quick')">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">🎯</span>
+                                    <h4 class="font-semibold">Quick Scope</h4>
+                                </div>
+                                <p class="text-xs text-purple-300">Up to 3 wallets. Undetectable.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-neutral-800 rounded-lg p-4 mb-6">
+                            <h4 class="font-semibold mb-3">Selected Wallets for Block Zero</h4>
+                            <div class="space-y-2" id="block-zero-wallets">
+                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
+                                    <div class="flex items-center gap-2">
+                                        <span>🐘</span>
+                                        <span>sour-elephant</span>
+                                    </div>
+                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
+                                </div>
+                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
+                                    <div class="flex items-center gap-2">
+                                        <span>🦜</span>
+                                        <span>decisive-parrot</span>
+                                    </div>
+                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
+                        Launch Token
+                    </button>
                 </div>
             </div>
         </div>
@@ -2377,6 +2962,185 @@
             }
             
             addConsoleLog(`Tag ${tagType} ${isActive ? 'removed' : 'added'}`, 'info');
+        }
+
+        // Token Management Functions
+        let selectedToken = null;
+        let currentTokenTab = 'Active';
+
+        function switchTokenTab(tab) {
+            currentTokenTab = tab;
+            const activeTab = document.getElementById('token-active-tab');
+            const archivedTab = document.getElementById('token-archived-tab');
+            
+            if (tab === 'Active') {
+                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+            } else {
+                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+            }
+            
+            addConsoleLog(`Switched to ${tab} tokens`, 'info');
+        }
+
+        function selectToken(tokenName) {
+            const tokens = {
+                'USDC': { name: 'USDC', subtitle: 'United States Debt Coin', icon: '💵', address: '8paR6pAt8GZcKvNn2w2ScZ3x6qQPjwuNPt4NtC43Njpump', status: 'LAUNCHED' },
+                'Goonoween': { name: 'Goonoween', subtitle: 'Goonoween', icon: '👻', address: 'GAPcgrqvJ4MbaTpzGBAVBFEvChth6ZbeawVPXnGD1bonK', status: 'PRE-LAUNCH' },
+                'mCAP': { name: 'mCAP', subtitle: 'market cap', icon: '⚪', address: 'bPNjbFyyVpPXUwXGdHCXaYTxJMJh2wDwXnHSzizpump', status: 'PRE-LAUNCH' },
+                'SHARE': { name: 'SHARE', subtitle: 'PumpShare', icon: '💎', address: '2ZH7SFVYnPedR0qnpbTDsaz6KCNMgrxuNDXoUfPXpump', status: 'IMPORTED' }
+            };
+            
+            selectedToken = tokens[tokenName];
+            if (selectedToken) {
+                document.getElementById('selected-token-name').textContent = selectedToken.name;
+                document.getElementById('selected-token-icon').textContent = selectedToken.icon;
+                document.getElementById('selected-token-title').innerHTML = `${selectedToken.name} <span class="text-gray-500">${selectedToken.subtitle}</span>`;
+                document.getElementById('selected-token-address').textContent = selectedToken.address;
+                document.getElementById('token-status').textContent = selectedToken.status;
+                
+                // Show/hide prepare launch button based on status
+                const prepareBtn = document.getElementById('prepare-launch-btn');
+                if (selectedToken.status === 'PRE-LAUNCH') {
+                    prepareBtn.classList.remove('hidden');
+                } else {
+                    prepareBtn.classList.add('hidden');
+                }
+                
+                navigateToPage('token-detail');
+                addConsoleLog(`Selected token: ${tokenName}`, 'info');
+            }
+        }
+
+        function selectTokenPlatform(platform) {
+            const pumpfunBtn = document.getElementById('create-pumpfun-btn');
+            const raydiumBtn = document.getElementById('create-raydium-btn');
+            
+            if (platform === 'pumpfun') {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+            } else {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+            }
+            
+            addConsoleLog(`Selected platform: ${platform}`, 'info');
+        }
+
+        function selectCopyPlatform(platform) {
+            const pumpfunBtn = document.getElementById('copy-pumpfun-btn');
+            const raydiumBtn = document.getElementById('copy-raydium-btn');
+            
+            if (platform === 'pumpfun') {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+            } else {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+            }
+            
+            addConsoleLog(`Selected copy platform: ${platform}`, 'info');
+        }
+
+        function selectBlockZeroMode(mode) {
+            const safeMode = document.getElementById('block-zero-safe');
+            const quickMode = document.getElementById('block-zero-quick');
+            
+            if (mode === 'safe') {
+                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-500 bg-neutral-800';
+                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
+            } else {
+                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
+                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20';
+            }
+            
+            addConsoleLog(`Selected Block Zero mode: ${mode}`, 'info');
+        }
+
+        function uploadTokenImage() {
+            showToast('Image upload functionality would be implemented here', 'info');
+            addConsoleLog('Token image upload initiated', 'info');
+        }
+
+        function executeCreateToken() {
+            const name = document.getElementById('token-name').value;
+            const symbol = document.getElementById('token-symbol').value;
+            const description = document.getElementById('token-description').value;
+            const website = document.getElementById('token-website').value;
+            const twitter = document.getElementById('token-twitter').value;
+            const telegram = document.getElementById('token-telegram').value;
+            const useVanity = document.getElementById('use-vanity').checked;
+            
+            if (!name || !symbol) {
+                showToast('Please fill in required fields (Name and Symbol)', 'error');
+                return;
+            }
+            
+            showToast(`Creating token "${name}" (${symbol})...`, 'info');
+            addConsoleLog(`Creating token: ${name} (${symbol})`, 'info');
+            
+            setTimeout(() => {
+                showToast('Token created successfully!', 'success');
+                addConsoleLog('Token creation completed', 'success');
+                navigateToPage('tokens');
+            }, 3000);
+        }
+
+        function executeCopyToken() {
+            const mintAddress = document.getElementById('copy-mint-address').value;
+            const useVanity = document.getElementById('copy-use-vanity').checked;
+            
+            if (!mintAddress) {
+                showToast('Please enter a token mint address', 'error');
+                return;
+            }
+            
+            showToast(`Copying token from ${mintAddress.substring(0, 8)}...`, 'info');
+            addConsoleLog(`Copying token: ${mintAddress}`, 'info');
+            
+            setTimeout(() => {
+                showToast('Token copied successfully!', 'success');
+                addConsoleLog('Token copy completed', 'success');
+                navigateToPage('tokens');
+            }, 2500);
+        }
+
+        function executeImportToken() {
+            const mintAddress = document.getElementById('import-mint-address').value;
+            
+            if (!mintAddress) {
+                showToast('Please enter a token mint address', 'error');
+                return;
+            }
+            
+            showToast(`Importing token from ${mintAddress.substring(0, 8)}...`, 'info');
+            addConsoleLog(`Importing token: ${mintAddress}`, 'info');
+            
+            setTimeout(() => {
+                showToast('Token imported successfully!', 'success');
+                addConsoleLog('Token import completed', 'success');
+                navigateToPage('tokens');
+            }, 2000);
+        }
+
+        function executeTokenLaunch() {
+            if (!selectedToken) {
+                showToast('No token selected for launch', 'error');
+                return;
+            }
+            
+            const devBuyAmount = document.getElementById('dev-buy-amount')?.value || '0.2';
+            const enableBlockZero = document.getElementById('enable-block-zero')?.checked || false;
+            
+            showToast(`Launching token "${selectedToken.name}"...`, 'info');
+            addConsoleLog(`Launching token: ${selectedToken.name}`, 'info');
+            
+            setTimeout(() => {
+                showToast('Token launched successfully!', 'success');
+                addConsoleLog('Token launch completed', 'success');
+                navigateToPage('tokens');
+            }, 4000);
         }
 
         // Initialize all features when DOM loads

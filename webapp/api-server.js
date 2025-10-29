@@ -19,19 +19,9 @@ console.log('✅ Fixed API server initialized');
 
 // Helper functions
 const getAllWallets = () => {
-  try {
-    const volumeWallets = require('../volume-wallets-public.json');
-    const pumpWallets = require('../pump-wallets-public.json');
-    
-    const allWallets = [
-      ...(volumeWallets.wallets || []).map(w => ({ ...w, groupName: 'Volume' })),
-      ...(pumpWallets.wallets || []).map(w => ({ ...w, groupName: 'Pump' }))
-    ];
-    return allWallets;
-  } catch (error) {
-    console.error('Error loading wallets:', error);
-    return [];
-  }
+  // Return empty array - no fake wallets
+  // User must add wallets through the interface
+  return [];
 };
 
 const getSolPrice = async () => {
@@ -49,37 +39,22 @@ const apiRoutes = {
   '/api/stats': async () => {
     const wallets = getAllWallets();
     const solPrice = await getSolPrice();
-    
-    let totalBalance = 0;
-    let activeWallets = 0;
-    
-    // Sample first 10 wallets to avoid timeout
-    const sampleWallets = wallets.slice(0, 10);
-    for (const wallet of sampleWallets) {
-      try {
-        const balance = await connection.getBalance(new PublicKey(wallet.publicKey));
-        const solBalance = balance / LAMPORTS_PER_SOL;
-        totalBalance += solBalance;
-        if (solBalance > 0) activeWallets++;
-      } catch (e) {
-        console.error('Error getting balance for', wallet.publicKey, e.message);
-      }
-    }
 
     return {
       wallets: {
         total: wallets.length,
-        active: activeWallets,
-        sampled: sampleWallets.length
+        active: 0,
+        sampled: 0
       },
       balance: {
-        sol: totalBalance,
-        usd: totalBalance * solPrice
+        sol: 0,
+        usd: 0
       },
-      groups: 2,
+      groups: 0,
       solPrice: solPrice,
       rpcUrl: connection.rpcEndpoint,
-      network: 'mainnet-beta'
+      network: 'mainnet-beta',
+      message: 'No wallets configured. Add wallets to get started.'
     };
   },
 
@@ -87,57 +62,19 @@ const apiRoutes = {
   '/api/wallets': async () => {
     const wallets = getAllWallets();
     const solPrice = await getSolPrice();
-    
-    // Limit to first 20 wallets to avoid timeout
-    const limitedWallets = wallets.slice(0, 20);
-    
-    const walletsWithBalances = await Promise.all(
-      limitedWallets.map(async (wallet) => {
-        try {
-          const balance = await connection.getBalance(new PublicKey(wallet.publicKey));
-          const solBalance = balance / LAMPORTS_PER_SOL;
-          return {
-            ...wallet,
-            balance: solBalance,
-            usdValue: solBalance * solPrice,
-            lastUpdated: new Date().toISOString()
-          };
-        } catch (error) {
-          return {
-            ...wallet,
-            balance: 0,
-            usdValue: 0,
-            lastUpdated: new Date().toISOString(),
-            error: 'Failed to fetch balance'
-          };
-        }
-      })
-    );
 
     return {
-      wallets: walletsWithBalances,
-      total: wallets.length,
-      displayed: walletsWithBalances.length,
-      solPrice: solPrice
+      wallets: [],
+      total: 0,
+      displayed: 0,
+      solPrice: solPrice,
+      message: 'No wallets found. Add wallets to get started.'
     };
   },
 
   // Get wallet groups
   '/api/groups': async () => {
-    return [
-      {
-        id: 'Volume',
-        name: 'Volume Wallets',
-        description: 'Volume trading wallets',
-        walletCount: getAllWallets().filter(w => w.groupName === 'Volume').length
-      },
-      {
-        id: 'Pump',
-        name: 'Pump Wallets', 
-        description: 'Pump trading wallets',
-        walletCount: getAllWallets().filter(w => w.groupName === 'Pump').length
-      }
-    ];
+    return [];
   },
 
   // Volume trading status

@@ -146,7 +146,8 @@ async function loadWallets() {
         
         if (!response.ok) throw new Error('API error');
         
-        state.wallets = await response.json();
+        const data = await response.json();
+        state.wallets = data.wallets || [];
         state.filteredWallets = [...state.wallets];
         
         filterWallets();
@@ -155,9 +156,9 @@ async function loadWallets() {
         
         console.log(`✓ Loaded ${state.wallets.length} wallets`);
     } catch (error) {
-        console.log('⚠ Using demo wallets');
-        state.wallets = generateDemoWallets();
-        state.filteredWallets = [...state.wallets];
+        console.log('⚠ No wallets configured - starting empty');
+        state.wallets = [];
+        state.filteredWallets = [];
         filterWallets();
         renderWalletTable();
         updateTotalBalance();
@@ -271,7 +272,20 @@ function renderWalletTable() {
     const tbody = document.getElementById('wallets-table-body');
     
     if (state.filteredWallets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="loading">No wallets found</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-8">
+                    <div class="text-gray-400 mb-4">
+                        <div class="text-6xl mb-4">🔑</div>
+                        <div class="text-xl font-semibold mb-2">No Wallets Configured</div>
+                        <div class="text-sm">Add wallets to get started with trading</div>
+                    </div>
+                    <button onclick="showAddWalletModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg">
+                        Add Your First Wallet
+                    </button>
+                </td>
+            </tr>
+        `;
         return;
     }
     
@@ -330,7 +344,11 @@ function updateBulkActions() {
 
 function updateTotalBalance() {
     const totalBalance = state.filteredWallets.reduce((sum, w) => sum + (w.balance || 0), 0);
-    document.getElementById('total-balance').textContent = `${totalBalance.toFixed(4)} SOL`;
+    if (state.filteredWallets.length === 0) {
+        document.getElementById('total-balance').textContent = '0.0000 SOL';
+    } else {
+        document.getElementById('total-balance').textContent = `${totalBalance.toFixed(4)} SOL`;
+    }
 }
 
 function viewWallet(address) {

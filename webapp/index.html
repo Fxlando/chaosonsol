@@ -6,6 +6,10 @@
     <title>Chaos Bot - FrogWifTools Complete Trading Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <!-- Solana Web3.js for real blockchain interactions -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- Our Solana Integration -->
+    <script src="solana-integration.js"></script>
     <style>
         .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
         .bg-neutral-900 { background-color: #171717; }
@@ -3208,31 +3212,18 @@
         let currentView = 'wallets';
         let autoScroll = true;
 
-        // Sample wallet data
-        const sampleWallets = [
-            { name: 'sour-elephant', emoji: '🐘', address: 'xVXqu8xYd7r4PjfnJ4ExvAMjL7TuWyaD6kbhpGQyuvaSp', tokens: 6, rent: -0.01, balance: 0.97, tags: ['🏠'] },
-            { name: 'decisive-parrot', emoji: '🦜', address: 'GPWuicusP+rxYUjseszLqEHdwzDSL0ttsjrR9jbCGgc8', tokens: 8, rent: -0.01, balance: 0.3, tags: ['🏠', '🌱', '⚠️', '🔰'] },
-            { name: 'unaware-shark', emoji: '🦈', address: 'N8fLtQnSEtpPMeVJ7a7EGbCx+T4u8bnzVE79ktj5wtL', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'tempting-cat', emoji: '🐈', address: '66rAEWpMnjqxU7841i1+w85LK57xjy28Stb1uioVzNtV?', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'dense-flamingo', emoji: '🦩', address: '3Scyg0Gmh1Bps3ZVaiV7PTOJuQR8gjnJOExFAhqYBgMwZ', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'rosy-giraffe', emoji: '🦒', address: '8APPiBRLTAWP3R9JMnsforYgbc5JNxeQ2jMj2kCEngl', tokens: 2, rent: 0, balance: 0.01, tags: ['🏠', '⚠️', '👑', '🌱'] },
-            { name: 'rubbery-cat', emoji: '😺', address: '7hCj9EsjzqdizPntD32rNqJMGQtY5hisiqDhs9TLAUNzu', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'acclaimed-rabbit', emoji: '🐰', address: '8cgxBsk069EOP2Uaq7nmMTis35fcBy8QpTtc78R13WXr', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'cautious-fish', emoji: '🐟', address: '9SDdzqL7XNkYNHKqyGcdTgYTwLvaB1YC9qS8MQJqQf2ze', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'tidy-dog', emoji: '🐕', address: 't35nCFwXxjoJJOqzEPxsewVsjd3BcuPoSRwvi46xq9PT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'respectful-turtle', emoji: '🐢', address: '7NPisMGzttLGdUAqrM037SLpRHWZ2mVtK2LthQ16qEcT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'calculating-fox', emoji: '🦊', address: 'C3Gx25mQ2iYfnH1iEuf3c7SHDKkqMYVBLoxjaqYYwPxJ', tokens: 0, rent: 0, balance: 0.01, tags: ['⚠️', '📦'] }
-        ];
+        // REMOVED: Fake sample wallet data - Now using real on-chain data
+        // Real data is loaded by real-trading-ui.js
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        // OLD Initialize - Now handled by real-trading-ui.js
+        /* document.addEventListener('DOMContentLoaded', () => {
             wallets = [...sampleWallets];
             renderWallets();
             updateTotalBalance();
             initializeEventListeners();
             startStatusUpdates();
             addConsoleLog('System initialized - Ready for trading', 'info');
-        });
+        }); */
 
         function initializeEventListeners() {
             // Navigation
@@ -4398,6 +4389,9 @@
             }, 3000);
         }
     </script>
+    
+    <!-- Real On-Chain Trading UI - Replaces fake data -->
+    <script src="real-trading-ui.js"></script>
 </body>
 </html>
 

@@ -1,5 +1,2 @@
 # API redirects
 /api/* /.netlify/functions/:splat 200
-
-# Home redirect - serve frogwiftools-complete.html as the homepage
-/ /frogwiftools-complete.html 200

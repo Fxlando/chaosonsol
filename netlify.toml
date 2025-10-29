@@ -1,6 +1,6 @@
 [build]
   publish = "webapp"
-  command = "echo 'Production build complete'"
+  command = "echo 'Build complete'"
   functions = "netlify/functions"
 
 [[redirects]]

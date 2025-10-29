@@ -421,6 +421,190 @@ function switchView(viewName) {
     addConsoleLog(`📱 Switched to ${viewName} view`, 'info');
 }
 
+// Token Launch with Automations
+let pumpFunTrading;
+
+// Initialize PumpFun Trading
+function initializePumpFun() {
+    if (!pumpFunTrading && solana) {
+        pumpFunTrading = new PumpFunTrading(solana);
+        console.log('✅ PumpFun Trading initialized');
+    }
+}
+
+// Toggle automation config sections
+function toggleSmartSellConfig() {
+    const checkbox = document.getElementById('enable-smart-sell');
+    const config = document.getElementById('smart-sell-config');
+    if (checkbox && config) {
+        config.classList.toggle('hidden', !checkbox.checked);
+    }
+}
+
+function toggleVolumeBotConfig() {
+    const checkbox = document.getElementById('enable-volume-bot');
+    const config = document.getElementById('volume-bot-config');
+    if (checkbox && config) {
+        config.classList.toggle('hidden', !checkbox.checked);
+    }
+}
+
+// Execute Token Creation & Launch with Automations
+async function executeCreateAndLaunchToken() {
+    try {
+        // Initialize PumpFun if not already
+        initializePumpFun();
+        
+        addConsoleLog('🚀 Starting token launch process...', 'info');
+        
+        // Get token metadata
+        const name = document.getElementById('token-name')?.value;
+        const symbol = document.getElementById('token-symbol')?.value;
+        const description = document.getElementById('token-description')?.value;
+        const website = document.getElementById('token-website')?.value;
+        const twitter = document.getElementById('token-twitter')?.value;
+        const telegram = document.getElementById('token-telegram')?.value;
+        
+        // Validation
+        if (!name || !symbol) {
+            addConsoleLog('❌ Token name and symbol are required!', 'error');
+            alert('Please enter token name and symbol');
+            return;
+        }
+        
+        if (!solana.wallets || solana.wallets.length === 0) {
+            addConsoleLog('❌ No wallets found! Create or import a wallet first.', 'error');
+            alert('Please create or import a wallet first');
+            return;
+        }
+        
+        // Get creator wallet (first wallet)
+        const creatorWallet = solana.wallets[0];
+        
+        // Get automation settings
+        const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
+        const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
+        const initialBuyAmount = parseFloat(document.getElementById('initial-buy-amount')?.value || '0');
+        
+        // Smart Sell Config
+        const smartSellConfig = enableSmartSell ? {
+            wallets: solana.wallets,
+            profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
+            stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
+            trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
+            partialSells: document.getElementById('smart-sell-partial')?.checked || true,
+            sellPercentages: [25, 25, 25, 25]
+        } : null;
+        
+        // Volume Bot Config
+        const volumeBotConfig = enableVolumeBot ? {
+            wallets: solana.wallets,
+            buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
+            sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30'),
+            cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10'),
+            randomizeAmounts: document.getElementById('volume-bot-randomize')?.checked || true,
+            minAmount: 0.005,
+            maxAmount: 0.02
+        } : null;
+        
+        addConsoleLog('📝 Token Configuration:', 'info');
+        addConsoleLog(`   Name: ${name}`, 'info');
+        addConsoleLog(`   Symbol: ${symbol}`, 'info');
+        addConsoleLog(`   Creator: ${creatorWallet.publicKey}`, 'info');
+        if (initialBuyAmount > 0) {
+            addConsoleLog(`   Initial Buy: ${initialBuyAmount} SOL`, 'info');
+        }
+        if (enableSmartSell) {
+            addConsoleLog(`   🤖 Smart Sell: Enabled`, 'success');
+        }
+        if (enableVolumeBot) {
+            addConsoleLog(`   📊 Volume Bot: Enabled`, 'success');
+        }
+        
+        // Create token config
+        const tokenConfig = {
+            name,
+            symbol,
+            description,
+            image: '', // TODO: Handle image upload
+            twitter,
+            telegram,
+            website,
+            creatorWallet,
+            initialBuyAmount,
+            enableSmartSell,
+            smartSellConfig,
+            enableVolumeBot,
+            volumeBotConfig
+        };
+        
+        // Launch token
+        addConsoleLog('🔨 Creating token on PumpFun...', 'info');
+        const result = await pumpFunTrading.createToken(tokenConfig);
+        
+        if (result.success) {
+            addConsoleLog('✅ TOKEN LAUNCHED SUCCESSFULLY!', 'success');
+            addConsoleLog(`🪙 Token Mint: ${result.tokenMint}`, 'success');
+            addConsoleLog(`📄 Metadata: ${result.metadataUri}`, 'info');
+            
+            // Show automations status
+            if (result.automations && result.automations.length > 0) {
+                addConsoleLog(`🤖 Active Automations: ${result.automations.length}`, 'success');
+                result.automations.forEach(auto => {
+                    addConsoleLog(`   - ${auto.type}: ${auto.bot.id}`, 'info');
+                });
+            }
+            
+            // Show success modal or redirect
+            alert(`🚀 Token Launched!\n\nMint: ${result.tokenMint}\n\nView on Solscan`);
+            window.open(`https://solscan.io/token/${result.tokenMint}`, '_blank');
+            
+            // Navigate back to tokens view
+            setTimeout(() => {
+                switchView('tokens');
+            }, 2000);
+            
+        } else {
+            addConsoleLog(`❌ Launch failed: ${result.error}`, 'error');
+            alert(`Token launch failed: ${result.error}`);
+        }
+        
+    } catch (error) {
+        addConsoleLog(`❌ Error: ${error.message}`, 'error');
+        console.error('Token launch error:', error);
+        alert(`Error: ${error.message}`);
+    }
+}
+
+// View active automations
+function viewActiveAutomations() {
+    if (!pumpFunTrading) {
+        addConsoleLog('⚠️ No automations running', 'info');
+        return;
+    }
+    
+    const automations = pumpFunTrading.getActiveAutomations();
+    
+    if (automations.length === 0) {
+        addConsoleLog('⚠️ No active automations', 'info');
+    } else {
+        addConsoleLog(`🤖 Active Automations: ${automations.length}`, 'info');
+        automations.forEach(bot => {
+            addConsoleLog(`   ${bot.type}: ${bot.id} - ${bot.status}`, 'info');
+        });
+    }
+}
+
+// Stop automation
+function stopAutomation(botId) {
+    if (!pumpFunTrading) return;
+    
+    const result = pumpFunTrading.stopAutomation(botId);
+    if (result) {
+        addConsoleLog(`🛑 Automation stopped: ${botId}`, 'info');
+    }
+}
+
 // Export functions for inline onclick handlers
 window.connectWalletHandler = connectWalletHandler;
 window.createNewWallet = createNewWallet;
@@ -430,6 +614,11 @@ window.viewOnSolscan = viewOnSolscan;
 window.copyAddress = copyAddress;
 window.refreshWalletBalance = refreshWalletBalance;
 window.toggleWalletSelection = toggleWalletSelection;
+window.toggleSmartSellConfig = toggleSmartSellConfig;
+window.toggleVolumeBotConfig = toggleVolumeBotConfig;
+window.executeCreateAndLaunchToken = executeCreateAndLaunchToken;
+window.viewActiveAutomations = viewActiveAutomations;
+window.stopAutomation = stopAutomation;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 

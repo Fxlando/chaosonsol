@@ -10,6 +10,8 @@
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <!-- Our Solana Integration -->
     <script src="solana-integration.js"></script>
+    <!-- PumpFun Trading & Automations -->
+    <script src="pumpfun-trading.js"></script>
     <style>
         .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
         .bg-neutral-900 { background-color: #171717; }
@@ -1201,8 +1203,149 @@
                         </label>
                     </div>
                     
-                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCreateToken()">
-                        Save
+                    <!-- AUTOMATIONS SECTION - Smart Sell & Volume Bot -->
+                    <div class="border-t-2 border-neutral-800 pt-6 mb-6">
+                        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <span>🤖</span>
+                            <span>Launch Automations</span>
+                        </h2>
+                        <p class="text-sm text-gray-400 mb-6">
+                            Configure automated trading strategies that activate immediately after token launch
+                        </p>
+                        
+                        <!-- Smart Sell Automation -->
+                        <div class="bg-neutral-800/50 rounded-lg p-4 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="enable-smart-sell" class="rounded" onchange="toggleSmartSellConfig()" />
+                                    <label for="enable-smart-sell" class="font-medium cursor-pointer">Enable Smart Sell</label>
+                                </div>
+                                <span class="text-xs bg-green-900 text-green-200 px-2 py-1 rounded">Auto-Profit Taking</span>
+                            </div>
+                            <p class="text-xs text-gray-400 mb-4">
+                                Automatically sell tokens when profit targets are reached or stop loss is triggered
+                            </p>
+                            
+                            <div id="smart-sell-config" class="space-y-4 hidden">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block mb-2 text-xs font-medium">Profit Target (%)</label>
+                                        <input
+                                            type="number"
+                                            id="smart-sell-profit"
+                                            value="30"
+                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block mb-2 text-xs font-medium">Stop Loss (%)</label>
+                                        <input
+                                            type="number"
+                                            id="smart-sell-stoploss"
+                                            value="-15"
+                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block mb-2 text-xs font-medium">Trailing Stop (%)</label>
+                                    <input
+                                        type="number"
+                                        id="smart-sell-trailing"
+                                        value="10"
+                                        class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="smart-sell-partial" checked class="rounded" />
+                                        <span class="text-xs">Partial Sells (25% chunks)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Volume Bot Automation -->
+                        <div class="bg-neutral-800/50 rounded-lg p-4 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="enable-volume-bot" class="rounded" onchange="toggleVolumeBotConfig()" />
+                                    <label for="enable-volume-bot" class="font-medium cursor-pointer">Enable Volume Bot</label>
+                                </div>
+                                <span class="text-xs bg-blue-900 text-blue-200 px-2 py-1 rounded">Volume Generation</span>
+                            </div>
+                            <p class="text-xs text-gray-400 mb-4">
+                                Generate trading volume automatically using multiple wallets to create market activity
+                            </p>
+                            
+                            <div id="volume-bot-config" class="space-y-4 hidden">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block mb-2 text-xs font-medium">Buy Amount (SOL)</label>
+                                        <input
+                                            type="number"
+                                            id="volume-bot-amount"
+                                            value="0.01"
+                                            step="0.001"
+                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block mb-2 text-xs font-medium">Sell Delay (seconds)</label>
+                                        <input
+                                            type="number"
+                                            id="volume-bot-delay"
+                                            value="30"
+                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                        />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block mb-2 text-xs font-medium">Number of Cycles</label>
+                                        <input
+                                            type="number"
+                                            id="volume-bot-cycles"
+                                            value="10"
+                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="flex items-center gap-2 cursor-pointer mt-6">
+                                            <input type="checkbox" id="volume-bot-randomize" checked class="rounded" />
+                                            <span class="text-xs">Randomize Amounts</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Initial Buy -->
+                        <div class="bg-neutral-800/50 rounded-lg p-4">
+                            <div class="flex items-center gap-2 mb-4">
+                                <span class="text-xl">💰</span>
+                                <label class="font-medium">Initial Buy</label>
+                            </div>
+                            <p class="text-xs text-gray-400 mb-4">
+                                Automatically buy tokens immediately after launch
+                            </p>
+                            <div>
+                                <label class="block mb-2 text-xs font-medium">Buy Amount (SOL)</label>
+                                <input
+                                    type="number"
+                                    id="initial-buy-amount"
+                                    value="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <p class="text-xs text-gray-500 mt-2">Enter 0 to skip initial buy</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition" onclick="executeCreateAndLaunchToken()">
+                        🚀 Create & Launch Token
                     </button>
                 </div>
             </div>

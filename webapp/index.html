@@ -3264,1163 +3264,174 @@
             ? 'http://localhost:3000' 
             : '/.netlify/functions';
 
-        // REMOVED: All old JavaScript - Now using real-trading-ui.js
-        // Everything below is commented out and replaced by real-trading-ui.js
-        /* OLD CODE - DO NOT USE
-        
-        function initializeEventListeners() {
-            // Navigation
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const view = item.dataset.view;
-                    switchView(view);
-                });
-            });
-            
-            // Search
-            document.getElementById('wallet-search').addEventListener('input', filterWallets);
-            
-            // Tab switching
-            document.getElementById('active-tab').addEventListener('click', () => switchTab('active'));
-            document.getElementById('inactive-tab').addEventListener('click', () => switchTab('inactive'));
-            
-            // Select all
-            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
-        }
-
-        function switchView(viewName) {
-            // Update navigation
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
-            });
-            document.querySelector(`[data-view="${viewName}"]`).className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
-            
-            // Update views
-            document.querySelectorAll('.view').forEach(view => {
-                view.classList.add('hidden');
-            });
-            document.getElementById(`${viewName}-view`).classList.remove('hidden');
-            
-            currentView = viewName;
-            
-            // Load view-specific data
-            if (viewName === 'wallets') {
-                renderWallets();
-            }
-        }
-
-        function renderWallets() {
-            const tbody = document.getElementById('wallets-table-body');
-            tbody.innerHTML = wallets.map(wallet => `
-                <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="toggleWalletSelection('${wallet.name}')">
-                    <td class="p-4">
-                        <input type="checkbox" class="rounded wallet-checkbox" data-wallet="${wallet.name}" ${selectedWallets.has(wallet.name) ? 'checked' : ''} />
-                    </td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="text-lg">${wallet.emoji}</span>
-                            <span class="font-mono text-sm">${wallet.name}</span>
-                            <i data-lucide="edit-2" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300"></i>
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex gap-1">
-                            ${wallet.tags.map(tag => `<span class="text-base">${tag}</span>`).join('')}
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="font-mono text-xs text-gray-400 truncate max-w-xs">${wallet.address}</span>
-                            <i data-lucide="copy" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" onclick="copyAddress('${wallet.address}')"></i>
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="text-gray-500">••••</span>
-                            <i data-lucide="copy" class="w-3.5 h-3.5 text-gray-500 hover:text-gray-300"></i>
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <span class="text-sm">
-                            ${wallet.tokens > 0 ? `${wallet.tokens} Tokens` : '—'}
-                        </span>
-                    </td>
-                    <td class="p-4">
-                        <span class="text-sm text-gray-400">
-                            ${wallet.rent < 0 ? `<${wallet.rent} SOL` : '—'}
-                        </span>
-                    </td>
-                    <td class="p-4">
-                        <div class="inline-block bg-purple-900 text-purple-200 px-3 py-1 rounded-full text-sm font-mono">
-                            &lt;${wallet.balance} SOL
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-            
-            // Re-initialize icons
-            lucide.createIcons();
-        }
-
-        function toggleWalletSelection(walletName) {
-            if (selectedWallets.has(walletName)) {
-                selectedWallets.delete(walletName);
-            } else {
-                selectedWallets.add(walletName);
-            }
-            updateBulkActions();
-        }
-
-        function updateBulkActions() {
-            const bulkActions = document.getElementById('bulk-actions');
-            const selectedCount = document.getElementById('selected-count');
-            
-            if (selectedWallets.size > 0) {
-                bulkActions.style.display = 'flex';
-                selectedCount.textContent = `${selectedWallets.size} wallets selected`;
-            } else {
-                bulkActions.style.display = 'none';
-            }
-        }
-
-        function updateTotalBalance() {
-            const total = wallets.reduce((sum, w) => sum + w.balance, 0);
-            document.getElementById('total-balance').textContent = `${total.toFixed(2)} SOL`;
-        }
-
-        function filterWallets() {
-            const searchTerm = document.getElementById('wallet-search').value.toLowerCase();
-            // In a real app, you'd filter the wallets array here
-            renderWallets();
-        }
-
-        function switchTab(tab) {
-            document.getElementById('active-tab').className = tab === 'active' ? 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white' : 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
-            document.getElementById('inactive-tab').className = tab === 'inactive' ? 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white' : 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
-        }
-
-        function toggleSelectAll() {
-            const selectAll = document.getElementById('select-all');
-            const checkboxes = document.querySelectorAll('.wallet-checkbox');
-            
-            checkboxes.forEach(cb => {
-                cb.checked = selectAll.checked;
-                const walletName = cb.dataset.wallet;
-                if (selectAll.checked) {
-                    selectedWallets.add(walletName);
-                } else {
-                    selectedWallets.delete(walletName);
-                }
-            });
-            updateBulkActions();
-        }
-
-        function openModal(modalId) {
-            document.getElementById(modalId).classList.remove('hidden');
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.add('hidden');
-        }
-
-        function executeGenerate() {
-            const count = parseInt(document.getElementById('generate-count').value);
-            if (!count || count < 1 || count > 100) {
-                showToast('Please enter a valid number (1-100)', 'error');
-                return;
-            }
-            
-            showToast(`Generating ${count} wallets...`, 'info');
-            addConsoleLog(`Generating ${count} new wallets`, 'info');
-            closeModal('generate-modal');
-            
-            setTimeout(() => {
-                showToast(`Successfully generated ${count} wallets!`, 'success');
-                addConsoleLog(`Generated ${count} new wallets`, 'success');
-            }, 2000);
-        }
-
-        function copyAddress(address) {
-            navigator.clipboard.writeText(address);
-            showToast('Address copied!', 'success');
-        }
-
-        function copyFeeWalletAddress() {
-            const address = '6NBcSPLV...1YnDb8L';
-            navigator.clipboard.writeText(address);
-            showToast('Fee wallet address copied!', 'success');
-        }
-
-        function copyFeeWalletKey() {
-            showToast('Fee wallet private key copied!', 'success');
-        }
-
-        function refreshFeeWallet() {
-            showToast('Refreshing fee wallet...', 'info');
-            addConsoleLog('Refreshing fee wallet balance', 'info');
-        }
-
-        async function exportWallets() {
-            if (window.walletOperations && window.walletOperations.exportWallets) {
-                await window.walletOperations.exportWallets();
-            } else {
-                // Fallback implementation
-                const walletsToExport = selectedWallets.size > 0 
-                    ? wallets.filter(w => selectedWallets.has(w.id || w.name))
-                    : wallets;
-                
-                if (walletsToExport.length === 0) {
-                    showToast('No wallets to export', 'error');
-                    return;
-                }
-                
-                const exportData = walletsToExport.map(wallet => ({
-                    name: wallet.name,
-                    address: wallet.address || wallet.publicKey,
-                    balance: wallet.balance || 0,
-                    tags: wallet.tags || [],
-                    group: wallet.group || wallet.groupName || 'default'
-                }));
-                
-                const dataStr = JSON.stringify(exportData, null, 2);
-                const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                const url = URL.createObjectURL(dataBlob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `wallets_export_${Date.now()}.json`;
-                link.click();
-                URL.revokeObjectURL(url);
-                
-                showToast(`Exported ${walletsToExport.length} wallets`, 'success');
-            }
-        }
-
-        async function deactivateWallets() {
-            if (window.walletOperations && window.walletOperations.deactivateWallets) {
-                await window.walletOperations.deactivateWallets();
-            } else {
-                // Fallback implementation
-                if (selectedWallets.size === 0) {
-                    showToast('Please select wallets to deactivate', 'error');
-                    return;
-                }
-                
-                showToast(`Deactivating ${selectedWallets.size} wallets...`, 'info');
-                // Call API to deactivate
-                try {
-                    const endpoint = API_BASE.includes('netlify') 
-                        ? `${API_BASE}/wallets/deactivate` 
-                        : `${API_BASE}/api/wallets/deactivate`;
-                    
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            walletIds: Array.from(selectedWallets) 
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        selectedWallets.clear();
-                        await loadWallets();
-                        showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
-                    }
-                } catch (error) {
-                    showToast(`Failed to deactivate wallets: ${error.message}`, 'error');
-                }
-            }
-        }
-
-        async function refreshBalances() {
-            if (window.walletOperations && window.walletOperations.refreshBalances) {
-                await window.walletOperations.refreshBalances();
-            } else {
-                // Fallback implementation
-                showToast('Refreshing balances...', 'info');
-                addConsoleLog('Refreshing wallet balances', 'info');
-                await loadWallets();
-                showToast('Balances updated!', 'success');
-            }
-        }
-
-        function clearConsole() {
-            document.getElementById('console-output').innerHTML = '';
-            addConsoleLog('Console cleared', 'info');
-        }
-
-        function toggleAutoScroll() {
-            autoScroll = !autoScroll;
-            document.getElementById('auto-scroll-text').textContent = `Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`;
-        }
-
-        function addConsoleLog(message, type = 'info') {
-            const consoleOutput = document.getElementById('console-output');
-            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-            
-            const line = document.createElement('div');
-            line.className = 'console-line flex gap-4 py-1';
-            line.innerHTML = `
-                <span class="text-gray-500">[${time}]</span>
-                <span class="font-semibold ${
-                    type === 'success' ? 'text-green-400' :
-                    type === 'error' ? 'text-red-400' :
-                    type === 'warning' ? 'text-yellow-400' :
-                    'text-blue-400'
-                }">${type.toUpperCase()}</span>
-                <span class="text-gray-300">${message}</span>
-            `;
-            
-            consoleOutput.insertBefore(line, consoleOutput.firstChild);
-            
-            // Keep only last 100 lines
-            while (consoleOutput.children.length > 100) {
-                consoleOutput.removeChild(consoleOutput.lastChild);
-            }
-            
-            if (autoScroll) {
-                consoleOutput.scrollTop = 0;
-            }
-        }
-
-        function startStatusUpdates() {
-            // Simulate status updates
-            setInterval(() => {
-                const statuses = ['Online', 'Connecting', 'Offline'];
-                const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-                
-                if (Math.random() > 0.8) {
-                    document.getElementById('rpc-status').textContent = randomStatus;
-                    document.getElementById('ws-status').textContent = randomStatus;
-                    document.getElementById('jito-status').textContent = randomStatus;
-                }
-            }, 10000);
-            
-            // Simulate console activity
-            setInterval(() => {
-                const activities = [
-                    'Price check completed',
-                    'RPC connection healthy',
-                    'Monitoring active positions',
-                    'System status: OK',
-                    'Wallet balance updated',
-                    'Transaction confirmed'
-                ];
-                const random = activities[Math.floor(Math.random() * activities.length)];
-                addConsoleLog(random, 'info');
-            }, 30000);
-        }
-
-        function openDocumentation() {
-            showToast('Opening documentation...', 'info');
-        }
-
-        function sharePlatform() {
-            showToast('Platform link copied to clipboard!', 'success');
-        }
-
-        // P&L Functions
-        function refreshPnL() {
-            showToast('Refreshing P&L data...', 'info');
-            addConsoleLog('Refreshing profit and loss data', 'info');
-            setTimeout(() => {
-                showToast('P&L data updated!', 'success');
-            }, 1000);
-        }
-
-        function exportPnL() {
-            showToast('Exporting P&L data...', 'info');
-            addConsoleLog('Exporting P&L data to CSV', 'info');
-            setTimeout(() => {
-                showToast('P&L data exported successfully!', 'success');
-            }, 1000);
-        }
-
-        // Fee Collection Functions
-        function collectAllFees() {
-            showToast('Collecting all fees...', 'info');
-            addConsoleLog('Starting fee collection from all wallets', 'info');
-            setTimeout(() => {
-                showToast('All fees collected successfully!', 'success');
-                addConsoleLog('Fee collection completed', 'success');
-            }, 2000);
-        }
-
-        function collectTradingFees() {
-            const walletCount = document.getElementById('trading-wallets').textContent || '0';
-            showToast('Collecting trading fees...', 'info');
-            addConsoleLog(`Collecting trading fees from ${walletCount} wallets`, 'info');
-            setTimeout(() => {
-                showToast('Trading fees collected!', 'success');
-            }, 1500);
-        }
-
-        function collectRentFees() {
-            const walletCount = document.getElementById('rent-wallets').textContent || '0';
-            showToast('Collecting rent fees...', 'info');
-            addConsoleLog(`Collecting rent fees from ${walletCount} wallets`, 'info');
-            setTimeout(() => {
-                showToast('Rent fees collected!', 'success');
-            }, 1500);
-        }
-
-        function toggleAutoCollect() {
-            const autoCollect = document.getElementById('auto-collect');
-            const isEnabled = autoCollect.textContent === 'Enabled';
-            autoCollect.textContent = isEnabled ? 'Disabled' : 'Enabled';
-            autoCollect.className = isEnabled ? 'text-sm font-mono text-red-400' : 'text-sm font-mono text-green-400';
-            showToast(`Auto collect ${isEnabled ? 'disabled' : 'enabled'}`, 'info');
-        }
-
-        // Vanity Functions
-        function startVanityGeneration() {
-            const prefix = document.getElementById('vanity-prefix').value;
-            const suffix = document.getElementById('vanity-suffix').value;
-            const difficulty = document.getElementById('vanity-difficulty').value;
-            const attempts = document.getElementById('vanity-attempts').value;
-
-            if (!prefix && !suffix) {
-                showToast('Please enter a prefix or suffix', 'error');
-                return;
-            }
-
-            showToast(`Starting vanity generation for ${prefix}...${suffix}`, 'info');
-            addConsoleLog(`Starting vanity address generation (${difficulty} difficulty)`, 'info');
-            
-            // Simulate generation
-            setTimeout(() => {
-                showToast('Vanity address generated!', 'success');
-                addConsoleLog('Vanity address generation completed', 'success');
-            }, 3000);
-        }
-
-        // Markdown Functions
-        function createNewDocument() {
-            showToast('Creating new document...', 'info');
-            addConsoleLog('Creating new markdown document', 'info');
-            setTimeout(() => {
-                showToast('New document created!', 'success');
-            }, 1000);
-        }
-
-        // Initialize markdown editor
-        function initializeMarkdownEditor() {
-            const editor = document.getElementById('markdown-editor');
-            const preview = document.getElementById('markdown-preview');
-            
-            if (editor && preview) {
-                editor.addEventListener('input', () => {
-                    const markdown = editor.value;
-                    // Simple markdown preview (in a real app, you'd use a proper markdown parser)
-                    preview.innerHTML = markdown
-                        .replace(/# (.*)/g, '<h1 class="text-2xl font-bold mb-2">$1</h1>')
-                        .replace(/## (.*)/g, '<h2 class="text-xl font-semibold mb-2">$1</h2>')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
-                        .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
-                        .replace(/`(.*?)`/g, '<code class="bg-gray-700 px-1 rounded text-sm">$1</code>')
-                        .replace(/\n/g, '<br>');
-                });
-            }
-        }
-
-        // Navigation Functions
-        function navigateToPage(page) {
-            // Hide all views
-            const views = document.querySelectorAll('.view');
-            views.forEach(view => view.classList.add('hidden'));
-            
-            // Show the requested page
-            const targetPage = document.getElementById(page + '-page');
-            if (targetPage) {
-                targetPage.classList.remove('hidden');
-                addConsoleLog(`Navigated to ${page} page`, 'info');
-            } else {
-                // If no dedicated page, show wallets view and open modal
-                document.getElementById('wallets-view').classList.remove('hidden');
-                openModal(page + '-modal');
-            }
-        }
-
-        // Wallet Operation Functions
-        async function executeGenerateWallets() {
-            const countInput = document.getElementById('generate-count-input');
-            if (!countInput) {
-                showToast('Generate count input not found', 'error');
-                return;
-            }
-            
-            const count = parseInt(countInput.value);
-            if (!count || count < 1 || count > 100) {
-                showToast('Please enter a valid number between 1 and 100', 'error');
-                return;
-            }
-            
-            showToast(`Generating ${count} wallets...`, 'info');
-            addConsoleLog(`Starting generation of ${count} wallets`, 'info');
-            
-            // Use wallet operations if available
-            if (window.walletOperations && window.walletOperations.executeGenerateWallets) {
-                await window.walletOperations.executeGenerateWallets();
-            } else {
-                // Fallback: call API directly
-                try {
-                    const endpoint = API_BASE.includes('netlify') 
-                        ? `${API_BASE}/wallets/generate` 
-                        : `${API_BASE}/api/wallets/generate`;
-                    
-                    const response = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ count })
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        showToast(`Successfully generated ${count} wallets!`, 'success');
-                        addConsoleLog(`Generated ${count} new wallets`, 'success');
-                        navigateToPage('wallets');
-                        // Reload wallets
-                        await loadWallets();
-                    } else {
-                        throw new Error('Failed to generate wallets');
-                    }
-                } catch (error) {
-                    showToast(`Failed to generate wallets: ${error.message}`, 'error');
-                    addConsoleLog(`Error generating wallets: ${error.message}`, 'error');
-                }
-            }
-        }
-
-        function executeFundWallets() {
-            const mode = document.querySelector('input[name="fund-method"]:checked').value;
-            const amount = document.getElementById('fund-amount-input').value;
-            const privateKey = document.getElementById('fund-private-key').value;
-            
-            showToast(`Funding wallets with ${amount} SOL each...`, 'info');
-            addConsoleLog(`Starting funding process (${mode} mode)`, 'info');
-            
-            setTimeout(() => {
-                showToast('Wallets funded successfully!', 'success');
-                addConsoleLog('Funding completed', 'success');
-                navigateToPage('wallets');
-            }, 3000);
-        }
-
-        function executeWithdrawWallets() {
-            const method = document.querySelector('input[name="withdraw-method"]:checked').value;
-            const percentage = document.getElementById('withdraw-percentage').value;
-            const destination = document.getElementById('withdraw-destination').value;
-            
-            showToast(`Withdrawing ${percentage}% to ${destination.substring(0, 8)}...`, 'info');
-            addConsoleLog(`Starting withdrawal process (${method})`, 'info');
-            
-            setTimeout(() => {
-                showToast('Withdrawal completed successfully!', 'success');
-                addConsoleLog('Withdrawal completed', 'success');
-                navigateToPage('wallets');
-            }, 2500);
-        }
-
-        function executeTagWallets() {
-            const executor = document.querySelector('#tag-jito-btn').classList.contains('bg-purple-600') ? 'jito' : 'rpc';
-            const minAmount = document.getElementById('tag-min-amount').value;
-            const maxAmount = document.getElementById('tag-max-amount').value;
-            
-            showToast(`Tagging wallets with ${executor} executor...`, 'info');
-            addConsoleLog(`Starting tagging process (${executor}, ${minAmount}-${maxAmount} SOL)`, 'info');
-            
-            setTimeout(() => {
-                showToast('Wallets tagged successfully!', 'success');
-                addConsoleLog('Tagging completed', 'success');
-                navigateToPage('wallets');
-            }, 4000);
-        }
-
-        function executeWarmWallets() {
-            const executor = document.querySelector('#warm-jito-btn').classList.contains('bg-purple-600') ? 'jito' : 'rpc';
-            const minSwaps = document.getElementById('warm-min-swaps').value;
-            const maxSwaps = document.getElementById('warm-max-swaps').value;
-            
-            showToast(`Warming wallets with ${executor} executor...`, 'info');
-            addConsoleLog(`Starting warming process (${executor}, ${minSwaps}-${maxSwaps} swaps)`, 'info');
-            
-            setTimeout(() => {
-                showToast('Wallets warmed successfully!', 'success');
-                addConsoleLog('Warming completed', 'success');
-                navigateToPage('wallets');
-            }, 5000);
-        }
-
-        function executeRedistributeWallets() {
-            const mode = document.querySelector('#redistribute-mixer-mode').classList.contains('border-purple-500') ? 'mixer' : 'standard';
-            
-            showToast(`Redistributing funds (${mode} mode)...`, 'info');
-            addConsoleLog(`Starting redistribution process (${mode} mode)`, 'info');
-            
-            setTimeout(() => {
-                showToast('Funds redistributed successfully!', 'success');
-                addConsoleLog('Redistribution completed', 'success');
-                navigateToPage('wallets');
-            }, 3000);
-        }
-
-        // Mode Selection Functions
-        function selectFundMode(mode) {
-            const standardMode = document.getElementById('fund-standard-mode');
-            const mixerMode = document.getElementById('fund-mixer-mode');
-            
-            if (mode === 'standard') {
-                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
-                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
-            } else {
-                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
-                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
-            }
-        }
-
-        function selectRedistributeMode(mode) {
-            const standardMode = document.getElementById('redistribute-standard-mode');
-            const mixerMode = document.getElementById('redistribute-mixer-mode');
-            
-            if (mode === 'standard') {
-                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
-                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
-            } else {
-                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
-                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
-            }
-        }
-
-        function selectTagExecutor(executor) {
-            const jitoBtn = document.getElementById('tag-jito-btn');
-            const rpcBtn = document.getElementById('tag-rpc-btn');
-            
-            if (executor === 'jito') {
-                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
-                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
-            } else {
-                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
-                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
-            }
-        }
-
-        function selectWarmExecutor(executor) {
-            const jitoBtn = document.getElementById('warm-jito-btn');
-            const rpcBtn = document.getElementById('warm-rpc-btn');
-            
-            if (executor === 'jito') {
-                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
-                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
-            } else {
-                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
-                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
-            }
-        }
-
-        function toggleTag(tagType) {
-            const button = event.target;
-            const isActive = button.classList.contains('bg-blue-600');
-            
-            if (isActive) {
-                button.className = 'bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition';
-            } else {
-                button.className = 'bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition';
-            }
-            
-            addConsoleLog(`Tag ${tagType} ${isActive ? 'removed' : 'added'}`, 'info');
-        }
-
-        // Token Management Functions
-        let selectedToken = null;
-        let currentTokenTab = 'Active';
-
-        function switchTokenTab(tab) {
-            currentTokenTab = tab;
-            const activeTab = document.getElementById('token-active-tab');
-            const archivedTab = document.getElementById('token-archived-tab');
-            
-            if (tab === 'Active') {
-                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
-                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
-            } else {
-                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
-                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
-            }
-            
-            addConsoleLog(`Switched to ${tab} tokens`, 'info');
-        }
-
-        function selectToken(tokenName) {
-            const tokens = {};
-            
-            selectedToken = tokens[tokenName];
-            if (selectedToken) {
-                document.getElementById('selected-token-name').textContent = selectedToken.name;
-                document.getElementById('selected-token-icon').textContent = selectedToken.icon;
-                document.getElementById('selected-token-title').innerHTML = `${selectedToken.name} <span class="text-gray-500">${selectedToken.subtitle}</span>`;
-                document.getElementById('selected-token-address').textContent = selectedToken.address;
-                document.getElementById('token-status').textContent = selectedToken.status;
-                
-                // Show/hide prepare launch button based on status
-                const prepareBtn = document.getElementById('prepare-launch-btn');
-                if (selectedToken.status === 'PRE-LAUNCH') {
-                    prepareBtn.classList.remove('hidden');
-                } else {
-                    prepareBtn.classList.add('hidden');
-                }
-                
-                navigateToPage('token-detail');
-                addConsoleLog(`Selected token: ${tokenName}`, 'info');
-            }
-        }
-
-        function selectTokenPlatform(platform) {
-            const pumpfunBtn = document.getElementById('create-pumpfun-btn');
-            const raydiumBtn = document.getElementById('create-raydium-btn');
-            
-            if (platform === 'pumpfun') {
-                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-            } else {
-                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-            }
-            
-            addConsoleLog(`Selected platform: ${platform}`, 'info');
-        }
-
-        function selectCopyPlatform(platform) {
-            const pumpfunBtn = document.getElementById('copy-pumpfun-btn');
-            const raydiumBtn = document.getElementById('copy-raydium-btn');
-            
-            if (platform === 'pumpfun') {
-                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-            } else {
-                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-            }
-            
-            addConsoleLog(`Selected copy platform: ${platform}`, 'info');
-        }
-
-        function selectBlockZeroMode(mode) {
-            const safeMode = document.getElementById('block-zero-safe');
-            const quickMode = document.getElementById('block-zero-quick');
-            
-            if (mode === 'safe') {
-                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-500 bg-neutral-800';
-                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
-            } else {
-                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
-                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20';
-            }
-            
-            addConsoleLog(`Selected Block Zero mode: ${mode}`, 'info');
-        }
-
-        function uploadTokenImage() {
-            showToast('Image upload functionality would be implemented here', 'info');
-            addConsoleLog('Token image upload initiated', 'info');
-        }
-
-        function executeCreateToken() {
-            const name = document.getElementById('token-name').value;
-            const symbol = document.getElementById('token-symbol').value;
-            const description = document.getElementById('token-description').value;
-            const website = document.getElementById('token-website').value;
-            const twitter = document.getElementById('token-twitter').value;
-            const telegram = document.getElementById('token-telegram').value;
-            const useVanity = document.getElementById('use-vanity').checked;
-            
-            if (!name || !symbol) {
-                showToast('Please fill in required fields (Name and Symbol)', 'error');
-                return;
-            }
-            
-            showToast(`Creating token "${name}" (${symbol})...`, 'info');
-            addConsoleLog(`Creating token: ${name} (${symbol})`, 'info');
-            
-            setTimeout(() => {
-                showToast('Token created successfully!', 'success');
-                addConsoleLog('Token creation completed', 'success');
-                navigateToPage('tokens');
-            }, 3000);
-        }
-
-        function executeCopyToken() {
-            const mintAddress = document.getElementById('copy-mint-address').value;
-            const useVanity = document.getElementById('copy-use-vanity').checked;
-            
-            if (!mintAddress) {
-                showToast('Please enter a token mint address', 'error');
-                return;
-            }
-            
-            showToast(`Copying token from ${mintAddress.substring(0, 8)}...`, 'info');
-            addConsoleLog(`Copying token: ${mintAddress}`, 'info');
-            
-            setTimeout(() => {
-                showToast('Token copied successfully!', 'success');
-                addConsoleLog('Token copy completed', 'success');
-                navigateToPage('tokens');
-            }, 2500);
-        }
-
-        function executeImportToken() {
-            const mintAddress = document.getElementById('import-mint-address').value;
-            
-            if (!mintAddress) {
-                showToast('Please enter a token mint address', 'error');
-                return;
-            }
-            
-            showToast(`Importing token from ${mintAddress.substring(0, 8)}...`, 'info');
-            addConsoleLog(`Importing token: ${mintAddress}`, 'info');
-            
-            setTimeout(() => {
-                showToast('Token imported successfully!', 'success');
-                addConsoleLog('Token import completed', 'success');
-                navigateToPage('tokens');
-            }, 2000);
-        }
-
-        function executeTokenLaunch() {
-            if (!selectedToken) {
-                showToast('No token selected for launch', 'error');
-                return;
-            }
-            
-            const devBuyAmount = document.getElementById('dev-buy-amount')?.value || '0.2';
-            const enableBlockZero = document.getElementById('enable-block-zero')?.checked || false;
-            
-            showToast(`Launching token "${selectedToken.name}"...`, 'info');
-            addConsoleLog(`Launching token: ${selectedToken.name}`, 'info');
-            
-            setTimeout(() => {
-                showToast('Token launched successfully!', 'success');
-                addConsoleLog('Token launch completed', 'success');
-                navigateToPage('tokens');
-            }, 4000);
-        }
-
-        // Task Management Functions
-        let activeTasks = [];
-
-        function showAddVolumeTask() {
-            showFloatingWindow('add-volume-window');
-            addConsoleLog('Opening Add Volume task window', 'info');
-        }
-
-        function showBulkSellTask() {
-            showFloatingWindow('bulk-sell-window');
-            addConsoleLog('Opening Bulk Sell task window', 'info');
-        }
-
-        function showBumpTask() {
-            showFloatingWindow('bump-window');
-            addConsoleLog('Opening Bump task window', 'info');
-        }
-
-        function showSellBuybackTask() {
-            showFloatingWindow('sell-buyback-window');
-            addConsoleLog('Opening Sell/Buyback task window', 'info');
-        }
-
-        function executeAddVolumeTask() {
-            const method = getSelectedMethod('volume');
-            const minAmount = document.getElementById('volume-min-amount').value;
-            const maxAmount = document.getElementById('volume-max-amount').value;
-            const minDelay = document.getElementById('volume-min-delay').value;
-            const maxDelay = document.getElementById('volume-max-delay').value;
-            
-            if (!minAmount || !maxAmount) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            const task = {
-                id: 'volume-' + Date.now(),
-                name: `Volume Generation (${method.toUpperCase()})`,
-                type: 'Volume Generation',
-                method: method,
-                status: 'Running',
-                icon: 'activity',
-                color: 'blue',
-                details: `Method: ${method.toUpperCase()} • Min: ${minAmount} SOL • Max: ${maxAmount} SOL • Delay: ${minDelay}-${maxDelay}s`,
-                wallets: '2/5 wallets'
-            };
-            
-            addTaskToList(task);
-            closeFloatingWindow('add-volume-window');
-            showToast(`Started Volume Generation (${method.toUpperCase()}) task`, 'success');
-            addConsoleLog(`Volume task started: ${method.toUpperCase()}`, 'success');
-        }
-
-        function executeBulkSellTask() {
-            const method = getSelectedMethod('bulk-sell');
-            const percentage = document.getElementById('bulk-sell-percentage').value;
-            const minAmount = document.getElementById('bulk-sell-min-amount').value;
-            const maxAmount = document.getElementById('bulk-sell-max-amount').value;
-            
-            if (!percentage || !minAmount || !maxAmount) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            const task = {
-                id: 'bulk-sell-' + Date.now(),
-                name: `Bulk Sell (${method.toUpperCase()})`,
-                type: 'Bulk Sell',
-                method: method,
-                status: 'Queued',
-                icon: 'trash-2',
-                color: 'red',
-                details: `Method: ${method.toUpperCase()} • Sell ${percentage}% • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
-                wallets: '3 wallets'
-            };
-            
-            addTaskToList(task);
-            closeFloatingWindow('bulk-sell-window');
-            showToast(`Started Bulk Sell (${method.toUpperCase()}) task`, 'success');
-            addConsoleLog(`Bulk sell task started: ${method.toUpperCase()}`, 'success');
-        }
-
-        function executeBumpTask() {
-            const method = getSelectedMethod('bump');
-            const amount = document.getElementById('bump-amount').value;
-            const count = document.getElementById('bump-count').value;
-            const minDelay = document.getElementById('bump-min-delay').value;
-            const maxDelay = document.getElementById('bump-max-delay').value;
-            
-            if (!amount || !count) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            const task = {
-                id: 'bump-' + Date.now(),
-                name: `Bump (${method.toUpperCase()})`,
-                type: 'Bump',
-                method: method,
-                status: 'Running',
-                icon: 'trending-up',
-                color: 'orange',
-                details: `Method: ${method.toUpperCase()} • Amount: ${amount} SOL • Count: ${count} • Delay: ${minDelay}-${maxDelay}s`,
-                wallets: '2 wallets'
-            };
-            
-            addTaskToList(task);
-            closeFloatingWindow('bump-window');
-            showToast(`Started Bump (${method.toUpperCase()}) task`, 'success');
-            addConsoleLog(`Bump task started: ${method.toUpperCase()}`, 'success');
-        }
-
-        function executeSellBuybackTask() {
-            const method = getSelectedMethod('sell-buyback');
-            const sellPercentage = document.getElementById('sell-buyback-sell-percentage').value;
-            const delay = document.getElementById('sell-buyback-delay').value;
-            const minAmount = document.getElementById('sell-buyback-min-amount').value;
-            const maxAmount = document.getElementById('sell-buyback-max-amount').value;
-            
-            if (!sellPercentage || !delay || !minAmount || !maxAmount) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            const task = {
-                id: 'sell-buyback-' + Date.now(),
-                name: `Sell/Buyback (${method.toUpperCase()})`,
-                type: 'Sell/Buyback',
-                method: method,
-                status: 'Running',
-                icon: 'refresh-cw',
-                color: 'blue',
-                details: `Method: ${method.toUpperCase()} • Sell ${sellPercentage}% • Delay: ${delay}s • Min: ${minAmount} SOL • Max: ${maxAmount} SOL`,
-                wallets: '2 wallets'
-            };
-            
-            addTaskToList(task);
-            closeFloatingWindow('sell-buyback-window');
-            showToast(`Started Sell/Buyback (${method.toUpperCase()}) task`, 'success');
-            addConsoleLog(`Sell/Buyback task started: ${method.toUpperCase()}`, 'success');
-        }
-
-        function addTaskToList(task) {
-            activeTasks.push(task);
-            updateTasksList();
-        }
-
-        function updateTasksList() {
-            const tasksList = document.getElementById('active-tasks-list');
-            const noTasksState = document.getElementById('no-tasks-state');
-            
-            if (activeTasks.length === 0) {
-                tasksList.innerHTML = '';
-                noTasksState.classList.remove('hidden');
-                return;
-            }
-            
-            noTasksState.classList.add('hidden');
-            
-            tasksList.innerHTML = activeTasks.map(task => `
-                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 bg-${task.color}-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="${task.icon}" class="w-4 h-4 text-${task.color}-200"></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-sm">${task.name}</h4>
-                                <p class="text-xs text-gray-400">${task.status} • ${task.wallets}</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs bg-${task.status === 'Running' ? 'green' : 'yellow'}-900 text-${task.status === 'Running' ? 'green' : 'yellow'}-200 px-2 py-1 rounded">${task.status}</span>
-                            <button class="text-gray-400 hover:text-white" onclick="${task.status === 'Running' ? 'stopTask' : 'cancelTask'}('${task.id}')">
-                                <i data-lucide="${task.status === 'Running' ? 'square' : 'x'}" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="text-xs text-gray-500">
-                        ${task.details}
-                    </div>
-                </div>
-            `).join('');
-            
-            // Re-initialize Lucide icons
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
-        }
-
-        function stopTask(taskId) {
-            const task = activeTasks.find(t => t.id === taskId);
-            if (task) {
-                task.status = 'Stopped';
-                updateTasksList();
-                showToast(`Stopped ${task.name} task`, 'info');
-                addConsoleLog(`Task stopped: ${task.name}`, 'info');
-            }
-        }
-
-        function cancelTask(taskId) {
-            activeTasks = activeTasks.filter(t => t.id !== taskId);
-            updateTasksList();
-            showToast('Task cancelled', 'info');
-            addConsoleLog(`Task cancelled: ${taskId}`, 'info');
-        }
-
-    // Method Selection Functions
-    function selectMethod(taskType, method) {
-        // Remove active class from both buttons
-        const jitoBtn = document.getElementById(`${taskType}-method-jito`);
-        const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
-        
-        jitoBtn.classList.remove('active');
-        rpcBtn.classList.remove('active');
-        
-        // Add active class to selected button
-        if (method === 'jito') {
-            jitoBtn.classList.add('active');
-        } else {
-            rpcBtn.classList.add('active');
-        }
-        
-        addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
-    }
-
-    function getSelectedMethod(taskType) {
-        const jitoBtn = document.getElementById(`${taskType}-method-jito`);
-        return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
-    }
-
-    // Settings Functions
-    function selectDefaultExecutor(executor) {
-        const jitoBtn = document.getElementById('default-executor-jito');
-        const rpcBtn = document.getElementById('default-executor-rpc');
-        
-        // Remove active class from both buttons
-        jitoBtn.classList.remove('bg-purple-700', 'text-white');
-        jitoBtn.classList.add('bg-neutral-800', 'text-gray-300');
-        rpcBtn.classList.remove('bg-purple-700', 'text-white');
-        rpcBtn.classList.add('bg-neutral-800', 'text-gray-300');
-        
-        // Add active class to selected button
-        if (executor === 'jito') {
-            jitoBtn.classList.remove('bg-neutral-800', 'text-gray-300');
-            jitoBtn.classList.add('bg-purple-700', 'text-white');
-        } else {
-            rpcBtn.classList.remove('bg-neutral-800', 'text-gray-300');
-            rpcBtn.classList.add('bg-purple-700', 'text-white');
-        }
-        
-        addConsoleLog(`Selected ${executor.toUpperCase()} as default executor`, 'info');
-    }
-
-    function saveSettings() {
-        // Collect all settings values
-        const settings = {
-            solana: {
-                rpcHttp: document.querySelector('input[value*="rpc.va.shyft.to"]').value,
-                rpcWebsocket: document.querySelector('input[value*="wss://rpc.va.shyft.to"]').value,
-                skipPreflight: document.getElementById('skipPreflight').checked,
-                priorityFee: document.querySelector('input[value="0.0005"]').value
-            },
-            jito: {
-                location: document.querySelector('select option:checked').textContent,
-                bundleMaxTip: document.querySelector('input[value="0.001"]').value,
-                transactionMaxTip: document.querySelectorAll('input[value="0.001"]')[1].value,
-                forwarder: document.querySelectorAll('select')[1].value
-            },
-            astralane: {
-                location: document.querySelectorAll('select')[2].value,
-                apiKey: document.querySelector('input[placeholder="Optional"]').value,
-                minPriorityFee: document.querySelector('input[value="0.0001"]').value,
-                maxPriorityFee: document.querySelector('input[value="0.0005"]').value
-            },
-            proxies: {
-                endpoints: document.querySelector('textarea').value
-            },
-            launchpad: {
-                buySlippage: document.querySelector('input[value="20"]').value,
-                sellSlippage: document.querySelectorAll('input[value="20"]')[1].value
-            },
-            dex: {
-                buySlippage: document.querySelector('input[value="5"]').value,
-                sellSlippage: document.querySelector('input[value="50"]').value
-            },
-            customization: {
-                defaultExecutor: document.querySelector('#default-executor-jito').classList.contains('bg-purple-700') ? 'jito' : 'rpc',
-                quickBuyOptions: [
-                    document.querySelectorAll('input[value="0.1"]')[0].value,
-                    document.querySelectorAll('input[value="0.5"]')[0].value,
-                    document.querySelectorAll('input[value="1"]')[0].value
-                ],
-                quickSellOptions: [
-                    document.querySelectorAll('input[value="25"]')[0].value,
-                    document.querySelectorAll('input[value="50"]')[0].value,
-                    document.querySelectorAll('input[value="100"]')[0].value
-                ],
-                autoOpenLinks: {
-                    solscan: document.querySelectorAll('input[type="checkbox"]')[1].checked,
-                    axiom: document.querySelectorAll('input[type="checkbox"]')[2].checked,
-                    gmgn: document.querySelectorAll('input[type="checkbox"]')[3].checked,
-                    pumpfun: document.querySelectorAll('input[type="checkbox"]')[4].checked,
-                    raydium: document.querySelectorAll('input[type="checkbox"]')[5].checked,
-                    bonk: document.querySelectorAll('input[type="checkbox"]')[6].checked
-                },
-                hideAddresses: document.getElementById('hideAddresses').checked
-            }
+        // Expose critical functions globally for inline onclick handlers
+        const globalFunctionMap = {
+            navigateToPage,
+            executeGenerateWallets,
+            executeFundWallets,
+            executeWithdrawWallets,
+            selectFundMode,
+            selectTagExecutor,
+            toggleTag,
+            executeTagWallets,
+            selectWarmExecutor,
+            executeWarmWallets,
+            selectRedistributeMode,
+            executeRedistributeWallets,
+            switchTokenTab,
+            selectTokenPlatform,
+            selectCopyPlatform,
+            selectBlockZeroMode,
+            uploadTokenImage,
+            executeCreateToken,
+            executeCopyToken,
+            executeImportToken,
+            loadWalletsForTokenCreation,
+            selectTokenByMint,
+            collectAllFees,
+            collectTradingFees,
+            collectRentFees,
+            toggleAutoCollect,
+            executeQuickBuy,
+            executeQuickSell,
+            executeCreateAndLaunchToken,
+            executePumpFunBuy,
+            executePumpFunSell,
+            executeAddLiquidity,
+            executeRemoveLiquidity,
+            executeManualSwap,
+            runQuickAction,
+            openModal,
+            closeModal,
+            refreshBalances,
+            exportWallets,
+            deactivateWallets,
+            refreshFeeWallet,
+            copyFeeWalletAddress,
+            copyFeeWalletKey,
+            openDocumentation,
+            sharePlatform
         };
-        
-        // Save to localStorage (in a real app, this would be sent to the backend)
-        localStorage.setItem('chaosonsolana-settings', JSON.stringify(settings));
-        
-        addConsoleLog('Settings saved successfully!', 'success');
-        
-        // Show success message
-        showToast('Settings saved successfully!', 'success');
-    }
+
+        Object.entries(globalFunctionMap).forEach(([name, fn]) => {
+            if (typeof fn === 'function') {
+                window[name] = fn;
+            } else {
+                console.warn(`Global function "${name}" is not defined when exporting`, fn);
+            }
+        });
+
+        // Method Selection Functions
+        function selectMethod(taskType, method) {
+            // Remove active class from both buttons
+            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+            const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
+            
+            jitoBtn.classList.remove('active');
+            rpcBtn.classList.remove('active');
+            
+            // Add active class to selected button
+            if (method === 'jito') {
+                jitoBtn.classList.add('active');
+            } else {
+                rpcBtn.classList.add('active');
+            }
+            
+            addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
+        }
+
+        function getSelectedMethod(taskType) {
+            const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+            return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
+        }
+
+        // Settings Functions
+        function selectDefaultExecutor(executor) {
+            const jitoBtn = document.getElementById('default-executor-jito');
+            const rpcBtn = document.getElementById('default-executor-rpc');
+            
+            // Remove active class from both buttons
+            jitoBtn.classList.remove('bg-purple-700', 'text-white');
+            jitoBtn.classList.add('bg-neutral-800', 'text-gray-300');
+            rpcBtn.classList.remove('bg-purple-700', 'text-white');
+            rpcBtn.classList.add('bg-neutral-800', 'text-gray-300');
+            
+            // Add active class to selected button
+            if (executor === 'jito') {
+                jitoBtn.classList.remove('bg-neutral-800', 'text-gray-300');
+                jitoBtn.classList.add('bg-purple-700', 'text-white');
+            } else {
+                rpcBtn.classList.remove('bg-neutral-800', 'text-gray-300');
+                rpcBtn.classList.add('bg-purple-700', 'text-white');
+            }
+            
+            addConsoleLog(`Selected ${executor.toUpperCase()} as default executor`, 'info');
+        }
+
+        function saveSettings() {
+            // Collect all settings values
+            const settings = {
+                solana: {
+                    rpcHttp: document.querySelector('input[value*="rpc.va.shyft.to"]').value,
+                    rpcWebsocket: document.querySelector('input[value*="wss://rpc.va.shyft.to"]').value,
+                    skipPreflight: document.getElementById('skipPreflight').checked,
+                    priorityFee: document.querySelector('input[value="0.0005"]').value
+                },
+                jito: {
+                    location: document.querySelector('select option:checked').textContent,
+                    bundleMaxTip: document.querySelector('input[value="0.001"]').value,
+                    transactionMaxTip: document.querySelectorAll('input[value="0.001"]')[1].value,
+                    forwarder: document.querySelectorAll('select')[1].value
+                },
+                astralane: {
+                    location: document.querySelectorAll('select')[2].value,
+                    apiKey: document.querySelector('input[placeholder="Optional"]').value,
+                    minPriorityFee: document.querySelector('input[value="0.0001"]').value,
+                    maxPriorityFee: document.querySelector('input[value="0.0005"]').value
+                },
+                proxies: {
+                    endpoints: document.querySelector('textarea').value
+                },
+                launchpad: {
+                    buySlippage: document.querySelector('input[value="20"]').value,
+                    sellSlippage: document.querySelectorAll('input[value="20"]')[1].value
+                },
+                dex: {
+                    buySlippage: document.querySelector('input[value="5"]').value,
+                    sellSlippage: document.querySelector('input[value="50"]').value
+                },
+                customization: {
+                    defaultExecutor: document.querySelector('#default-executor-jito').classList.contains('bg-purple-700') ? 'jito' : 'rpc',
+                    quickBuyOptions: [
+                        document.querySelectorAll('input[value="0.1"]')[0].value,
+                        document.querySelectorAll('input[value="0.5"]')[0].value,
+                        document.querySelectorAll('input[value="1"]')[0].value
+                    ],
+                    quickSellOptions: [
+                        document.querySelectorAll('input[value="25"]')[0].value,
+                        document.querySelectorAll('input[value="50"]')[0].value,
+                        document.querySelectorAll('input[value="100"]')[0].value
+                    ],
+                    autoOpenLinks: {
+                        solscan: document.querySelectorAll('input[type="checkbox"]')[1].checked,
+                        axiom: document.querySelectorAll('input[type="checkbox"]')[2].checked,
+                        gmgn: document.querySelectorAll('input[type="checkbox"]')[3].checked,
+                        pumpfun: document.querySelectorAll('input[type="checkbox"]')[4].checked,
+                        raydium: document.querySelectorAll('input[type="checkbox"]')[5].checked,
+                        bonk: document.querySelectorAll('input[type="checkbox"]')[6].checked
+                    },
+                    hideAddresses: document.getElementById('hideAddresses').checked
+                }
+            };
+            
+            // Save to localStorage (in a real app, this would be sent to the backend)
+            localStorage.setItem('chaosonsolana-settings', JSON.stringify(settings));
+            
+            addConsoleLog('Settings saved successfully!', 'success');
+            
+            // Show success message
+            showToast('Settings saved successfully!', 'success');
+        }
 
         // Floating Window Management Functions
         let isDragging = false;
@@ -4528,79 +3539,77 @@
             }, 3000);
         }
         
-        END OF OLD CODE - DO NOT USE */
-    </script>
-    
-    <!-- Real On-Chain Trading UI - Replaces fake data -->
-    <script src="real-trading-ui.js"></script>
-    
-    <!-- Inline navigation fallback - ensures navigation works even if other scripts fail -->
-    <script>
-        // Ensure navigation works - this runs after DOM is loaded
-        (function() {
-            function setupNavigation() {
-                console.log('🔧 Setting up navigation (inline fallback)...');
-                const navItems = document.querySelectorAll('.nav-item');
-                console.log(`Found ${navItems.length} nav items`);
-                
-                if (navItems.length === 0) {
-                    console.warn('No nav items found, retrying...');
-                    setTimeout(setupNavigation, 200);
-                    return;
+        // Real On-Chain Trading UI - Replaces fake data
+        <script src="real-trading-ui.js"></script>
+        
+        // Inline navigation fallback - ensures navigation works even if other scripts fail
+        <script>
+            // Ensure navigation works - this runs after DOM is loaded
+            (function() {
+                function setupNavigation() {
+                    console.log('🔧 Setting up navigation (inline fallback)...');
+                    const navItems = document.querySelectorAll('.nav-item');
+                    console.log(`Found ${navItems.length} nav items`);
+                    
+                    if (navItems.length === 0) {
+                        console.warn('No nav items found, retrying...');
+                        setTimeout(setupNavigation, 200);
+                        return;
+                    }
+                    
+                    navItems.forEach(function(item) {
+                        const viewName = item.getAttribute('data-view');
+                        if (!viewName) return;
+                        
+                        // Remove any existing listeners by cloning
+                        const newItem = item.cloneNode(true);
+                        item.parentNode.replaceChild(newItem, item);
+                        
+                        // Add click handler
+                        newItem.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('📱 Navigation clicked:', viewName);
+                            
+                            // Call switchView if it exists, otherwise do it manually
+                            if (typeof switchView === 'function') {
+                                switchView(viewName);
+                            } else {
+                                // Manual view switching
+                                document.querySelectorAll('.view').forEach(function(v) {
+                                    v.classList.add('hidden');
+                                });
+                                const targetView = document.getElementById(viewName + '-view') || document.getElementById(viewName + '-page');
+                                if (targetView) {
+                                    targetView.classList.remove('hidden');
+                                }
+                                
+                                // Update nav styling
+                                document.querySelectorAll('.nav-item').forEach(function(nav) {
+                                    if (nav.getAttribute('data-view') === viewName) {
+                                        nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
+                                    } else {
+                                        nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
+                                    }
+                                });
+                            }
+                        });
+                    });
+                    
+                    console.log('✅ Navigation setup complete');
                 }
                 
-                navItems.forEach(function(item) {
-                    const viewName = item.getAttribute('data-view');
-                    if (!viewName) return;
-                    
-                    // Remove any existing listeners by cloning
-                    const newItem = item.cloneNode(true);
-                    item.parentNode.replaceChild(newItem, item);
-                    
-                    // Add click handler
-                    newItem.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('📱 Navigation clicked:', viewName);
-                        
-                        // Call switchView if it exists, otherwise do it manually
-                        if (typeof switchView === 'function') {
-                            switchView(viewName);
-                        } else {
-                            // Manual view switching
-                            document.querySelectorAll('.view').forEach(function(v) {
-                                v.classList.add('hidden');
-                            });
-                            const targetView = document.getElementById(viewName + '-view') || document.getElementById(viewName + '-page');
-                            if (targetView) {
-                                targetView.classList.remove('hidden');
-                            }
-                            
-                            // Update nav styling
-                            document.querySelectorAll('.nav-item').forEach(function(nav) {
-                                if (nav.getAttribute('data-view') === viewName) {
-                                    nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
-                                } else {
-                                    nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
-                                }
-                            });
-                        }
-                    });
-                });
+                // Run immediately if DOM is ready, otherwise wait
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', setupNavigation);
+                } else {
+                    setupNavigation();
+                }
                 
-                console.log('✅ Navigation setup complete');
-            }
-            
-            // Run immediately if DOM is ready, otherwise wait
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', setupNavigation);
-            } else {
-                setupNavigation();
-            }
-            
-            // Also run after a short delay to catch any late-loading elements
-            setTimeout(setupNavigation, 500);
-        })();
+                // Also run after a short delay to catch any late-loading elements
+                setTimeout(setupNavigation, 500);
+            })();
+        </script>
     </script>
 </body>
 </html>

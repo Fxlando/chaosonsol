@@ -3198,6 +3198,7 @@
                 alert('Error opening modal: ' + error.message);
             }
         }
+        window.openModal = openModal;
 
         function closeModal(modalId) {
             try {
@@ -3212,6 +3213,7 @@
                 console.error('Error in closeModal:', error);
             }
         }
+        window.closeModal = closeModal;
 
         function executeGenerate() {
             const count = parseInt(document.getElementById('generate-count').value);
@@ -3613,6 +3615,9 @@
                 alert('Navigation error: ' + error.message);
             }
         }
+        
+        // Immediately expose to window for onclick handlers
+        window.navigateToPage = navigateToPage;
 
         // Wallet Operation Functions
         function executeGenerateWallets() {
@@ -3647,6 +3652,7 @@
                 alert('Error generating wallets: ' + error.message);
             }
         }
+        window.executeGenerateWallets = executeGenerateWallets;
 
         function executeFundWallets() {
             const mode = document.querySelector('input[name="fund-method"]:checked').value;
@@ -3987,6 +3993,7 @@
                 alert('Error selecting platform: ' + error.message);
             }
         }
+        window.selectTokenPlatform = selectTokenPlatform;
 
         function selectCopyPlatform(platform) {
             const pumpfunBtn = document.getElementById('copy-pumpfun-btn');
@@ -4022,6 +4029,7 @@
             showToast('Image upload functionality would be implemented here', 'info');
             addConsoleLog('Token image upload initiated', 'info');
         }
+        window.uploadTokenImage = uploadTokenImage;
 
         async function executeCreateToken() {
             const name = document.getElementById('token-name').value.trim();
@@ -4137,6 +4145,7 @@
                 createBtn.textContent = originalText;
             }
         }
+        window.executeCreateToken = executeCreateToken;
         
         // Load wallets into the dropdown
         async function loadWalletsForTokenCreation() {
@@ -4177,6 +4186,7 @@
                 walletSelect.innerHTML = '<option value="">Error loading wallets</option>';
             }
         }
+        window.loadWalletsForTokenCreation = loadWalletsForTokenCreation;
 
         function executeCopyToken() {
             const mintAddress = document.getElementById('copy-mint-address').value;
@@ -4196,6 +4206,7 @@
                 navigateToPage('tokens');
             }, 2500);
         }
+        window.executeCopyToken = executeCopyToken;
 
         function executeImportToken() {
             const mintAddress = document.getElementById('import-mint-address').value;

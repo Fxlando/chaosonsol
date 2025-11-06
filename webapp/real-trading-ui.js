@@ -385,19 +385,19 @@ function addConsoleLog(message, type = 'info') {
 
 // Initialize event listeners
 function initializeEventListeners() {
-    // Navigation - make sure we don't add duplicate listeners
+    // Navigation - simple and clean
     document.querySelectorAll('.nav-item').forEach(item => {
-        // Remove existing listeners to avoid duplicates
+        // Remove any existing click listeners by cloning
         const newItem = item.cloneNode(true);
         item.parentNode.replaceChild(newItem, item);
         
         // Add click listener
-        newItem.addEventListener('click', (e) => {
+        newItem.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            const view = newItem.dataset.view;
-            if (view) {
-                switchView(view);
+            const viewName = this.dataset.view;
+            if (viewName) {
+                switchView(viewName);
             }
         });
     });
@@ -406,29 +406,39 @@ function initializeEventListeners() {
 }
 
 function switchView(viewName) {
+    if (!viewName) {
+        console.error('switchView called without viewName');
+        return;
+    }
+    
     currentView = viewName;
     
-    // Hide all views (both -view and -page elements)
-    document.querySelectorAll('[id$="-view"], [id$="-page"]').forEach(view => {
+    // Hide ALL views and pages
+    document.querySelectorAll('.view').forEach(view => {
         view.classList.add('hidden');
     });
     
-    // Show selected view (try both -view and -page)
-    const selectedView = document.getElementById(`${viewName}-view`) || document.getElementById(`${viewName}-page`);
+    // Show selected view - try -view first, then -page
+    let selectedView = document.getElementById(`${viewName}-view`);
+    if (!selectedView) {
+        selectedView = document.getElementById(`${viewName}-page`);
+    }
+    
     if (selectedView) {
         selectedView.classList.remove('hidden');
     } else {
         console.warn(`View not found: ${viewName}-view or ${viewName}-page`);
     }
     
-    // Update navigation
+    // Update navigation styling
     document.querySelectorAll('.nav-item').forEach(item => {
-        if (item.dataset.view === viewName) {
-            item.classList.add('bg-purple-900', 'text-white');
-            item.classList.remove('text-gray-400', 'hover:bg-neutral-800', 'hover:text-white');
+        const itemView = item.dataset.view;
+        if (itemView === viewName) {
+            // Active state
+            item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
         } else {
-            item.classList.remove('bg-purple-900', 'text-white');
-            item.classList.add('text-gray-400', 'hover:bg-neutral-800', 'hover:text-white');
+            // Inactive state
+            item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
         }
     });
     
@@ -442,7 +452,14 @@ function switchView(viewName) {
         }
     }
     
-    addConsoleLog(`📱 Switched to ${viewName} view`, 'info');
+    // Re-initialize Lucide icons for the new view
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+    
+    if (typeof addConsoleLog === 'function') {
+        addConsoleLog(`📱 Switched to ${viewName} view`, 'info');
+    }
 }
 
 // Token Launch with Automations

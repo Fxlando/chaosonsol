@@ -50,28 +50,12 @@ exports.handler = async (event, context) => {
 
   try {
     const app = await getApp();
-    // Handle both /api/* and /.netlify/functions/api/* paths
-    let path = event.path.replace('/.netlify/functions/api', '');
-    // Also handle /api/* redirects
-    if (path.startsWith('/api')) {
-      path = path.replace('/api', '');
-    }
-    // Remove leading slash
-    if (path.startsWith('/')) {
-      path = path.substring(1);
-    }
-    // Add leading slash back for consistency
-    if (path && !path.startsWith('/')) {
-      path = '/' + path;
-    }
-    if (!path) {
-      path = '/';
-    }
+    const path = event.path.replace('/.netlify/functions/api', '');
     const method = event.httpMethod;
     const body = event.body ? JSON.parse(event.body) : {};
 
     // Route handling
-    if ((path === '/health' || path === '/api/health') && method === 'GET') {
+    if (path === '/health' && method === 'GET') {
       return {
         statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -83,101 +67,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Stats route - proxy to stats function or handle directly
-    if ((path === '/stats' || path === '/api/stats') && method === 'GET') {
-      // Try to use the stats function, but also provide fallback
-      try {
-        // Import stats function logic (CommonJS context, so use require)
-        const axios = require('axios');
-        const volumeWallets = require('../../volume-wallets-public.json');
-        const pumpWallets = require('../../pump-wallets-public.json');
-        
-        const RPC_URL = 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
-        const LAMPORTS_PER_SOL = 1000000000;
-        
-        async function getBalance(publicKey) {
-          try {
-            const response = await axios.post(RPC_URL, {
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'getBalance',
-              params: [publicKey]
-            }, { timeout: 5000 });
-            
-            if (response.data && response.data.result && response.data.result.value !== undefined) {
-              return response.data.result.value / LAMPORTS_PER_SOL;
-            }
-            return 0;
-          } catch (error) {
-            return 0;
-          }
-        }
-        
-        async function getSolPrice() {
-          try {
-            const response = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL', {
-              timeout: 3000
-            });
-            return parseFloat(response.data.data.rates.USD);
-          } catch (error) {
-            return 180;
-          }
-        }
-        
-        const allWallets = [
-          ...(volumeWallets.wallets || []),
-          ...(pumpWallets.wallets || [])
-        ];
-        
-        const solPrice = await getSolPrice();
-        let totalBalance = 0;
-        let activeWallets = 0;
-        
-        const balancePromises = allWallets.slice(0, 10).map(wallet => getBalance(wallet.publicKey));
-        const balances = await Promise.all(balancePromises);
-        
-        balances.forEach(balance => {
-          totalBalance += balance;
-          if (balance > 0) activeWallets++;
-        });
-        
-        const stats = {
-          wallets: {
-            total: allWallets.length,
-            active: activeWallets,
-            sampled: 10
-          },
-          balance: {
-            sol: totalBalance,
-            usd: totalBalance * solPrice
-          },
-          groups: 2,
-          solPrice: solPrice,
-          network: 'mainnet-beta'
-        };
-        
-        return {
-          statusCode: 200,
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify(stats)
-        };
-      } catch (error) {
-        // Fallback stats
-        return {
-          statusCode: 200,
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            wallets: { total: 0, active: 0 },
-            balance: { sol: 0, usd: 0 },
-            groups: 0,
-            solPrice: 180,
-            network: 'mainnet-beta'
-          })
-        };
-      }
-    }
-
-    if ((path === '/initialize' || path === '/api/initialize') && method === 'POST') {
+    if (path === '/initialize' && method === 'POST') {
       const status = app.getStatus();
       return {
         statusCode: 200,
@@ -186,63 +76,27 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Wallet routes - proxy to wallets function or handle directly
-    if ((path === '/wallets/create' || path === '/api/wallets/create') && method === 'POST') {
-      try {
-        // Try to use App class if available
-        if (app && typeof app.createWallet === 'function') {
-          const result = app.createWallet(body.name || null, body.tags || []);
-          return {
-            statusCode: 200,
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify(result)
-          };
-        }
-      } catch (error) {
-        console.error('Error using App.createWallet:', error);
-      }
-      
-      // Fallback: return error suggesting to use wallets function
+    // Wallet routes
+    if (path === '/wallets/create' && method === 'POST') {
+      const result = app.createWallet(body.name || null, body.tags || []);
       return {
         statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          success: false, 
-          error: 'Use /.netlify/functions/wallets/generate endpoint',
-          message: 'Wallet creation should use the wallets function'
-        })
+        body: JSON.stringify(result)
       };
     }
 
-    if ((path === '/wallets' || path === '/api/wallets') && method === 'GET') {
-      try {
-        // Try to use App class if available
-        if (app && typeof app.getAllWalletsWithBalances === 'function') {
-          const wallets = await app.getAllWalletsWithBalances();
-          return {
-            statusCode: 200,
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ success: true, wallets })
-          };
-        }
-      } catch (error) {
-        console.error('Error using App.getAllWalletsWithBalances:', error);
-      }
-      
-      // Fallback: return empty array
+    if (path === '/wallets' && method === 'GET') {
+      const wallets = await app.getAllWalletsWithBalances();
       return {
         statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          success: true, 
-          wallets: [],
-          message: 'Use /.netlify/functions/wallets endpoint for wallet data'
-        })
+        body: JSON.stringify({ success: true, wallets })
       };
     }
 
     // Trading routes
-    if ((path === '/trading/buy' || path === '/api/trading/buy') && method === 'POST') {
+    if (path === '/trading/buy' && method === 'POST') {
       const result = await app.buyToken(body.walletId, body.tokenMint, body.solAmount, body.options || {});
       return {
         statusCode: 200,
@@ -251,7 +105,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    if ((path === '/trading/sell' || path === '/api/trading/sell') && method === 'POST') {
+    if (path === '/trading/sell' && method === 'POST') {
       const result = await app.sellToken(body.walletId, body.tokenMint, body.tokenAmount, body.options || {});
       return {
         statusCode: 200,
@@ -261,7 +115,7 @@ exports.handler = async (event, context) => {
     }
 
     // Token launch routes
-    if ((path === '/tokens/launch' || path === '/api/tokens/launch') && method === 'POST') {
+    if (path === '/tokens/launch' && method === 'POST') {
       const result = await app.launchToken(
         body.walletId,
         body.metadata,
@@ -290,7 +144,7 @@ exports.handler = async (event, context) => {
     }
 
     // Status routes
-    if ((path === '/status' || path === '/api/status') && method === 'GET') {
+    if (path === '/status' && method === 'GET') {
       const status = app.getStatus();
       const rpcStats = app.getRPCStats();
       return {
@@ -301,7 +155,7 @@ exports.handler = async (event, context) => {
     }
 
     // Instant trading status
-    if ((path === '/instant-trading/status' || path === '/api/instant-trading/status') && method === 'GET') {
+    if (path === '/instant-trading/status' && method === 'GET') {
       // Return status - in production this would connect to the bot instance
       return {
         statusCode: 200,

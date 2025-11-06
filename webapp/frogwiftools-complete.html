@@ -1063,14 +1063,22 @@
                     </div>
                     
                     <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Wallet</label>
+                        <select id="create-token-wallet" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2">
+                            <option value="">Loading wallets...</option>
+                        </select>
+                        <p class="text-xs text-gray-500">Select a wallet to create the token with.</p>
+                    </div>
+                    
+                    <div class="mb-6">
                         <label class="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" id="use-vanity" class="rounded" />
                             <span class="text-sm">Use Vanity</span>
                         </label>
                     </div>
                     
-                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCreateToken()">
-                        Save
+                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCreateToken()" id="create-token-btn">
+                        Create Token
                     </button>
                 </div>
             </div>
@@ -2925,6 +2933,7 @@
         // State
         let selectedWallets = new Set();
         let wallets = [];
+        let selectedTokenPlatform = 'pumpfun'; // Default to Pump.fun
         let currentView = 'wallets';
         let autoScroll = true;
         let tokens = []; // Store loaded tokens
@@ -3505,6 +3514,11 @@
             if (targetPage) {
                 targetPage.classList.remove('hidden');
                 addConsoleLog(`Navigated to ${page} page`, 'info');
+                
+                // Load wallets when navigating to create-token page
+                if (page === 'create-token') {
+                    loadWalletsForTokenCreation();
+                }
             } else {
                 // If no dedicated page, show wallets view and open modal
                 document.getElementById('wallets-view').classList.remove('hidden');
@@ -3839,6 +3853,8 @@
             const pumpfunBtn = document.getElementById('create-pumpfun-btn');
             const raydiumBtn = document.getElementById('create-raydium-btn');
             
+            selectedTokenPlatform = platform;
+            
             if (platform === 'pumpfun') {
                 pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
                 raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
@@ -3885,28 +3901,159 @@
             addConsoleLog('Token image upload initiated', 'info');
         }
 
-        function executeCreateToken() {
-            const name = document.getElementById('token-name').value;
-            const symbol = document.getElementById('token-symbol').value;
-            const description = document.getElementById('token-description').value;
-            const website = document.getElementById('token-website').value;
-            const twitter = document.getElementById('token-twitter').value;
-            const telegram = document.getElementById('token-telegram').value;
+        async function executeCreateToken() {
+            const name = document.getElementById('token-name').value.trim();
+            const symbol = document.getElementById('token-symbol').value.trim();
+            const description = document.getElementById('token-description').value.trim();
+            const website = document.getElementById('token-website').value.trim();
+            const twitter = document.getElementById('token-twitter').value.trim();
+            const telegram = document.getElementById('token-telegram').value.trim();
+            const walletId = document.getElementById('create-token-wallet').value;
             const useVanity = document.getElementById('use-vanity').checked;
             
+            // Validation
             if (!name || !symbol) {
                 showToast('Please fill in required fields (Name and Symbol)', 'error');
                 return;
             }
             
-            showToast(`Creating token "${name}" (${symbol})...`, 'info');
-            addConsoleLog(`Creating token: ${name} (${symbol})`, 'info');
+            if (!walletId) {
+                showToast('Please select a wallet to create the token with', 'error');
+                return;
+            }
             
-            setTimeout(() => {
-                showToast('Token created successfully!', 'success');
-                addConsoleLog('Token creation completed', 'success');
-                navigateToPage('tokens');
-            }, 3000);
+            // Disable button during creation
+            const createBtn = document.getElementById('create-token-btn');
+            const originalText = createBtn.textContent;
+            createBtn.disabled = true;
+            createBtn.textContent = 'Creating...';
+            
+            try {
+                showToast(`Creating token "${name}" (${symbol}) on ${selectedTokenPlatform}...`, 'info');
+                addConsoleLog(`Creating token: ${name} (${symbol}) on ${selectedTokenPlatform}`, 'info');
+                
+                // Prepare metadata
+                const metadata = {
+                    name: name,
+                    symbol: symbol,
+                    description: description || '',
+                    website: website || '',
+                    twitter: twitter || '',
+                    telegram: telegram || '',
+                    image: '' // Image upload would be handled separately
+                };
+                
+                // Prepare options
+                const options = {
+                    platform: selectedTokenPlatform,
+                    useVanity: useVanity
+                };
+                
+                // Determine API base URL
+                const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3000/api'
+                    : '/.netlify/functions/api';
+                
+                // Call the API to create the token
+                const response = await fetch(`${API_BASE}/tokens/launch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        walletId: walletId,
+                        metadata: metadata,
+                        initialBuy: 0, // Can be made configurable later
+                        options: options
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                if (result.success) {
+                    showToast(`Token "${name}" created successfully!`, 'success');
+                    addConsoleLog(`Token created successfully: ${result.tokenMint || 'N/A'}`, 'success');
+                    
+                    if (result.tokenMint) {
+                        addConsoleLog(`Token Mint: ${result.tokenMint}`, 'info');
+                    }
+                    if (result.signature) {
+                        addConsoleLog(`Transaction: ${result.signature}`, 'info');
+                    }
+                    if (result.viewOnExplorer) {
+                        addConsoleLog(`View on explorer: ${result.viewOnExplorer}`, 'info');
+                    }
+                    
+                    // Clear form
+                    document.getElementById('token-name').value = '';
+                    document.getElementById('token-symbol').value = '';
+                    document.getElementById('token-description').value = '';
+                    document.getElementById('token-website').value = '';
+                    document.getElementById('token-twitter').value = '';
+                    document.getElementById('token-telegram').value = '';
+                    document.getElementById('use-vanity').checked = false;
+                    
+                    // Navigate to tokens page after a short delay
+                    setTimeout(() => {
+                        navigateToPage('tokens');
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Token creation failed');
+                }
+                
+            } catch (error) {
+                console.error('Token creation error:', error);
+                showToast(`Token creation failed: ${error.message}`, 'error');
+                addConsoleLog(`Token creation failed: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                createBtn.disabled = false;
+                createBtn.textContent = originalText;
+            }
+        }
+        
+        // Load wallets into the dropdown
+        async function loadWalletsForTokenCreation() {
+            const walletSelect = document.getElementById('create-token-wallet');
+            if (!walletSelect) return;
+            
+            try {
+                const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3000/api'
+                    : '/.netlify/functions/api';
+                
+                const response = await fetch(`${API_BASE}/wallets`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch wallets');
+                }
+                
+                const data = await response.json();
+                const walletList = data.wallets || [];
+                
+                // Clear existing options
+                walletSelect.innerHTML = '<option value="">Select a wallet...</option>';
+                
+                if (walletList.length === 0) {
+                    walletSelect.innerHTML = '<option value="">No wallets available</option>';
+                    return;
+                }
+                
+                // Add wallets to dropdown
+                walletList.forEach(wallet => {
+                    const option = document.createElement('option');
+                    option.value = wallet.id || wallet.name || wallet.publicKey;
+                    option.textContent = `${wallet.name || 'Unnamed'} (${(wallet.balance || 0).toFixed(4)} SOL)`;
+                    walletSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading wallets:', error);
+                walletSelect.innerHTML = '<option value="">Error loading wallets</option>';
+            }
         }
 
         function executeCopyToken() {

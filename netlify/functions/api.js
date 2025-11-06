@@ -1,14 +1,22 @@
 /**
  * Netlify Serverless Function - Production API
  * Wraps the new production backend for Netlify deployment
+ * 
+ * Note: Netlify functions need CommonJS, but we'll use dynamic import for ES modules
  */
 
-const { App } = require('../../src/App.js');
+let App = null;
 
 // Initialize app (singleton)
 let appInstance = null;
 
 async function getApp() {
+  if (!App) {
+    // Dynamic import for ES modules
+    const appModule = await import('../../src/App.js');
+    App = appModule.App || appModule.default;
+  }
+  
   if (!appInstance) {
     appInstance = new App({
       network: process.env.NETWORK || 'mainnet-beta'

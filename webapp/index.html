@@ -4428,62 +4428,6 @@
             addConsoleLog('Stopped dragging window', 'info');
         }
 
-        // Initialize all features when DOM loads
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Initialize Lucide icons
-            lucide.createIcons();
-            
-            // Initialize wallets view
-            if (document.getElementById('wallets-view')) {
-                // Load wallets when wallets view is shown
-                if (window.walletOperations && window.walletOperations.loadWallets) {
-                    await window.walletOperations.loadWallets();
-                } else {
-                    // Fallback: load wallets directly
-                    await loadWallets();
-                }
-            }
-            
-            // Initialize markdown editor
-            initializeMarkdownEditor();
-            
-            // Setup navigation
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const view = item.dataset.view;
-                    switchView(view);
-                });
-            });
-            
-            // Load wallets on page load if wallets view is active
-            if (currentView === 'wallets') {
-                if (window.walletOperations && window.walletOperations.loadWallets) {
-                    window.walletOperations.loadWallets();
-                } else {
-                    loadWallets();
-                }
-            }
-        });
-        
-        // Load wallets function (fallback if wallet-operations.js not loaded)
-        async function loadWallets() {
-            try {
-                const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
-                const response = await fetch(endpoint);
-                if (response.ok) {
-                    const data = await response.json();
-                    wallets = Array.isArray(data) ? data : (data.wallets || []);
-                    if (window.walletOperations && window.walletOperations.renderWallets) {
-                        window.walletOperations.renderWallets();
-                    } else {
-                        renderWallets();
-                    }
-                    updateTotalBalance();
-                }
-            } catch (error) {
-                console.error('Error loading wallets:', error);
-            }
-        }
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');

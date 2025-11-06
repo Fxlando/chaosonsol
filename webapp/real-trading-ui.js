@@ -385,11 +385,20 @@ function addConsoleLog(message, type = 'info') {
 
 // Initialize event listeners
 function initializeEventListeners() {
-    // Navigation
+    // Navigation - make sure we don't add duplicate listeners
     document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const view = item.dataset.view;
-            switchView(view);
+        // Remove existing listeners to avoid duplicates
+        const newItem = item.cloneNode(true);
+        item.parentNode.replaceChild(newItem, item);
+        
+        // Add click listener
+        newItem.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const view = newItem.dataset.view;
+            if (view) {
+                switchView(view);
+            }
         });
     });
     
@@ -399,27 +408,39 @@ function initializeEventListeners() {
 function switchView(viewName) {
     currentView = viewName;
     
-    // Hide all views
-    document.querySelectorAll('[id$="-view"]').forEach(view => {
+    // Hide all views (both -view and -page elements)
+    document.querySelectorAll('[id$="-view"], [id$="-page"]').forEach(view => {
         view.classList.add('hidden');
     });
     
-    // Show selected view
-    const selectedView = document.getElementById(`${viewName}-view`);
+    // Show selected view (try both -view and -page)
+    const selectedView = document.getElementById(`${viewName}-view`) || document.getElementById(`${viewName}-page`);
     if (selectedView) {
         selectedView.classList.remove('hidden');
+    } else {
+        console.warn(`View not found: ${viewName}-view or ${viewName}-page`);
     }
     
     // Update navigation
     document.querySelectorAll('.nav-item').forEach(item => {
         if (item.dataset.view === viewName) {
             item.classList.add('bg-purple-900', 'text-white');
-            item.classList.remove('text-gray-400');
+            item.classList.remove('text-gray-400', 'hover:bg-neutral-800', 'hover:text-white');
         } else {
             item.classList.remove('bg-purple-900', 'text-white');
-            item.classList.add('text-gray-400');
+            item.classList.add('text-gray-400', 'hover:bg-neutral-800', 'hover:text-white');
         }
     });
+    
+    // Load view-specific data
+    if (viewName === 'wallets') {
+        // Load wallets using wallet-operations if available
+        if (window.walletOperations && window.walletOperations.loadWallets) {
+            window.walletOperations.loadWallets();
+        } else if (typeof loadRealData === 'function') {
+            loadRealData();
+        }
+    }
     
     addConsoleLog(`📱 Switched to ${viewName} view`, 'info');
 }

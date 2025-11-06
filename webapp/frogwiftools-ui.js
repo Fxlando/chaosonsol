@@ -1,6 +1,6 @@
-// FrogWifTools Style Trading Platform
+// ChaosOnSolana Style Trading Platform
 
-console.log('🐸 FrogWifTools Style Platform Loading...');
+console.log('⚡ ChaosOnSolana Style Platform Loading...');
 
 // Configuration
 const IS_NETLIFY = window.location.hostname !== 'localhost';
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     startAutoRefresh();
     
     addConsoleLog('System initialized - Ready for trading', 'success');
-    console.log('✓ FrogWifTools Style Platform Ready');
+    console.log('✓ ChaosOnSolana Style Platform Ready');
 });
 
 // Navigation
@@ -583,4 +583,4 @@ window.toggleWalletSelection = toggleWalletSelection;
 window.viewWallet = viewWallet;
 window.copyAddress = copyAddress;
 
-console.log('✅ FrogWifTools Style Platform Initialized');
+console.log('✅ ChaosOnSolana Style Platform Initialized');

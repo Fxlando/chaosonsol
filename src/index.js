@@ -27,6 +27,11 @@ export { default as WalletManager } from './wallet/WalletManager.js';
 
 // Trading
 export { default as TradingEngine } from './trading/TradingEngine.js';
+export { default as SmartSell } from './trading/SmartSell.js';
+export { default as VolumeBot } from './trading/VolumeBot.js';
+
+// Wallet
+export { default as Security } from './wallet/Security.js';
 
 // Re-export for convenience
 export default {
@@ -37,7 +42,10 @@ export default {
   PumpFunClient: () => import('./integrations/pumpfun/PumpFunClient.js'),
   JupiterClient: () => import('./integrations/jupiter/JupiterClient.js'),
   WalletManager: () => import('./wallet/WalletManager.js'),
+  Security: () => import('./wallet/Security.js'),
   TradingEngine: () => import('./trading/TradingEngine.js'),
+  SmartSell: () => import('./trading/SmartSell.js'),
+  VolumeBot: () => import('./trading/VolumeBot.js'),
   // More exports will be added as modules are built
 };
 

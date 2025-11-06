@@ -251,7 +251,7 @@
                     </div>
                     <div class="text-xs text-gray-500 mt-1" id="fee-wallet-percent">66%</div>
                 </div>
-                <div class="text-green-400 font-mono text-sm mb-3" id="fee-wallet-balance">0.3300 SOL</div>
+                <div class="text-green-400 font-mono text-sm mb-3" id="fee-wallet-balance">0.0000 SOL</div>
                 <div class="text-xs text-gray-500 mb-1">Address:</div>
                 <div class="flex items-center gap-2">
                     <div class="text-xs font-mono truncate flex-1" id="fee-wallet-address">6NBcSPLV...1YnDb8L</div>
@@ -292,7 +292,7 @@
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-gray-500">Solana/USD</span>
-                <span class="text-gray-300" id="sol-price">$223.66</span>
+                <span class="text-gray-300" id="sol-price">$0.00</span>
             </div>
         </div>
         
@@ -322,7 +322,7 @@
                         <h1 class="text-2xl font-semibold">Wallets</h1>
                     </div>
                     <div class="text-xl">
-                        Total: <span class="font-mono font-bold" id="total-balance">0.69 SOL</span>
+                        Total: <span class="font-mono font-bold" id="total-balance">0.00 SOL</span>
                     </div>
                 </div>
                 
@@ -664,11 +664,11 @@
                         </div>
                     </div>
                     
-                    <div id="tag-wallet-info" class="mb-6 bg-neutral-800 rounded-lg p-4">
+                    <div id="tag-wallet-info" class="mb-6 bg-neutral-800 rounded-lg p-4 hidden">
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center gap-2">
-                                <span class="text-lg">🐘</span>
-                                <span class="font-mono text-sm">sour-elephant</span>
+                                <span class="text-lg">💰</span>
+                                <span class="font-mono text-sm" id="tag-wallet-name">No wallet selected</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-xs text-gray-400">Address</span>
@@ -1242,30 +1242,6 @@
                                     </tr>
                                 </thead>
                                 <tbody id="token-wallets-table">
-                                    <tr class="border-t border-neutral-800">
-                                        <td class="p-3">
-                                            <div class="flex items-center gap-2">
-                                                <span>🐘</span>
-                                                <span>sour-elephant</span>
-                                            </div>
-                                        </td>
-                                        <td class="p-3">0.34 SOL</td>
-                                        <td class="p-3">
-                                            <input type="number" value="0" class="w-20 bg-black border border-neutral-700 rounded px-2 py-1 text-xs" />
-                                        </td>
-                                    </tr>
-                                    <tr class="border-t border-neutral-800">
-                                        <td class="p-3">
-                                            <div class="flex items-center gap-2">
-                                                <span>🦜</span>
-                                                <span>decisive-parrot</span>
-                                            </div>
-                                        </td>
-                                        <td class="p-3">0.3 SOL</td>
-                                        <td class="p-3">
-                                            <input type="number" value="0" class="w-20 bg-black border border-neutral-700 rounded px-2 py-1 text-xs" />
-                                        </td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1425,24 +1401,13 @@
                                             <th class="text-left py-2 text-gray-400">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <tr class="border-b border-neutral-800">
-                                            <td class="py-3">
-                                                <div class="flex items-center gap-2">
-                                                    <span>🐘</span>
-                                                    <span>tempting-cat</span>
+                                    <tbody id="token-launch-wallets-body">
+                                        <tr>
+                                            <td colspan="5" class="py-8 text-center text-gray-500">
+                                                <div class="flex flex-col items-center gap-2">
+                                                    <i data-lucide="inbox" class="w-6 h-6 text-gray-600"></i>
+                                                    <span class="text-sm">No wallets available</span>
                                                 </div>
-                                            </td>
-                                            <td class="py-3">
-                                                <span class="font-mono text-xs">66r...NtV?</span>
-                                            </td>
-                                            <td class="py-3">&lt;0.01 SOL</td>
-                                            <td class="py-3">
-                                                <span class="text-gray-400">0.1</span>
-                                                <span class="text-xs ml-2 text-gray-500">0.1</span>
-                                            </td>
-                                            <td class="py-3">
-                                                <button class="bg-green-700 text-white text-xs px-3 py-1 rounded">BUY</button>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -1488,8 +1453,8 @@
                         <div class="grid grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label class="block mb-2 text-sm font-medium">Dev Wallet</label>
-                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
-                                    <option>🐘 sour-elephant 0.34 SOL</option>
+                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600" id="dev-wallet-select">
+                                    <option value="">No wallets available</option>
                                 </select>
                                 <p class="text-xs text-gray-500 mt-2">
                                     The dev wallet you want to use for the token launch. This wallet will be used to pay for the transaction fees.
@@ -1546,20 +1511,7 @@
                         <div class="bg-neutral-800 rounded-lg p-4 mb-6">
                             <h4 class="font-semibold mb-3">Selected Wallets for Block Zero</h4>
                             <div class="space-y-2" id="block-zero-wallets">
-                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
-                                    <div class="flex items-center gap-2">
-                                        <span>🐘</span>
-                                        <span>sour-elephant</span>
-                                    </div>
-                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
-                                </div>
-                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
-                                    <div class="flex items-center gap-2">
-                                        <span>🦜</span>
-                                        <span>decisive-parrot</span>
-                                    </div>
-                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
-                                </div>
+                                <div class="text-xs text-gray-500 text-center py-4">No wallets available</div>
                             </div>
                         </div>
                     </div>
@@ -1615,19 +1567,8 @@
                     
                     <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-1 max-h-24 overflow-y-auto">
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" class="rounded" />
-                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
-                            </label>
+                        <div class="space-y-1 max-h-24 overflow-y-auto" id="wallets-to-use-list">
+                            <div class="text-xs text-gray-500 text-center py-2">No wallets available</div>
                         </div>
                     </div>
                 </div>
@@ -1676,19 +1617,8 @@
                     
                     <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-1 max-h-24 overflow-y-auto">
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" class="rounded" />
-                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
-                            </label>
+                        <div class="space-y-1 max-h-24 overflow-y-auto" id="wallets-to-use-list">
+                            <div class="text-xs text-gray-500 text-center py-2">No wallets available</div>
                         </div>
                     </div>
                 </div>
@@ -1742,19 +1672,8 @@
                     
                     <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-1 max-h-24 overflow-y-auto">
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" class="rounded" />
-                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
-                            </label>
+                        <div class="space-y-1 max-h-24 overflow-y-auto" id="wallets-to-use-list">
+                            <div class="text-xs text-gray-500 text-center py-2">No wallets available</div>
                         </div>
                     </div>
                 </div>
@@ -1808,19 +1727,8 @@
                     
                     <div class="mb-4">
                         <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-1 max-h-24 overflow-y-auto">
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🐘 sour-elephant (0.34 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" checked class="rounded" />
-                                <span class="text-xs">🦜 decisive-parrot (0.3 SOL)</span>
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input type="checkbox" class="rounded" />
-                                <span class="text-xs">🦈 unaware-shark (0.01 SOL)</span>
-                            </label>
+                        <div class="space-y-1 max-h-24 overflow-y-auto" id="wallets-to-use-list">
+                            <div class="text-xs text-gray-500 text-center py-2">No wallets available</div>
                         </div>
                     </div>
                 </div>
@@ -2403,16 +2311,16 @@
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold">Trading Fees</h3>
-                            <span class="text-2xl font-bold text-green-400" id="trading-fees">0.0234 SOL</span>
+                            <span class="text-2xl font-bold text-green-400" id="trading-fees">0.0000 SOL</span>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">From Wallets</span>
-                                <span class="text-sm font-mono" id="trading-wallets">12</span>
+                                <span class="text-sm font-mono" id="trading-wallets">0</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">Last Collected</span>
-                                <span class="text-sm font-mono text-gray-500" id="trading-last">2h ago</span>
+                                <span class="text-sm font-mono text-gray-500" id="trading-last">Never</span>
                             </div>
                         </div>
                         <button class="w-full mt-4 bg-green-700 hover:bg-green-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectTradingFees()">
@@ -2423,16 +2331,16 @@
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold">Rent Fees</h3>
-                            <span class="text-2xl font-bold text-blue-400" id="rent-fees">0.0156 SOL</span>
+                            <span class="text-2xl font-bold text-blue-400" id="rent-fees">0.0000 SOL</span>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">From Wallets</span>
-                                <span class="text-sm font-mono" id="rent-wallets">8</span>
+                                <span class="text-sm font-mono" id="rent-wallets">0</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">Last Collected</span>
-                                <span class="text-sm font-mono text-gray-500" id="rent-last">1h ago</span>
+                                <span class="text-sm font-mono text-gray-500" id="rent-last">Never</span>
                             </div>
                         </div>
                         <button class="w-full mt-4 bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectRentFees()">
@@ -2443,16 +2351,16 @@
                     <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-semibold">Total Available</h3>
-                            <span class="text-2xl font-bold text-purple-400" id="total-fees">0.0390 SOL</span>
+                            <span class="text-2xl font-bold text-purple-400" id="total-fees">0.0000 SOL</span>
                         </div>
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">USD Value</span>
-                                <span class="text-sm font-mono" id="fees-usd">$8.72</span>
+                                <span class="text-sm font-mono" id="fees-usd">$0.00</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-400">Auto Collect</span>
-                                <span class="text-sm font-mono text-green-400" id="auto-collect">Enabled</span>
+                                <span class="text-sm font-mono text-gray-400" id="auto-collect">Disabled</span>
                             </div>
                         </div>
                         <button class="w-full mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded transition" onclick="toggleAutoCollect()">
@@ -2478,26 +2386,12 @@
                                 </tr>
                             </thead>
                             <tbody id="fees-history-body">
-                                <tr class="border-b border-neutral-700">
-                                    <td class="p-4 text-sm font-mono text-gray-400">14:30:15</td>
-                                    <td class="p-4">
-                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Trading</span>
-                                    </td>
-                                    <td class="p-4 text-sm font-mono">0.0234 SOL</td>
-                                    <td class="p-4 text-sm font-mono">12</td>
-                                    <td class="p-4">
-                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
-                                    </td>
-                                </tr>
-                                <tr class="border-b border-neutral-700">
-                                    <td class="p-4 text-sm font-mono text-gray-400">13:45:22</td>
-                                    <td class="p-4">
-                                        <span class="px-2 py-1 bg-blue-900 text-blue-200 text-xs rounded">Rent</span>
-                                    </td>
-                                    <td class="p-4 text-sm font-mono">0.0156 SOL</td>
-                                    <td class="p-4 text-sm font-mono">8</td>
-                                    <td class="p-4">
-                                        <span class="px-2 py-1 bg-green-900 text-green-200 text-xs rounded">Completed</span>
+                                <tr>
+                                    <td colspan="5" class="p-8 text-center text-gray-500">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <i data-lucide="inbox" class="w-8 h-8 text-gray-600"></i>
+                                            <span>No collection history yet</span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -3086,28 +2980,14 @@
             ? 'http://localhost:3000' 
             : '/.netlify/functions';
 
-        // Sample wallet data
-        const sampleWallets = [
-            { name: 'sour-elephant', emoji: '🐘', address: 'xVXqu8xYd7r4PjfnJ4ExvAMjL7TuWyaD6kbhpGQyuvaSp', tokens: 6, rent: -0.01, balance: 0.97, tags: ['🏠'] },
-            { name: 'decisive-parrot', emoji: '🦜', address: 'GPWuicusP+rxYUjseszLqEHdwzDSL0ttsjrR9jbCGgc8', tokens: 8, rent: -0.01, balance: 0.3, tags: ['🏠', '🌱', '⚠️', '🔰'] },
-            { name: 'unaware-shark', emoji: '🦈', address: 'N8fLtQnSEtpPMeVJ7a7EGbCx+T4u8bnzVE79ktj5wtL', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'tempting-cat', emoji: '🐈', address: '66rAEWpMnjqxU7841i1+w85LK57xjy28Stb1uioVzNtV?', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'dense-flamingo', emoji: '🦩', address: '3Scyg0Gmh1Bps3ZVaiV7PTOJuQR8gjnJOExFAhqYBgMwZ', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'rosy-giraffe', emoji: '🦒', address: '8APPiBRLTAWP3R9JMnsforYgbc5JNxeQ2jMj2kCEngl', tokens: 2, rent: 0, balance: 0.01, tags: ['🏠', '⚠️', '👑', '🌱'] },
-            { name: 'rubbery-cat', emoji: '😺', address: '7hCj9EsjzqdizPntD32rNqJMGQtY5hisiqDhs9TLAUNzu', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'acclaimed-rabbit', emoji: '🐰', address: '8cgxBsk069EOP2Uaq7nmMTis35fcBy8QpTtc78R13WXr', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'cautious-fish', emoji: '🐟', address: '9SDdzqL7XNkYNHKqyGcdTgYTwLvaB1YC9qS8MQJqQf2ze', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'tidy-dog', emoji: '🐕', address: 't35nCFwXxjoJJOqzEPxsewVsjd3BcuPoSRwvi46xq9PT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'respectful-turtle', emoji: '🐢', address: '7NPisMGzttLGdUAqrM037SLpRHWZ2mVtK2LthQ16qEcT', tokens: 0, rent: 0, balance: 0.01, tags: [] },
-            { name: 'calculating-fox', emoji: '🦊', address: 'C3Gx25mQ2iYfnH1iEuf3c7SHDKkqMYVBLoxjaqYYwPxJ', tokens: 0, rent: 0, balance: 0.01, tags: ['⚠️', '📦'] }
-        ];
-
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            wallets = [...sampleWallets];
+            // Initialize with empty wallets - will be loaded from on-chain data
+            wallets = [];
             renderWallets();
             updateTotalBalance();
             initializeEventListeners();
+            initializeCollectFees();
             startStatusUpdates();
             addConsoleLog('System initialized - Ready for trading', 'info');
         });
@@ -3115,45 +2995,81 @@
         function initializeEventListeners() {
             // Navigation
             document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     const view = item.dataset.view;
-                    switchView(view);
+                    if (view) {
+                        switchView(view);
+                    }
                 });
             });
             
             // Search
-            document.getElementById('wallet-search').addEventListener('input', filterWallets);
+            const walletSearch = document.getElementById('wallet-search');
+            if (walletSearch) {
+                walletSearch.addEventListener('input', filterWallets);
+            }
             
             // Tab switching
-            document.getElementById('active-tab').addEventListener('click', () => switchTab('active'));
-            document.getElementById('inactive-tab').addEventListener('click', () => switchTab('inactive'));
+            const activeTab = document.getElementById('active-tab');
+            const inactiveTab = document.getElementById('inactive-tab');
+            if (activeTab) {
+                activeTab.addEventListener('click', () => switchTab('active'));
+            }
+            if (inactiveTab) {
+                inactiveTab.addEventListener('click', () => switchTab('inactive'));
+            }
             
             // Select all
-            document.getElementById('select-all').addEventListener('change', toggleSelectAll);
+            const selectAll = document.getElementById('select-all');
+            if (selectAll) {
+                selectAll.addEventListener('change', toggleSelectAll);
+            }
         }
 
         function switchView(viewName) {
-            // Update navigation
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
-            });
-            document.querySelector(`[data-view="${viewName}"]`).className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
-            
-            // Update views
-            document.querySelectorAll('.view').forEach(view => {
-                view.classList.add('hidden');
-            });
-            document.getElementById(`${viewName}-view`).classList.remove('hidden');
-            
-            currentView = viewName;
-            
-            // Load view-specific data
-            if (viewName === 'wallets') {
-                renderWallets();
-            } else if (viewName === 'tokens') {
-                loadTokens();
+            try {
+                // Update navigation
+                document.querySelectorAll('.nav-item').forEach(item => {
+                    item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
+                });
+                const navItem = document.querySelector(`[data-view="${viewName}"]`);
+                if (navItem) {
+                    navItem.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
+                }
+                
+                // Update views
+                document.querySelectorAll('.view').forEach(view => {
+                    view.classList.add('hidden');
+                });
+                const targetView = document.getElementById(`${viewName}-view`);
+                if (targetView) {
+                    targetView.classList.remove('hidden');
+                } else {
+                    console.error(`View not found: ${viewName}-view`);
+                }
+                
+                currentView = viewName;
+                
+                // Load view-specific data
+                if (viewName === 'wallets') {
+                    renderWallets();
+                } else if (viewName === 'tokens') {
+                    if (typeof loadTokens === 'function') {
+                        loadTokens();
+                    }
+                } else if (viewName === 'collect-fees') {
+                    loadCollectFeesData();
+                }
+            } catch (error) {
+                console.error('Error switching view:', error);
+                addConsoleLog(`Error switching to ${viewName}: ${error.message}`, 'error');
             }
         }
+        
+        // Make switchView globally accessible
+        window.switchView = switchView;
 
         function renderWallets() {
             const tbody = document.getElementById('wallets-table-body');
@@ -3415,38 +3331,163 @@
         }
 
         // Fee Collection Functions
-        function collectAllFees() {
-            showToast('Collecting all fees...', 'info');
-            addConsoleLog('Starting fee collection from all wallets', 'info');
-            setTimeout(() => {
-                showToast('All fees collected successfully!', 'success');
-                addConsoleLog('Fee collection completed', 'success');
-            }, 2000);
+        function initializeCollectFees() {
+            // Initialize collect fees data to zero
+            updateCollectFeesDisplay({
+                tradingFees: 0,
+                rentFees: 0,
+                totalFees: 0,
+                tradingWallets: 0,
+                rentWallets: 0,
+                tradingLastCollected: null,
+                rentLastCollected: null,
+                usdValue: 0,
+                autoCollectEnabled: false
+            });
         }
 
-        function collectTradingFees() {
-            showToast('Collecting trading fees...', 'info');
-            addConsoleLog('Collecting trading fees from 12 wallets', 'info');
-            setTimeout(() => {
-                showToast('Trading fees collected!', 'success');
-            }, 1500);
+        async function loadCollectFeesData() {
+            try {
+                // Fetch real on-chain data
+                const response = await fetch(`${API_BASE}/wallets`);
+                if (!response.ok) throw new Error('Failed to fetch wallets');
+                
+                const walletsData = await response.json();
+                const wallets = walletsData.wallets || [];
+                
+                // Calculate fees from wallets
+                let tradingFees = 0;
+                let rentFees = 0;
+                let tradingWallets = 0;
+                let rentWallets = 0;
+                
+                for (const wallet of wallets) {
+                    const balance = wallet.balance || 0;
+                    if (balance > 0) {
+                        tradingFees += balance;
+                        tradingWallets++;
+                    }
+                    // Rent fees would be calculated differently based on account rent
+                    // For now, we'll set it to 0 as it requires more complex calculation
+                }
+                
+                // Get SOL price for USD conversion
+                let solPrice = 0;
+                try {
+                    const priceResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+                    if (priceResponse.ok) {
+                        const priceData = await priceResponse.json();
+                        solPrice = priceData.solana?.usd || 0;
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch SOL price:', e);
+                }
+                
+                const totalFees = tradingFees + rentFees;
+                const usdValue = totalFees * solPrice;
+                
+                updateCollectFeesDisplay({
+                    tradingFees,
+                    rentFees,
+                    totalFees,
+                    tradingWallets,
+                    rentWallets,
+                    tradingLastCollected: null,
+                    rentLastCollected: null,
+                    usdValue,
+                    autoCollectEnabled: false
+                });
+            } catch (error) {
+                console.error('Error loading collect fees data:', error);
+                addConsoleLog('Error loading collect fees data', 'error');
+                // Initialize to zero on error
+                initializeCollectFees();
+            }
         }
 
-        function collectRentFees() {
-            showToast('Collecting rent fees...', 'info');
-            addConsoleLog('Collecting rent fees from 8 wallets', 'info');
-            setTimeout(() => {
-                showToast('Rent fees collected!', 'success');
-            }, 1500);
+        function updateCollectFeesDisplay(data) {
+            document.getElementById('trading-fees').textContent = `${data.tradingFees.toFixed(4)} SOL`;
+            document.getElementById('rent-fees').textContent = `${data.rentFees.toFixed(4)} SOL`;
+            document.getElementById('total-fees').textContent = `${data.totalFees.toFixed(4)} SOL`;
+            document.getElementById('trading-wallets').textContent = data.tradingWallets.toString();
+            document.getElementById('rent-wallets').textContent = data.rentWallets.toString();
+            document.getElementById('trading-last').textContent = data.tradingLastCollected || 'Never';
+            document.getElementById('rent-last').textContent = data.rentLastCollected || 'Never';
+            document.getElementById('fees-usd').textContent = `$${data.usdValue.toFixed(2)}`;
+            
+            const autoCollectEl = document.getElementById('auto-collect');
+            if (data.autoCollectEnabled) {
+                autoCollectEl.textContent = 'Enabled';
+                autoCollectEl.className = 'text-sm font-mono text-green-400';
+            } else {
+                autoCollectEl.textContent = 'Disabled';
+                autoCollectEl.className = 'text-sm font-mono text-gray-400';
+            }
+        }
+
+        async function collectAllFees() {
+            try {
+                showToast('Collecting all fees...', 'info');
+                addConsoleLog('Starting fee collection from all wallets', 'info');
+                
+                // TODO: Implement actual on-chain fee collection
+                // This would involve:
+                // 1. Getting all wallet addresses
+                // 2. Creating transfer transactions from each wallet to fee wallet
+                // 3. Signing and sending transactions
+                // 4. Updating the UI with results
+                
+                showToast('Fee collection feature requires wallet connection', 'info');
+                addConsoleLog('Fee collection requires wallet connection and signing', 'info');
+            } catch (error) {
+                console.error('Error collecting fees:', error);
+                showToast('Error collecting fees', 'error');
+                addConsoleLog('Error collecting fees: ' + error.message, 'error');
+            }
+        }
+
+        async function collectTradingFees() {
+            try {
+                showToast('Collecting trading fees...', 'info');
+                addConsoleLog('Collecting trading fees', 'info');
+                
+                // TODO: Implement actual on-chain trading fee collection
+                showToast('Fee collection feature requires wallet connection', 'info');
+            } catch (error) {
+                console.error('Error collecting trading fees:', error);
+                showToast('Error collecting trading fees', 'error');
+                addConsoleLog('Error collecting trading fees: ' + error.message, 'error');
+            }
+        }
+
+        async function collectRentFees() {
+            try {
+                showToast('Collecting rent fees...', 'info');
+                addConsoleLog('Collecting rent fees', 'info');
+                
+                // TODO: Implement actual on-chain rent fee collection
+                showToast('Fee collection feature requires wallet connection', 'info');
+            } catch (error) {
+                console.error('Error collecting rent fees:', error);
+                showToast('Error collecting rent fees', 'error');
+                addConsoleLog('Error collecting rent fees: ' + error.message, 'error');
+            }
         }
 
         function toggleAutoCollect() {
             const autoCollect = document.getElementById('auto-collect');
             const isEnabled = autoCollect.textContent === 'Enabled';
             autoCollect.textContent = isEnabled ? 'Disabled' : 'Enabled';
-            autoCollect.className = isEnabled ? 'text-sm font-mono text-red-400' : 'text-sm font-mono text-green-400';
+            autoCollect.className = isEnabled ? 'text-sm font-mono text-gray-400' : 'text-sm font-mono text-green-400';
             showToast(`Auto collect ${isEnabled ? 'disabled' : 'enabled'}`, 'info');
+            addConsoleLog(`Auto collect ${isEnabled ? 'disabled' : 'enabled'}`, 'info');
         }
+        
+        // Make collect fees functions globally accessible
+        window.collectAllFees = collectAllFees;
+        window.collectTradingFees = collectTradingFees;
+        window.collectRentFees = collectRentFees;
+        window.toggleAutoCollect = toggleAutoCollect;
 
         // Vanity Functions
         function startVanityGeneration() {

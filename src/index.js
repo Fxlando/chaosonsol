@@ -33,6 +33,9 @@ export { default as VolumeBot } from './trading/VolumeBot.js';
 // Wallet
 export { default as Security } from './wallet/Security.js';
 
+// App
+export { default as App } from './App.js';
+
 // Re-export for convenience
 export default {
   SolanaCore: () => import('./core/SolanaCore.js'),
@@ -46,6 +49,7 @@ export default {
   TradingEngine: () => import('./trading/TradingEngine.js'),
   SmartSell: () => import('./trading/SmartSell.js'),
   VolumeBot: () => import('./trading/VolumeBot.js'),
+  App: () => import('./App.js'),
   // More exports will be added as modules are built
 };
 

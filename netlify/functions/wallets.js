@@ -1,29 +1,80 @@
-// Netlify Function to get all wallets with balances (simplified)
+// Netlify Function for Complete Wallet Management
 const axios = require('axios');
+const { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
+const bs58 = require('bs58');
 
 // Load wallet data
-const volumeWallets = require('../../volume-wallets-public.json');
-const pumpWallets = require('../../pump-wallets-public.json');
+let volumeWallets, pumpWallets;
+try {
+  volumeWallets = require('../../volume-wallets-public.json');
+} catch (e) {
+  volumeWallets = { wallets: [] };
+}
+try {
+  pumpWallets = require('../../pump-wallets-public.json');
+} catch (e) {
+  pumpWallets = { wallets: [] };
+}
 
-const RPC_URL = 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
-const LAMPORTS_PER_SOL = 1000000000;
+// In-memory wallet storage (in production, use a database)
+let walletStorage = new Map();
+
+// Initialize wallet storage from JSON files
+function initializeWalletStorage() {
+  if (volumeWallets.wallets) {
+    volumeWallets.wallets.forEach((wallet, index) => {
+      const walletId = `volume_${index}`;
+      walletStorage.set(walletId, {
+        id: walletId,
+        name: wallet.name || `Volume_${index + 1}`,
+        address: wallet.publicKey,
+        publicKey: wallet.publicKey,
+        group: 'Volume',
+        groupName: 'Volume',
+        status: 'active',
+        tags: [],
+        balance: 0,
+        tokenHoldings: 0,
+        unclaimedRent: 0,
+        createdAt: new Date().toISOString()
+      });
+    });
+  }
+  
+  if (pumpWallets.wallets) {
+    pumpWallets.wallets.forEach((wallet, index) => {
+      const walletId = `pump_${index}`;
+      walletStorage.set(walletId, {
+        id: walletId,
+        name: wallet.name || `Pump_${index + 1}`,
+        address: wallet.publicKey,
+        publicKey: wallet.publicKey,
+        group: 'VolumePump',
+        groupName: 'VolumePump',
+        status: 'active',
+        tags: [],
+        balance: 0,
+        tokenHoldings: 0,
+        unclaimedRent: 0,
+        createdAt: new Date().toISOString()
+      });
+    });
+  }
+}
+
+// Initialize on module load
+initializeWalletStorage();
+
+const RPC_URL = process.env.RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
+const connection = new Connection(RPC_URL, 'confirmed');
 
 async function getBalance(publicKey) {
   try {
-    const response = await axios.post(RPC_URL, {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getBalance',
-      params: [publicKey]
-    }, {
-      timeout: 5000
-    });
-    
-    if (response.data && response.data.result && response.data.result.value !== undefined) {
-      return response.data.result.value / LAMPORTS_PER_SOL;
-    }
-    return 0;
+    const pubkey = new PublicKey(publicKey);
+    const balance = await connection.getBalance(pubkey);
+    return balance / LAMPORTS_PER_SOL;
   } catch (error) {
+    console.error('Error getting balance:', error);
     return 0;
   }
 }
@@ -39,11 +90,140 @@ async function getSolPrice() {
   }
 }
 
+async function getAllWalletsWithBalances() {
+  const solPrice = await getSolPrice();
+  const wallets = Array.from(walletStorage.values());
+  
+  // Fetch balances for all wallets
+  const walletsWithBalances = await Promise.all(
+    wallets.map(async (wallet) => {
+      const balance = await getBalance(wallet.publicKey || wallet.address);
+      return {
+        ...wallet,
+        balance: balance,
+        usdValue: balance * solPrice
+      };
+    })
+  );
+  
+  return walletsWithBalances;
+}
+
+async function generateWallet(name = null, tags = []) {
+  try {
+    const keypair = Keypair.generate();
+    const walletId = `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const wallet = {
+      id: walletId,
+      name: name || `Wallet_${walletStorage.size + 1}`,
+      address: keypair.publicKey.toString(),
+      publicKey: keypair.publicKey.toString(),
+      privateKey: bs58.encode(keypair.secretKey),
+      group: 'default',
+      groupName: 'default',
+      status: 'active',
+      tags: tags,
+      balance: 0,
+      tokenHoldings: 0,
+      unclaimedRent: 0,
+      createdAt: new Date().toISOString()
+    };
+    
+    walletStorage.set(walletId, wallet);
+    
+    return {
+      success: true,
+      wallet: {
+        ...wallet,
+        privateKey: wallet.privateKey // Return private key for new wallets
+      }
+    };
+  } catch (error) {
+    console.error('Error generating wallet:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+async function importWallet(privateKey, name = null, tags = []) {
+  try {
+    let secretKey;
+    
+    // Handle different private key formats
+    if (typeof privateKey === 'string') {
+      try {
+        // Try base58
+        secretKey = bs58.decode(privateKey);
+      } catch (e) {
+        // Try JSON array
+        secretKey = new Uint8Array(JSON.parse(privateKey));
+      }
+    } else if (Array.isArray(privateKey)) {
+      secretKey = new Uint8Array(privateKey);
+    } else {
+      throw new Error('Invalid private key format');
+    }
+    
+    if (secretKey.length !== 64) {
+      throw new Error('Invalid private key length');
+    }
+    
+    const keypair = Keypair.fromSecretKey(secretKey);
+    const walletId = `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Check if wallet already exists
+    for (const [id, existing] of walletStorage) {
+      if (existing.publicKey === keypair.publicKey.toString()) {
+        return {
+          success: false,
+          error: 'Wallet already exists',
+          wallet: existing
+        };
+      }
+    }
+    
+    const wallet = {
+      id: walletId,
+      name: name || `Imported_${walletStorage.size + 1}`,
+      address: keypair.publicKey.toString(),
+      publicKey: keypair.publicKey.toString(),
+      privateKey: bs58.encode(keypair.secretKey),
+      group: 'default',
+      groupName: 'default',
+      status: 'active',
+      tags: tags,
+      balance: 0,
+      tokenHoldings: 0,
+      unclaimedRent: 0,
+      createdAt: new Date().toISOString()
+    };
+    
+    walletStorage.set(walletId, wallet);
+    
+    return {
+      success: true,
+      wallet: {
+        ...wallet,
+        privateKey: wallet.privateKey
+      }
+    };
+  } catch (error) {
+    console.error('Error importing wallet:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 exports.handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Content-Type': 'application/json'
   };
 
@@ -52,40 +232,168 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const solPrice = await getSolPrice();
+    const path = event.path.replace('/.netlify/functions/wallets', '');
+    const method = event.httpMethod;
+    const body = event.body ? JSON.parse(event.body) : {};
 
-    // Process volume wallets
-    const volumeWalletsWithBalance = await Promise.all(
-      (volumeWallets.wallets || []).slice(0, 10).map(async (wallet) => {
-        const balance = await getBalance(wallet.publicKey);
-        return {
-          ...wallet,
-          groupName: 'Volume',
-          balance: balance,
-          usdValue: balance * solPrice
-        };
-      })
-    );
+    // GET /wallets - Get all wallets
+    if (path === '' && method === 'GET') {
+      const wallets = await getAllWalletsWithBalances();
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(wallets)
+      };
+    }
 
-    // Process pump wallets
-    const pumpWalletsWithBalance = await Promise.all(
-      (pumpWallets.wallets || []).slice(0, 10).map(async (wallet) => {
-        const balance = await getBalance(wallet.publicKey);
-        return {
-          ...wallet,
-          groupName: 'VolumePump',
-          balance: balance,
-          usdValue: balance * solPrice
-        };
-      })
-    );
+    // POST /wallets/generate - Generate new wallets
+    if (path === '/generate' && method === 'POST') {
+      const count = body.count || 1;
+      const name = body.name || null;
+      const tags = body.tags || [];
+      
+      const results = [];
+      for (let i = 0; i < count; i++) {
+        const result = await generateWallet(
+          name ? `${name}_${i + 1}` : null,
+          tags
+        );
+        if (result.success) {
+          results.push(result.wallet);
+        }
+      }
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          count: results.length,
+          wallets: results
+        })
+      };
+    }
 
-    const allWallets = [...volumeWalletsWithBalance, ...pumpWalletsWithBalance];
+    // POST /wallets/import - Import wallet
+    if (path === '/import' && method === 'POST') {
+      const result = await importWallet(
+        body.privateKey,
+        body.name || null,
+        body.tags || []
+      );
+      
+      return {
+        statusCode: result.success ? 200 : 400,
+        headers,
+        body: JSON.stringify(result)
+      };
+    }
 
+    // POST /wallets/deactivate - Deactivate wallets
+    if (path === '/deactivate' && method === 'POST') {
+      const walletIds = body.walletIds || [];
+      let deactivated = 0;
+      
+      walletIds.forEach(walletId => {
+        const wallet = walletStorage.get(walletId);
+        if (wallet) {
+          wallet.status = 'inactive';
+          walletStorage.set(walletId, wallet);
+          deactivated++;
+        }
+      });
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          deactivated
+        })
+      };
+    }
+
+    // POST /wallets/activate - Activate wallets
+    if (path === '/activate' && method === 'POST') {
+      const walletIds = body.walletIds || [];
+      let activated = 0;
+      
+      walletIds.forEach(walletId => {
+        const wallet = walletStorage.get(walletId);
+        if (wallet) {
+          wallet.status = 'active';
+          walletStorage.set(walletId, wallet);
+          activated++;
+        }
+      });
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          activated
+        })
+      };
+    }
+
+    // POST /wallets/tag - Tag wallets
+    if (path === '/tag' && method === 'POST') {
+      const walletIds = body.walletIds || [];
+      const tags = body.tags || [];
+      let tagged = 0;
+      
+      walletIds.forEach(walletId => {
+        const wallet = walletStorage.get(walletId);
+        if (wallet) {
+          wallet.tags = [...new Set([...wallet.tags, ...tags])];
+          walletStorage.set(walletId, wallet);
+          tagged++;
+        }
+      });
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          tagged
+        })
+      };
+    }
+
+    // POST /wallets/group - Group wallets
+    if (path === '/group' && method === 'POST') {
+      const walletIds = body.walletIds || [];
+      const groupName = body.groupName || 'default';
+      let grouped = 0;
+      
+      walletIds.forEach(walletId => {
+        const wallet = walletStorage.get(walletId);
+        if (wallet) {
+          wallet.group = groupName;
+          wallet.groupName = groupName;
+          walletStorage.set(walletId, wallet);
+          grouped++;
+        }
+      });
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          grouped
+        })
+      };
+    }
+
+    // Default: return all wallets
+    const wallets = await getAllWalletsWithBalances();
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(allWallets)
+      body: JSON.stringify(wallets)
     };
   } catch (error) {
     console.error('Error in wallets function:', error);
@@ -93,8 +401,9 @@ exports.handler = async (event, context) => {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
+        success: false,
         error: error.message,
-        message: 'Failed to fetch wallets'
+        message: 'Failed to process wallet request'
       })
     };
   }

@@ -21,6 +21,8 @@
     <!-- New API Client (Production Backend) -->
     <script src="services/api-client.js"></script>
     <script src="services/integration.js"></script>
+    <!-- Wallet Operations -->
+    <script src="wallet-operations.js"></script>
     <style>
         .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
         .bg-neutral-900 { background-color: #171717; }
@@ -3378,20 +3380,87 @@
             addConsoleLog('Refreshing fee wallet balance', 'info');
         }
 
-        function exportWallets() {
-            showToast(`Exported ${selectedWallets.size || wallets.length} wallets`, 'success');
+        async function exportWallets() {
+            if (window.walletOperations && window.walletOperations.exportWallets) {
+                await window.walletOperations.exportWallets();
+            } else {
+                // Fallback implementation
+                const walletsToExport = selectedWallets.size > 0 
+                    ? wallets.filter(w => selectedWallets.has(w.id || w.name))
+                    : wallets;
+                
+                if (walletsToExport.length === 0) {
+                    showToast('No wallets to export', 'error');
+                    return;
+                }
+                
+                const exportData = walletsToExport.map(wallet => ({
+                    name: wallet.name,
+                    address: wallet.address || wallet.publicKey,
+                    balance: wallet.balance || 0,
+                    tags: wallet.tags || [],
+                    group: wallet.group || wallet.groupName || 'default'
+                }));
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `wallets_export_${Date.now()}.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+                
+                showToast(`Exported ${walletsToExport.length} wallets`, 'success');
+            }
         }
 
-        function deactivateWallets() {
-            showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
+        async function deactivateWallets() {
+            if (window.walletOperations && window.walletOperations.deactivateWallets) {
+                await window.walletOperations.deactivateWallets();
+            } else {
+                // Fallback implementation
+                if (selectedWallets.size === 0) {
+                    showToast('Please select wallets to deactivate', 'error');
+                    return;
+                }
+                
+                showToast(`Deactivating ${selectedWallets.size} wallets...`, 'info');
+                // Call API to deactivate
+                try {
+                    const endpoint = API_BASE.includes('netlify') 
+                        ? `${API_BASE}/wallets/deactivate` 
+                        : `${API_BASE}/api/wallets/deactivate`;
+                    
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            walletIds: Array.from(selectedWallets) 
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        selectedWallets.clear();
+                        await loadWallets();
+                        showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
+                    }
+                } catch (error) {
+                    showToast(`Failed to deactivate wallets: ${error.message}`, 'error');
+                }
+            }
         }
 
-        function refreshBalances() {
-            showToast('Refreshing balances...', 'info');
-            addConsoleLog('Refreshing wallet balances', 'info');
-            setTimeout(() => {
+        async function refreshBalances() {
+            if (window.walletOperations && window.walletOperations.refreshBalances) {
+                await window.walletOperations.refreshBalances();
+            } else {
+                // Fallback implementation
+                showToast('Refreshing balances...', 'info');
+                addConsoleLog('Refreshing wallet balances', 'info');
+                await loadWallets();
                 showToast('Balances updated!', 'success');
-            }, 1000);
+            }
         }
 
         function clearConsole() {
@@ -3592,16 +3661,53 @@
         }
 
         // Wallet Operation Functions
-        function executeGenerateWallets() {
-            const count = document.getElementById('generate-count-input').value;
+        async function executeGenerateWallets() {
+            const countInput = document.getElementById('generate-count-input');
+            if (!countInput) {
+                showToast('Generate count input not found', 'error');
+                return;
+            }
+            
+            const count = parseInt(countInput.value);
+            if (!count || count < 1 || count > 100) {
+                showToast('Please enter a valid number between 1 and 100', 'error');
+                return;
+            }
+            
             showToast(`Generating ${count} wallets...`, 'info');
             addConsoleLog(`Starting generation of ${count} wallets`, 'info');
             
-            setTimeout(() => {
-                showToast(`${count} wallets generated successfully!`, 'success');
-                addConsoleLog(`Generated ${count} new wallets`, 'success');
-                navigateToPage('wallets');
-            }, 2000);
+            // Use wallet operations if available
+            if (window.walletOperations && window.walletOperations.executeGenerateWallets) {
+                await window.walletOperations.executeGenerateWallets();
+            } else {
+                // Fallback: call API directly
+                try {
+                    const endpoint = API_BASE.includes('netlify') 
+                        ? `${API_BASE}/wallets/generate` 
+                        : `${API_BASE}/api/wallets/generate`;
+                    
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ count })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        showToast(`Successfully generated ${count} wallets!`, 'success');
+                        addConsoleLog(`Generated ${count} new wallets`, 'success');
+                        navigateToPage('wallets');
+                        // Reload wallets
+                        await loadWallets();
+                    } else {
+                        throw new Error('Failed to generate wallets');
+                    }
+                } catch (error) {
+                    showToast(`Failed to generate wallets: ${error.message}`, 'error');
+                    addConsoleLog(`Error generating wallets: ${error.message}`, 'error');
+                }
+            }
         }
 
         function executeFundWallets() {
@@ -4323,10 +4429,61 @@
         }
 
         // Initialize all features when DOM loads
-        document.addEventListener('DOMContentLoaded', () => {
-            // ... existing initialization code ...
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize Lucide icons
+            lucide.createIcons();
+            
+            // Initialize wallets view
+            if (document.getElementById('wallets-view')) {
+                // Load wallets when wallets view is shown
+                if (window.walletOperations && window.walletOperations.loadWallets) {
+                    await window.walletOperations.loadWallets();
+                } else {
+                    // Fallback: load wallets directly
+                    await loadWallets();
+                }
+            }
+            
+            // Initialize markdown editor
             initializeMarkdownEditor();
+            
+            // Setup navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const view = item.dataset.view;
+                    switchView(view);
+                });
+            });
+            
+            // Load wallets on page load if wallets view is active
+            if (currentView === 'wallets') {
+                if (window.walletOperations && window.walletOperations.loadWallets) {
+                    window.walletOperations.loadWallets();
+                } else {
+                    loadWallets();
+                }
+            }
         });
+        
+        // Load wallets function (fallback if wallet-operations.js not loaded)
+        async function loadWallets() {
+            try {
+                const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
+                const response = await fetch(endpoint);
+                if (response.ok) {
+                    const data = await response.json();
+                    wallets = Array.isArray(data) ? data : (data.wallets || []);
+                    if (window.walletOperations && window.walletOperations.renderWallets) {
+                        window.walletOperations.renderWallets();
+                    } else {
+                        renderWallets();
+                    }
+                    updateTotalBalance();
+                }
+            } catch (error) {
+                console.error('Error loading wallets:', error);
+            }
+        }
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');

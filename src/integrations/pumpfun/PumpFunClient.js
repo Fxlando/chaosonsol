@@ -301,37 +301,49 @@ export class PumpFunClient {
         throw new Error(calculation.error);
       }
 
-      // Build buy instructions
-      const instructions = await this.buildBuyInstruction(walletKeypair, tokenMint, solAmount, options);
-
-      // Build transaction
-      const transaction = await this.transactionBuilder.buildTransaction({
-        instructions,
-        feePayer: walletKeypair.publicKey,
-        priorityFee: options.priorityFee || this.config.priorityFee
-      });
-
-      // Sign transaction
-      this.transactionBuilder.signTransaction(transaction, [walletKeypair]);
-
-      // Execute transaction
-      const result = await this.solanaCore.executeTransaction(transaction, [walletKeypair], {
-        maxRetries: options.maxRetries || this.config.maxRetries
-      });
-
-      if (!result.success) {
-        throw new Error('Transaction failed');
+      // Use pumpfun-sdk for REAL on-chain buy (100% real transaction)
+      try {
+        const pumpfunSdk = await import('pumpfun-sdk');
+        const { pumpFunBuy, TransactionMode } = pumpfunSdk;
+        
+        const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
+        const slippageDecimal = (options.slippage || this.config.defaultSlippage) / 100;
+        const priorityFeeSol = ((options.priorityFee || 5000) / 1e9);
+        
+        logger.info(`Slippage: ${(slippageDecimal * 100).toFixed(2)}%, Priority Fee: ${priorityFeeSol} SOL`);
+        
+        const result = await pumpFunBuy(
+          TransactionMode.Execution,
+          privateKeyBase58,
+          tokenMint.toString(),
+          solAmount,
+          priorityFeeSol,
+          slippageDecimal,
+          {
+            rpcUrl: this.connection.rpcEndpoint,
+            commitment: 'confirmed',
+            trackTx: true
+          }
+        );
+        
+        if (result && result.signature) {
+          logger.info(`✅ REAL buy successful: ${result.signature}`);
+          return {
+            success: true,
+            signature: result.signature,
+            solAmount: solAmount,
+            tokenAmount: result.expectedOutput || calculation.tokenAmount,
+            priceImpact: calculation.priceImpact,
+            transaction: result,
+            viewOnExplorer: `https://solscan.io/tx/${result.signature}`
+          };
+        }
+        
+        throw new Error('Buy transaction failed - no signature returned');
+      } catch (error) {
+        logger.error('REAL buy failed:', error);
+        throw new Error(`Buy failed: ${error.message}`);
       }
-
-      logger.info(`✅ Buy successful: ${result.signature}`);
-      
-      return {
-        signature: result.signature,
-        tokenAmount: calculation.tokenAmount,
-        solAmount: solAmount,
-        priceImpact: calculation.priceImpact,
-        success: true
-      };
     } catch (error) {
       logger.error('Buy failed:', error);
       const classifiedError = ErrorClassifier.classifyTransactionError(error);
@@ -358,18 +370,49 @@ export class PumpFunClient {
         throw new Error(calculation.error);
       }
 
-      // TODO: Build sell instruction (similar to buy)
-      // This requires the same program interface knowledge as buy
-
-      logger.warn('Sell instruction building requires program interface - not yet implemented');
-      
-      return {
-        signature: null,
-        tokenAmount: tokenAmount,
-        solAmount: 0,
-        success: false,
-        error: 'Sell instruction building not yet implemented'
-      };
+      // Use pumpfun-sdk for REAL on-chain sell (100% real transaction)
+      try {
+        const pumpfunSdk = await import('pumpfun-sdk');
+        const { pumpFunSell, TransactionMode } = pumpfunSdk;
+        
+        const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
+        const slippageDecimal = (options.slippage || this.config.defaultSlippage) / 100;
+        const priorityFeeSol = ((options.priorityFee || 5000) / 1e9);
+        
+        logger.info(`Slippage: ${(slippageDecimal * 100).toFixed(2)}%, Priority Fee: ${priorityFeeSol} SOL`);
+        
+        const result = await pumpFunSell(
+          TransactionMode.Execution,
+          privateKeyBase58,
+          tokenMint.toString(),
+          tokenAmount,
+          priorityFeeSol,
+          slippageDecimal,
+          {
+            rpcUrl: this.connection.rpcEndpoint,
+            commitment: 'confirmed',
+            trackTx: true
+          }
+        );
+        
+        if (result && result.signature) {
+          logger.info(`✅ REAL sell successful: ${result.signature}`);
+          return {
+            success: true,
+            signature: result.signature,
+            tokenAmount: tokenAmount,
+            solAmount: result.expectedOutput || calculation.solAmount,
+            priceImpact: calculation.priceImpact,
+            transaction: result,
+            viewOnExplorer: `https://solscan.io/tx/${result.signature}`
+          };
+        }
+        
+        throw new Error('Sell transaction failed - no signature returned');
+      } catch (error) {
+        logger.error('REAL sell failed:', error);
+        throw new Error(`Sell failed: ${error.message}`);
+      }
     } catch (error) {
       logger.error('Sell failed:', error);
       return {

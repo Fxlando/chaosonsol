@@ -2927,10 +2927,7 @@
     <div class="fixed top-4 right-4 z-50 space-y-2" id="toast-container"></div>
 
     <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
-
-        // State
+        // State - Must be in global scope for onclick handlers
         let selectedWallets = new Set();
         let wallets = [];
         let selectedTokenPlatform = 'pumpfun'; // Default to Pump.fun
@@ -2945,14 +2942,26 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize with empty wallets - will be loaded from on-chain data
-            wallets = [];
-            renderWallets();
-            updateTotalBalance();
-            initializeEventListeners();
-            initializeCollectFees();
-            startStatusUpdates();
-            addConsoleLog('System initialized - Ready for trading', 'info');
+            try {
+                // Initialize Lucide icons AFTER DOM is ready
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                } else {
+                    console.warn('Lucide icons library not loaded');
+                }
+                
+                // Initialize with empty wallets - will be loaded from on-chain data
+                wallets = [];
+                renderWallets();
+                updateTotalBalance();
+                initializeEventListeners();
+                initializeCollectFees();
+                startStatusUpdates();
+                addConsoleLog('System initialized - Ready for trading', 'info');
+            } catch (error) {
+                console.error('Initialization error:', error);
+                alert('Error initializing application: ' + error.message);
+            }
         });
 
         function initializeEventListeners() {
@@ -3031,7 +3040,7 @@
             }
         }
         
-        // Make switchView globally accessible
+        // Make switchView globally accessible (functions are hoisted, so this works)
         window.switchView = switchView;
 
         function renderWallets() {
@@ -4541,6 +4550,49 @@
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
+        
+        // Expose ALL functions to global scope for onclick handlers
+        // This must be at the end to ensure all functions are defined
+        window.navigateToPage = navigateToPage;
+        window.executeCreateToken = executeCreateToken;
+        window.selectTokenPlatform = selectTokenPlatform;
+        window.executeCopyToken = executeCopyToken;
+        window.executeImportToken = executeImportToken;
+        window.loadWalletsForTokenCreation = loadWalletsForTokenCreation;
+        window.uploadTokenImage = uploadTokenImage;
+        window.copyFeeWalletAddress = copyFeeWalletAddress;
+        window.copyFeeWalletKey = copyFeeWalletKey;
+        window.refreshFeeWallet = refreshFeeWallet;
+        window.selectTokenByMint = selectTokenByMint;
+        window.switchTokenTab = switchTokenTab;
+        window.selectCopyPlatform = selectCopyPlatform;
+        window.selectBlockZeroMode = selectBlockZeroMode;
+        window.selectRedistributeMode = selectRedistributeMode;
+        window.selectTagExecutor = selectTagExecutor;
+        window.selectWarmExecutor = selectWarmExecutor;
+        window.toggleTag = toggleTag;
+        window.executeTagWallets = executeTagWallets;
+        window.executeWarmWallets = executeWarmWallets;
+        window.executeRedistributeWallets = executeRedistributeWallets;
+        
+        // Also expose other commonly used functions
+        window.copyAddress = copyAddress;
+        window.refreshBalances = refreshBalances;
+        window.exportWallets = exportWallets;
+        window.deactivateWallets = deactivateWallets;
+        window.clearConsole = clearConsole;
+        window.toggleAutoScroll = toggleAutoScroll;
+        window.openDocumentation = openDocumentation;
+        window.sharePlatform = sharePlatform;
+        window.openModal = openModal;
+        window.closeModal = closeModal;
+        window.executeGenerateWallets = executeGenerateWallets;
+        window.executeFundWallets = executeFundWallets;
+        window.executeWithdrawWallets = executeWithdrawWallets;
+        window.selectFundMode = selectFundMode;
+        window.toggleWalletSelection = toggleWalletSelection;
+        
+        console.log('✅ All global functions exposed for onclick handlers');
     </script>
 </body>
 </html>

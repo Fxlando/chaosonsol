@@ -246,47 +246,9 @@ export class PumpFunClient {
   }
 
   /**
-   * Build PumpFun buy instruction
+   * Note: Instruction building is not needed as we use pumpfun-sdk for all real transactions.
+   * The SDK handles all instruction building, account derivation, and transaction construction.
    */
-  async buildBuyInstruction(walletKeypair, tokenMint, solAmount, options = {}) {
-    try {
-      const walletPubkey = walletKeypair.publicKey;
-      
-      // Get or create associated token account
-      const tokenAccountExists = await this.accountManager.tokenAccountExists(tokenMint, walletPubkey);
-      
-      const instructions = [];
-
-      // Create token account if needed
-      if (!tokenAccountExists) {
-        const createTokenAccountIx = await this.accountManager.createAssociatedTokenAccountInstruction(
-          walletPubkey,
-          walletPubkey,
-          tokenMint
-        );
-        instructions.push(createTokenAccountIx);
-      }
-
-      // Build PumpFun buy instruction using instruction builder
-      const { buildBuyInstruction } = await import('./instructions.js');
-      const buyInstruction = await buildBuyInstruction(
-        walletPubkey,
-        tokenMint,
-        solAmount,
-        {
-          slippageBps: options.slippageBps || Math.floor(this.config.defaultSlippage * 100),
-          ...options
-        }
-      );
-
-      instructions.push(buyInstruction);
-
-      return instructions;
-    } catch (error) {
-      logger.error('Failed to build buy instruction:', error);
-      throw error;
-    }
-  }
 
   /**
    * Buy token on PumpFun

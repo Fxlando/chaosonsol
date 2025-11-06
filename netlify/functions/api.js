@@ -124,6 +124,20 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Get tokens from wallets (on-chain data)
+    if (path === '/tokens' && method === 'GET') {
+      // This will be handled by the tokens.js function
+      // But we can also add it here as a fallback
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          tokens: [],
+          message: 'Use /.netlify/functions/tokens endpoint'
+        })
+      };
+    }
+
     // Status routes
     if (path === '/status' && method === 'GET') {
       const status = app.getStatus();

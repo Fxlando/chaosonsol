@@ -1,6 +1,7 @@
 /**
  * PumpFun Client
- * Complete PumpFun integration with proper instruction building
+ * Production-ready PumpFun integration using pumpfun-sdk for all on-chain transactions
+ * All operations use real on-chain transactions via the official SDK
  */
 
 import { 

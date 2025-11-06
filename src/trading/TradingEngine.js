@@ -177,6 +177,54 @@ export class TradingEngine {
   }
 
   /**
+   * Create and launch token on PumpFun
+   */
+  async createToken(walletId, metadata, options = {}) {
+    try {
+      // Get wallet keypair
+      const keypair = this.walletManager.getWalletKeypair(walletId);
+
+      // Use PumpFun client to create token
+      const result = await this.pumpFun.createToken(keypair, metadata, options);
+
+      // Update wallet last used
+      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+
+      return result;
+    } catch (error) {
+      logger.error('Create token failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Launch token with initial buy
+   */
+  async launchToken(walletId, metadata, initialBuyAmount = 0, options = {}) {
+    try {
+      // Get wallet keypair
+      const keypair = this.walletManager.getWalletKeypair(walletId);
+
+      // Use PumpFun client to launch token
+      const result = await this.pumpFun.launchToken(keypair, metadata, initialBuyAmount, options);
+
+      // Update wallet last used
+      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+
+      return result;
+    } catch (error) {
+      logger.error('Launch token failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Get quote for swap
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {

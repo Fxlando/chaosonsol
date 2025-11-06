@@ -383,6 +383,50 @@ export class PumpFunClient {
   }
 
   /**
+   * Create and launch token on PumpFun
+   */
+  async createToken(walletKeypair, metadata, options = {}) {
+    try {
+      // Import TokenLaunch for token creation
+      const { TokenLaunch } = await import('./TokenLaunch.js');
+      const tokenLaunch = new TokenLaunch(this.solanaCore, this.config);
+      await tokenLaunch.initialize();
+
+      return await tokenLaunch.createToken(walletKeypair, metadata, options);
+    } catch (error) {
+      logger.error('Create token failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        tokenMint: null,
+        signature: null
+      };
+    }
+  }
+
+  /**
+   * Launch token with initial buy
+   */
+  async launchToken(walletKeypair, metadata, initialBuyAmount = 0, options = {}) {
+    try {
+      // Import TokenLaunch for token launch
+      const { TokenLaunch } = await import('./TokenLaunch.js');
+      const tokenLaunch = new TokenLaunch(this.solanaCore, this.config);
+      await tokenLaunch.initialize();
+
+      return await tokenLaunch.launchToken(walletKeypair, metadata, initialBuyAmount, options);
+    } catch (error) {
+      logger.error('Launch token failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        tokenMint: null,
+        signature: null
+      };
+    }
+  }
+
+  /**
    * Get trending tokens
    */
   async getTrendingTokens(limit = 20) {

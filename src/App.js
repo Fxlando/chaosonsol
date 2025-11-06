@@ -207,6 +207,26 @@ export class App {
   }
 
   /**
+   * Create token on PumpFun
+   */
+  async createToken(walletId, metadata, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+    return await this.tradingEngine.createToken(walletId, metadata, options);
+  }
+
+  /**
+   * Launch token with initial buy
+   */
+  async launchToken(walletId, metadata, initialBuyAmount = 0, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+    return await this.tradingEngine.launchToken(walletId, metadata, initialBuyAmount, options);
+  }
+
+  /**
    * Get quote for swap
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {

@@ -20,6 +20,7 @@ export { default as Logger, loggerManager, logger } from './utils/logger.js';
 
 // Integrations
 export { default as PumpFunClient } from './integrations/pumpfun/PumpFunClient.js';
+export { default as TokenLaunch } from './integrations/pumpfun/TokenLaunch.js';
 export { default as JupiterClient } from './integrations/jupiter/JupiterClient.js';
 
 // Wallet

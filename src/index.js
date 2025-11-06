@@ -20,6 +20,13 @@ export { default as Logger, loggerManager, logger } from './utils/logger.js';
 
 // Integrations
 export { default as PumpFunClient } from './integrations/pumpfun/PumpFunClient.js';
+export { default as JupiterClient } from './integrations/jupiter/JupiterClient.js';
+
+// Wallet
+export { default as WalletManager } from './wallet/WalletManager.js';
+
+// Trading
+export { default as TradingEngine } from './trading/TradingEngine.js';
 
 // Re-export for convenience
 export default {
@@ -28,6 +35,9 @@ export default {
   TransactionBuilder: () => import('./core/TransactionBuilder.js'),
   AccountManager: () => import('./core/AccountManager.js'),
   PumpFunClient: () => import('./integrations/pumpfun/PumpFunClient.js'),
+  JupiterClient: () => import('./integrations/jupiter/JupiterClient.js'),
+  WalletManager: () => import('./wallet/WalletManager.js'),
+  TradingEngine: () => import('./trading/TradingEngine.js'),
   // More exports will be added as modules are built
 };
 

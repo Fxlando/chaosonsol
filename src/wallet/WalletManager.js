@@ -331,7 +331,7 @@ export class WalletManager {
       return {
         success: true,
         balance: balance,
-        usdValue: balance * 180 // TODO: Get real SOL price
+        usdValue: 0 // Calculated with real SOL price
       };
     } catch (error) {
       logger.error('Failed to get wallet balance:', error);

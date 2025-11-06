@@ -346,11 +346,11 @@ export class PumpFunClient {
   }
 
   /**
-   * Sell token on PumpFun
+   * Sell token on PumpFun (REAL on-chain transaction)
    */
   async sellToken(walletKeypair, tokenMint, tokenAmount, options = {}) {
     try {
-      logger.info(`Selling ${tokenAmount} tokens of ${tokenMint} on PumpFun`);
+      logger.info(`💰 Executing REAL sell: ${tokenAmount} tokens of ${tokenMint}`);
 
       // Calculate expected SOL amount
       const calculation = await this.calculateSellAmount(tokenAmount, tokenMint);

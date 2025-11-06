@@ -140,13 +140,15 @@ export class TokenLaunch {
       let createResult;
       
       try {
-        // Try using pumpfun-sdk
-        const pumpfunSdk = require('pumpfun-sdk');
+        // Use pumpfun-sdk for REAL token creation (on-chain)
+        const pumpfunSdk = await import('pumpfun-sdk');
+        
         if (pumpfunSdk && pumpfunSdk.pumpFunCreate) {
-          logger.info('Using pumpfun-sdk for token creation...');
+          logger.info('🚀 Creating REAL token on-chain using pumpfun-sdk...');
           
           const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
           
+          // REAL token creation - this executes on-chain
           createResult = await pumpfunSdk.pumpFunCreate(
             privateKeyBase58,
             name,
@@ -154,75 +156,32 @@ export class TokenLaunch {
             metadataUri,
             {
               rpcUrl: this.connection.rpcEndpoint,
-              commitment: 'confirmed'
+              commitment: 'confirmed',
+              trackTx: true
             }
           );
 
           if (createResult && createResult.signature) {
-            logger.info(`✅ Token created successfully: ${mintPubkey.toString()}`);
+            logger.info(`✅ REAL token created on-chain: ${mintPubkey.toString()}`);
+            logger.info(`Transaction: https://solscan.io/tx/${createResult.signature}`);
             
             return {
               success: true,
               tokenMint: mintPubkey.toString(),
               signature: createResult.signature,
               metadataUri: metadataUri,
-              transaction: createResult
+              transaction: createResult,
+              viewOnExplorer: `https://solscan.io/tx/${createResult.signature}`
             };
           }
         }
       } catch (sdkError) {
-        logger.warn('pumpfun-sdk not available or failed, using manual method:', sdkError.message);
+        logger.error('REAL token creation failed:', sdkError);
+        throw new Error(`Token creation failed: ${sdkError.message}`);
       }
 
-      // Fallback: Build transaction manually using PumpFun API
-      logger.info('Building token creation transaction via PumpFun API...');
-      
-      // Call PumpFun API to create token
-      const createResponse = await axios.post(`${this.config.apiBaseUrl}/create`, {
-        name: name,
-        symbol: symbol,
-        uri: metadataUri,
-        creator: walletKeypair.publicKey.toString()
-      }, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (createResponse.data && createResponse.data.transaction) {
-        // Deserialize and sign transaction
-        const transactionBuffer = Buffer.from(createResponse.data.transaction, 'base64');
-        const transaction = Transaction.from(transactionBuffer);
-        
-        // Sign transaction
-        transaction.sign(walletKeypair, mintKeypair);
-
-        // Execute transaction
-        const result = await this.solanaCore.executeTransaction(
-          transaction,
-          [walletKeypair, mintKeypair],
-          {
-            maxRetries: options.maxRetries || this.config.maxRetries
-          }
-        );
-
-        if (result.success) {
-          logger.info(`✅ Token created successfully: ${mintPubkey.toString()}`);
-          
-          return {
-            success: true,
-            tokenMint: mintPubkey.toString(),
-            signature: result.signature,
-            metadataUri: metadataUri,
-            transaction: result
-          };
-        } else {
-          throw new Error('Transaction failed');
-        }
-      }
-
-      throw new Error('Token creation failed - no transaction returned');
+      // If SDK failed, we cannot create tokens without it
+      throw new Error('Token creation requires pumpfun-sdk package. Please install: npm install pumpfun-sdk');
 
     } catch (error) {
       logger.error('Token creation failed:', error);

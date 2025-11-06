@@ -506,6 +506,13 @@ function switchView(viewName) {
         } else if (typeof loadRealData === 'function') {
             loadRealData();
         }
+    } else if (viewName === 'instant') {
+        // Load instant trading data
+        loadInstantTradingData();
+        startInstantTradingRefresh();
+    } else {
+        // Stop refresh when leaving instant view
+        stopInstantTradingRefresh();
     }
     
     // Re-initialize Lucide icons for the new view
@@ -1048,8 +1055,148 @@ window.updatePriorityFee = updatePriorityFee;
 window.resetSettings = resetSettings;
 window.exportSettings = exportSettings;
 window.importSettings = importSettings;
+// Instant Trading Functions
+async function loadInstantTradingData() {
+    try {
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:3000' 
+            : '/.netlify/functions';
+        
+        const endpoint = API_BASE.includes('netlify') 
+            ? `${API_BASE}/api/instant-trading/status` 
+            : `${API_BASE}/api/instant-trading/status`;
+        
+        console.log('Loading instant trading data from:', endpoint);
+        
+        const response = await fetch(endpoint);
+        
+        if (response.ok) {
+            const data = await response.json();
+            updateInstantTradingStatus(data);
+        } else {
+            console.error('Failed to load instant trading status');
+            updateInstantTradingStatus({
+                available: false,
+                connected: false,
+                isRunning: false,
+                message: 'Failed to connect to API'
+            });
+        }
+    } catch (error) {
+        console.error('Error loading instant trading data:', error);
+        updateInstantTradingStatus({
+            available: false,
+            connected: false,
+            isRunning: false,
+            error: error.message
+        });
+    }
+}
+
+function updateInstantTradingStatus(data) {
+    const statusEl = document.getElementById('instant-trading-status');
+    if (!statusEl) {
+        console.warn('instant-trading-status element not found');
+        return;
+    }
+    
+    if (data.available && data.connected && data.isRunning) {
+        statusEl.innerHTML = `
+            <div class="bg-green-900/20 border border-green-700 rounded-lg p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <h3 class="text-lg font-semibold text-green-400">Instant Trading System - Running</h3>
+                </div>
+                ${data.currentToken ? `
+                    <p class="text-sm text-gray-300 mb-2">
+                        <span class="text-gray-400">Token:</span> 
+                        <span class="font-mono">${data.currentToken.substring(0, 8)}...${data.currentToken.substring(data.currentToken.length - 6)}</span>
+                    </p>
+                ` : ''}
+                ${data.stats ? `
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <div class="text-2xl font-bold text-purple-400">${data.stats.totalDetections || 0}</div>
+                            <div class="text-xs text-gray-500">Total Detections</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-green-400">${data.stats.successfulSells || 0}</div>
+                            <div class="text-xs text-gray-500">Successful Sells</div>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // Update statistics
+        if (data.stats) {
+            const totalDetectionsEl = document.getElementById('total-detections');
+            const successfulSellsEl = document.getElementById('successful-sells');
+            const totalSellsEl = document.getElementById('total-sells');
+            const successRateEl = document.getElementById('success-rate');
+            
+            if (totalDetectionsEl) totalDetectionsEl.textContent = data.stats.totalDetections || 0;
+            if (successfulSellsEl) successfulSellsEl.textContent = data.stats.successfulSells || 0;
+            if (totalSellsEl) totalSellsEl.textContent = data.stats.totalSells || 0;
+            if (successRateEl && data.stats.totalSells > 0) {
+                const rate = ((data.stats.successfulSells / data.stats.totalSells) * 100).toFixed(1);
+                successRateEl.textContent = `${rate}%`;
+            }
+        }
+    } else if (data.available && data.connected) {
+        statusEl.innerHTML = `
+            <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    <h3 class="text-lg font-semibold text-yellow-400">Instant Trading System - Stopped</h3>
+                </div>
+                <p class="text-sm text-gray-300">${data.message || 'System is available but not currently running'}</p>
+            </div>
+        `;
+    } else {
+        statusEl.innerHTML = `
+            <div class="bg-red-900/20 border border-red-700 rounded-lg p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <h3 class="text-lg font-semibold text-red-400">Instant Trading System - Not Available</h3>
+                </div>
+                <p class="text-sm text-gray-300">${data.message || 'Start the bot to activate instant trading'}</p>
+                ${data.error ? `<p class="text-xs text-red-400 mt-2">Error: ${data.error}</p>` : ''}
+            </div>
+        `;
+    }
+    
+    // Re-initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Auto-refresh instant trading status when on instant view
+let instantTradingRefreshInterval = null;
+
+function startInstantTradingRefresh() {
+    if (instantTradingRefreshInterval) {
+        clearInterval(instantTradingRefreshInterval);
+    }
+    
+    instantTradingRefreshInterval = setInterval(() => {
+        if (currentView === 'instant') {
+            loadInstantTradingData();
+        }
+    }, 5000); // Refresh every 5 seconds
+}
+
+function stopInstantTradingRefresh() {
+    if (instantTradingRefreshInterval) {
+        clearInterval(instantTradingRefreshInterval);
+        instantTradingRefreshInterval = null;
+    }
+}
+
 window.switchView = switchView;
 window.initializeEventListeners = initializeEventListeners;
+window.loadInstantTradingData = loadInstantTradingData;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 

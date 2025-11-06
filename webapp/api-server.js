@@ -104,6 +104,55 @@ const apiRoutes = {
     };
   },
 
+  // Instant trading system status
+  '/api/instant-trading/status': async () => {
+    try {
+      // Try to get instant trading system from simple-bot if available
+      let instantTradingSystem = null;
+      try {
+        // Check if simple-bot is running and has instant trading system
+        // This is a simple check - in production you'd use IPC or shared state
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Try to require the instant trading system if available
+        try {
+          const InstantTradingSystem = require(path.join(__dirname, '..', 'instant-trading-system'));
+          // If we can get it, try to get status from global or shared state
+          // For now, return that it's available but not connected
+          return {
+            available: true,
+            connected: false,
+            isRunning: false,
+            currentToken: null,
+            message: 'Instant trading system available but not connected. Start the bot to activate.'
+          };
+        } catch (e) {
+          return {
+            available: false,
+            connected: false,
+            isRunning: false,
+            message: 'Instant trading system not available'
+          };
+        }
+      } catch (error) {
+        return {
+          available: false,
+          connected: false,
+          isRunning: false,
+          error: error.message
+        };
+      }
+    } catch (error) {
+      return {
+        available: false,
+        connected: false,
+        isRunning: false,
+        error: error.message
+      };
+    }
+  },
+
   // Get tokens from user wallets (on-chain data)
   '/api/tokens': async (req) => {
     try {
@@ -233,6 +282,7 @@ server.listen(PORT, () => {
   console.log(`   GET /api/tokens`);
   console.log(`   GET /api/volume/status`);
   console.log(`   GET /api/smartsell/status`);
+  console.log(`   GET /api/instant-trading/status`);
 });
 
 module.exports = server;

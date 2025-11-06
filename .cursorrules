@@ -1,0 +1,45 @@
+# Cursor AI Rules for Chaos Bot Project
+
+## CRITICAL: Always Deploy Changes
+
+**MANDATORY**: After making ANY changes to the codebase:
+
+1. **ALWAYS commit and push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   git push origin main
+   ```
+
+2. **ALWAYS verify Netlify deployment**:
+   - Changes auto-deploy to https://chaosbotonsol.xyz/
+   - Wait 2-3 minutes after push
+   - Verify deployment in Netlify dashboard
+
+3. **NEVER leave changes uncommitted** - Always push to GitHub immediately after making changes
+
+## On-Chain Requirements
+
+**MANDATORY**: All trading operations MUST be 100% on-chain:
+
+1. **NO MOCK DATA** - All wallet balances, token prices, and transactions must come from Solana blockchain
+2. **NO FAKE DATA** - Never use placeholder or demo data in production code
+3. **ALWAYS VERIFY** - Use `connection.getBalance()`, `getParsedTokenAccountsByOwner()`, etc. for real data
+4. **TEST ON DEVNET FIRST** - Before mainnet, test on devnet with real transactions
+
+## File Structure
+
+- `webapp/` - Frontend files (deployed to Netlify)
+- `netlify/functions/` - Serverless functions (deployed to Netlify)
+- `src/` - Core application code
+- `simple-bot.js` - Main bot entry point
+
+## Deployment Checklist
+
+Before considering any task complete:
+- [ ] Code changes committed
+- [ ] Changes pushed to GitHub
+- [ ] Netlify deployment verified
+- [ ] On-chain functionality tested
+- [ ] No mock/fake data in production code
+

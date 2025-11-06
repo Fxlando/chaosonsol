@@ -199,6 +199,18 @@ const initializeInstantTradingSystem = async () => {
       autoSellEnabled: true
     });
     
+    // Set Jupiter integration
+    instantTradingSystem.setJupiter(jupiter);
+    
+    // Set wallet group manager
+    instantTradingSystem.setWalletGroupManager(walletGroupManager);
+    
+    // Initialize with all wallets
+    const allWallets = getAllWallets();
+    if (allWallets.length > 0) {
+      await instantTradingSystem.initialize(allWallets);
+    }
+    
     console.log('✅ Instant Trading System initialized');
     return true;
   } catch (error) {

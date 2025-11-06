@@ -1,0 +1,39 @@
+name: Auto-Deploy to Netlify
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Validate On-Chain
+        run: npm run validate
+      
+      - name: Health Check
+        run: npm run health
+        continue-on-error: true
+      
+      - name: Deploy to Netlify
+        run: |
+          echo "✅ Changes pushed to GitHub"
+          echo "⏳ Netlify will auto-deploy in 2-3 minutes"
+          echo "🌐 Check: https://chaosbotonsol.xyz/"
+      
+      - name: Deployment Status
+        run: |
+          echo "📊 Check Netlify Dashboard: https://app.netlify.com/"
+          echo "🔗 Live Site: https://chaosbotonsol.xyz/"
+

@@ -111,19 +111,49 @@ async function loadViewData(viewName) {
         case 'smartsell':
             await loadSmartSellView();
             break;
+        case 'instant':
+            await loadInstantTradingView();
+            break;
     }
 }
 
 // Dashboard
 async function loadDashboard() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        // Try stats endpoint first, then fallback to api/stats
+        let endpoint = API_BASE.includes('netlify') 
+            ? `${API_BASE}/stats` 
+            : `${API_BASE}/api/stats`;
+        
+        // If using Netlify, also try the api function
+        if (API_BASE.includes('netlify')) {
+            // Try both /stats and /api/stats
+            endpoint = `${API_BASE}/api/stats`;
+        }
+        
         console.log('🔄 Loading dashboard from:', endpoint);
         
         const response = await fetch(endpoint);
         console.log('📡 Response status:', response.status);
         
         if (!response.ok) {
+            // Try fallback endpoint
+            const fallbackEndpoint = API_BASE.includes('netlify') 
+                ? `${API_BASE}/stats` 
+                : `${API_BASE}/stats`;
+            
+            if (fallbackEndpoint !== endpoint) {
+                console.log('🔄 Trying fallback endpoint:', fallbackEndpoint);
+                const fallbackResponse = await fetch(fallbackEndpoint);
+                if (fallbackResponse.ok) {
+                    stats = await fallbackResponse.json();
+                    console.log('✅ Stats loaded from fallback:', stats);
+                    updateDashboardStats();
+                    await updateSystemStatus();
+                    return;
+                }
+            }
+            
             const errorText = await response.text();
             console.error('❌ API Error:', errorText);
             throw new Error(`API returned ${response.status}`);
@@ -207,15 +237,41 @@ async function updateSystemStatus() {
 // Wallets
 async function loadWallets() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
+        const endpoint = API_BASE.includes('netlify') 
+            ? `${API_BASE}/api/wallets` 
+            : `${API_BASE}/api/wallets`;
         const response = await fetch(endpoint);
-        wallets = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load wallets: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        // Handle both { success: true, wallets: [...] } and direct array
+        wallets = data.wallets || data || [];
         
         updateWalletGroups();
         updateWalletsTable();
         
     } catch (error) {
         console.error('Wallets load error:', error);
+        // Try fallback endpoint
+        try {
+            const fallbackEndpoint = API_BASE.includes('netlify') 
+                ? `${API_BASE}/wallets` 
+                : `${API_BASE}/wallets`;
+            const fallbackResponse = await fetch(fallbackEndpoint);
+            if (fallbackResponse.ok) {
+                const data = await fallbackResponse.json();
+                wallets = data.wallets || data || [];
+                updateWalletGroups();
+                updateWalletsTable();
+                return;
+            }
+        } catch (fallbackError) {
+            console.error('Fallback endpoint also failed:', fallbackError);
+        }
+        
         wallets = generateDemoWallets();
         updateWalletGroups();
         updateWalletsTable();
@@ -416,6 +472,64 @@ async function stopVolume() {
 // Smart Sell
 async function loadSmartSellView() {
     // Settings are pre-populated
+}
+
+// Instant Trading
+async function loadInstantTradingView() {
+    try {
+        const endpoint = API_BASE.includes('netlify') 
+            ? `${API_BASE}/instant-trading/status` 
+            : `${API_BASE}/api/instant-trading/status`;
+        
+        const response = await fetch(endpoint);
+        
+        if (response.ok) {
+            const data = await response.json();
+            updateInstantTradingStatus(data);
+        } else {
+            console.error('Failed to load instant trading status');
+            updateInstantTradingStatus({
+                available: false,
+                connected: false,
+                isRunning: false
+            });
+        }
+    } catch (error) {
+        console.error('Error loading instant trading view:', error);
+        updateInstantTradingStatus({
+            available: false,
+            connected: false,
+            isRunning: false,
+            error: error.message
+        });
+    }
+}
+
+function updateInstantTradingStatus(data) {
+    const statusEl = document.getElementById('instant-trading-status');
+    if (!statusEl) return;
+    
+    if (data.available && data.connected) {
+        statusEl.innerHTML = `
+            <div class="status-card ${data.isRunning ? 'active' : 'inactive'}">
+                <h3>Instant Trading System</h3>
+                <p>Status: ${data.isRunning ? '🟢 Running' : '🟡 Stopped'}</p>
+                ${data.currentToken ? `<p>Token: ${data.currentToken.substring(0, 8)}...${data.currentToken.substring(-6)}</p>` : ''}
+                ${data.stats ? `
+                    <p>Detections: ${data.stats.totalDetections || 0}</p>
+                    <p>Successful Sells: ${data.stats.successfulSells || 0}</p>
+                ` : ''}
+            </div>
+        `;
+    } else {
+        statusEl.innerHTML = `
+            <div class="status-card inactive">
+                <h3>Instant Trading System</h3>
+                <p>Status: ${data.available ? '🟡 Available but not connected' : '🔴 Not available'}</p>
+                <p>${data.message || 'Start the bot to activate instant trading'}</p>
+            </div>
+        `;
+    }
 }
 
 async function enableSmartSell() {

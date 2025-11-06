@@ -10,6 +10,25 @@
   status = 200
   force = false
 
+# Direct function redirects (for specific endpoints)
+[[redirects]]
+  from = "/stats"
+  to = "/.netlify/functions/stats"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/wallets"
+  to = "/.netlify/functions/wallets"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/wallets/*"
+  to = "/.netlify/functions/wallets/:splat"
+  status = 200
+  force = false
+
 # Fallback for SPA routing (must be last)
 [[redirects]]
   from = "/*"

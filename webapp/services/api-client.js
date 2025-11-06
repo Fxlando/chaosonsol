@@ -125,7 +125,12 @@ class APIClient {
    */
   async initializeApp(config = {}) {
     try {
-      const response = await this.safeFetch(`${this.baseURL}/api/initialize`, {
+      // Handle both /api/initialize and /initialize paths
+      const endpoint = this.baseURL.includes('netlify') 
+        ? `${this.baseURL}/initialize` 
+        : `${this.baseURL}/api/initialize`;
+      
+      const response = await this.safeFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config })
@@ -140,7 +145,11 @@ class APIClient {
    * Wallet operations
    */
   async createWallet(name, tags = []) {
-    const response = await fetch(`${this.baseURL}/api/wallets/create`, {
+    const endpoint = this.baseURL.includes('netlify') 
+      ? `${this.baseURL}/wallets/create` 
+      : `${this.baseURL}/api/wallets/create`;
+    
+    const response = await this.safeFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, tags })
@@ -149,7 +158,11 @@ class APIClient {
   }
 
   async importWallet(privateKey, name, tags = []) {
-    const response = await fetch(`${this.baseURL}/api/wallets/import`, {
+    const endpoint = this.baseURL.includes('netlify') 
+      ? `${this.baseURL}/wallets/import` 
+      : `${this.baseURL}/api/wallets/import`;
+    
+    const response = await this.safeFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ privateKey, name, tags })
@@ -158,7 +171,11 @@ class APIClient {
   }
 
   async getAllWallets() {
-    const response = await this.safeFetch(`${this.baseURL}/api/wallets`);
+    const endpoint = this.baseURL.includes('netlify') 
+      ? `${this.baseURL}/wallets` 
+      : `${this.baseURL}/api/wallets`;
+    
+    const response = await this.safeFetch(endpoint);
     if (!response.ok) {
       throw new Error(`Failed to get wallets: ${response.status}`);
     }
@@ -166,7 +183,11 @@ class APIClient {
   }
 
   async getWallet(walletId) {
-    const response = await fetch(`${this.baseURL}/api/wallets/${walletId}`);
+    const endpoint = this.baseURL.includes('netlify') 
+      ? `${this.baseURL}/wallets/${walletId}` 
+      : `${this.baseURL}/api/wallets/${walletId}`;
+    
+    const response = await this.safeFetch(endpoint);
     return await response.json();
   }
 

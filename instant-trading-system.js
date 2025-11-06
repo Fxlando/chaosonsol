@@ -32,6 +32,10 @@ class InstantTradingSystem {
     // Set reference to parent system for wallet access
     this.autoSell.parentSystem = this;
     
+    // Jupiter integration for selling
+    this.jupiter = null;
+    this.walletGroupManager = null;
+    
     this.isRunning = false;
     this.currentToken = null;
     this.wallets = [];
@@ -43,6 +47,111 @@ class InstantTradingSystem {
       lastDetection: null,
       lastSell: null
     };
+  }
+  
+  /**
+   * Set Jupiter integration (from parent)
+   */
+  setJupiter(jupiter) {
+    this.jupiter = jupiter;
+  }
+  
+  /**
+   * Set wallet group manager (from parent)
+   */
+  setWalletGroupManager(walletGroupManager) {
+    this.walletGroupManager = walletGroupManager;
+  }
+  
+  /**
+   * Sell token (for auto-sell to use)
+   */
+  async sellToken(walletId, tokenMint, tokenAmount) {
+    try {
+      if (!this.jupiter) {
+        // Try to get Jupiter from global or require it
+        try {
+          const { JupiterV6Integration } = require('./jupiter-v6-integration');
+          this.jupiter = new JupiterV6Integration(this.connection, this.config);
+        } catch (error) {
+          return { success: false, error: 'Jupiter integration not available' };
+        }
+      }
+      
+      // Get wallet keypair
+      let wallet = null;
+      let keypair = null;
+      
+      if (this.walletGroupManager) {
+        // Try to get wallet from wallet group manager
+        const allGroups = this.walletGroupManager.getAllGroups();
+        for (const group of Object.values(allGroups)) {
+          wallet = group.wallets.find(w => {
+            const id = w.id || w.walletAddress || w.publicKey?.toString();
+            return id === walletId;
+          });
+          if (wallet) break;
+        }
+      }
+      
+      // If not found, try from wallets array
+      if (!wallet) {
+        wallet = this.wallets.find(w => {
+          const id = w.id || w.walletAddress || w.publicKey?.toString();
+          return id === walletId;
+        });
+      }
+      
+      if (!wallet) {
+        return { success: false, error: 'Wallet not found' };
+      }
+      
+      // Get keypair
+      if (wallet.keypair) {
+        keypair = wallet.keypair;
+      } else if (wallet.secretKey) {
+        const { Keypair } = require('@solana/web3.js');
+        keypair = Keypair.fromSecretKey(new Uint8Array(wallet.secretKey));
+      } else if (wallet.privateKey) {
+        const { Keypair } = require('@solana/web3.js');
+        const bs58 = require('bs58');
+        keypair = Keypair.fromSecretKey(bs58.decode(wallet.privateKey));
+      } else {
+        return { success: false, error: 'Could not get wallet keypair' };
+      }
+      
+      // Execute sell
+      const result = await this.jupiter.sellToken(keypair, tokenMint, tokenAmount, {
+        slippage: this.config.slippage || 500,
+        priorityFee: this.config.priorityFee || 1000
+      });
+      
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+  
+  /**
+   * Get token price (for auto-sell to use)
+   */
+  async getTokenPrice(tokenMint) {
+    try {
+      if (!this.jupiter) {
+        try {
+          const { JupiterV6Integration } = require('./jupiter-v6-integration');
+          this.jupiter = new JupiterV6Integration(this.connection, this.config);
+        } catch (error) {
+          return 0;
+        }
+      }
+      
+      const { LAMPORTS_PER_SOL } = require('@solana/web3.js');
+      const price = await this.jupiter.getTokenPrice(tokenMint, LAMPORTS_PER_SOL);
+      return price || 0;
+    } catch (error) {
+      return 0;
+    }
   }
 
   /**

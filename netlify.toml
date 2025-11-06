@@ -3,17 +3,34 @@
   command = "echo 'Build complete'"
   functions = "netlify/functions"
 
+# API redirects - use 200 to proxy without redirect (must come before catch-all)
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
-  force = true
+  force = false
 
-# No redirects needed - files are served directly
+# Fallback for SPA routing (must be last)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 [functions]
   node_bundler = "esbuild"
   included_files = ["volume-wallets-public.json", "pump-wallets-public.json", "groups-config.json"]
+  
+# Headers for security and SSL
+# Note: Netlify automatically handles HTTP to HTTPS redirects when SSL is enabled
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [dev]
   command = "cd webapp && node api-server.js"

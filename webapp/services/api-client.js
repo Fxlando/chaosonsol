@@ -11,7 +11,7 @@ class APIClient {
     } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       this.baseURL = 'http://localhost:3000';
     } else {
-      // Production - use Netlify functions
+      // Production - use Netlify functions (relative path uses current protocol)
       this.baseURL = '/.netlify/functions/api';
     }
     
@@ -20,23 +20,85 @@ class APIClient {
   }
 
   /**
-   * Initialize connection
+   * Safe fetch with SSL error retry logic
+   */
+  async safeFetch(url, options = {}, retries = 2) {
+    // Ensure HTTPS for production URLs
+    let fullUrl = url;
+    if (url.startsWith('/') && window.location.protocol === 'https:') {
+      fullUrl = `${window.location.protocol}//${window.location.host}${url}`;
+    }
+    
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const response = await fetch(fullUrl, {
+          ...options,
+          cache: 'no-cache',
+          credentials: 'same-origin'
+        });
+        return response;
+      } catch (error) {
+        // Check if it's an SSL or network error
+        const isSslError = error.message.includes('SSL') || 
+                          error.message.includes('ERR_SSL') ||
+                          error.message.includes('network') ||
+                          error.message.includes('Failed to fetch');
+        
+        if (isSslError && i < retries) {
+          // Exponential backoff: wait 1s, 2s, 4s
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+          console.warn(`Retrying request after SSL error (attempt ${i + 2}/${retries + 1})...`);
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Initialize connection with SSL error handling
    */
   async initialize() {
     try {
-      // Check if API server is available
-      const health = await this.health();
+      // Ensure we're using HTTPS in production
+      if (window.location.protocol === 'https:' && this.baseURL.startsWith('/')) {
+        // Already using relative path, which will use current protocol
+        console.log('✅ Using HTTPS for API calls');
+      }
+      
+      // Check if API server is available with retry
+      const health = await this.health(3);
       if (health.status === 'ok') {
         this.isConnected = true;
         console.log('✅ Connected to API server');
         
         // Initialize app
-        await this.initializeApp();
+        try {
+          await this.initializeApp();
+        } catch (initError) {
+          console.warn('App initialization failed, continuing with connection:', initError.message);
+        }
         
         return true;
       }
       return false;
     } catch (error) {
+      // Check if it's an SSL error
+      if (error.message.includes('SSL') || error.message.includes('ERR_SSL')) {
+        console.error('SSL Error detected. This may be a temporary issue. Retrying...');
+        // Wait and retry once more
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          const health = await this.health(1);
+          if (health.status === 'ok') {
+            this.isConnected = true;
+            console.log('✅ Connected to API server after SSL retry');
+            return true;
+          }
+        } catch (retryError) {
+          console.error('SSL Error persists:', retryError.message);
+        }
+      }
       console.warn('API server not available, using local mode:', error.message);
       this.isConnected = false;
       return false;
@@ -44,12 +106,15 @@ class APIClient {
   }
 
   /**
-   * Health check
+   * Health check with retry logic for SSL errors
    */
-  async health() {
+  async health(retries = 3) {
     try {
-      const response = await fetch(`${this.baseURL}/health`);
-      return await response.json();
+      const response = await this.safeFetch(`${this.baseURL}/health`, { method: 'GET' }, retries);
+      if (response.ok) {
+        return await response.json();
+      }
+      throw new Error(`Health check failed: ${response.status}`);
     } catch (error) {
       throw new Error('API server not available');
     }
@@ -60,7 +125,7 @@ class APIClient {
    */
   async initializeApp(config = {}) {
     try {
-      const response = await fetch(`${this.baseURL}/api/initialize`, {
+      const response = await this.safeFetch(`${this.baseURL}/api/initialize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config })
@@ -93,7 +158,10 @@ class APIClient {
   }
 
   async getAllWallets() {
-    const response = await fetch(`${this.baseURL}/api/wallets`);
+    const response = await this.safeFetch(`${this.baseURL}/api/wallets`);
+    if (!response.ok) {
+      throw new Error(`Failed to get wallets: ${response.status}`);
+    }
     return await response.json();
   }
 

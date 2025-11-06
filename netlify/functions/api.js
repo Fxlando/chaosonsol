@@ -27,11 +27,16 @@ async function getApp() {
 }
 
 exports.handler = async (event, context) => {
+  // Set longer timeout for Netlify functions (up to 10s free tier, 26s pro)
+  context.callbackWaitsForEmptyEventLoop = false;
+  
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'X-Content-Type-Options': 'nosniff'
   };
 
   // Handle OPTIONS request

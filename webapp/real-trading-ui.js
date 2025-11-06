@@ -10,26 +10,51 @@ let autoScroll = true;
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Initializing Real On-Chain Trading Platform...');
     
-    // Initialize Solana integration
-    solana = new SolanaIntegration();
+    // FIRST: Set up navigation immediately - this is critical
+    initializeEventListeners();
     
     // Initialize Lucide icons
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
     
-    // Load real data
-    await loadRealData();
-    
-    // Initialize UI
-    initializeEventListeners();
-    startRealTimeUpdates();
-    
     // Show wallets view by default
     switchView('wallets');
     
+    // Try to initialize Solana integration (don't let errors block navigation)
+    try {
+        if (typeof SolanaIntegration !== 'undefined') {
+            solana = new SolanaIntegration();
+        }
+    } catch (error) {
+        console.warn('Solana integration not available:', error);
+    }
+    
+    // Load real data (don't let errors block navigation)
+    try {
+        await loadRealData();
+    } catch (error) {
+        console.warn('Error loading real data:', error);
+    }
+    
+    // Start real-time updates (don't let errors block navigation)
+    try {
+        if (typeof startRealTimeUpdates === 'function') {
+            startRealTimeUpdates();
+        }
+    } catch (error) {
+        console.warn('Error starting real-time updates:', error);
+    }
+    
     // Add console log
-    addConsoleLog('✅ System initialized - Real on-chain trading ready', 'success');
+    try {
+        if (typeof addConsoleLog === 'function') {
+            addConsoleLog('✅ System initialized - Real on-chain trading ready', 'success');
+        }
+    } catch (error) {
+        console.warn('Error adding console log:', error);
+    }
+    
     console.log('✅ Real Trading Platform Ready');
 });
 
@@ -385,27 +410,52 @@ function addConsoleLog(message, type = 'info') {
 
 // Initialize event listeners
 function initializeEventListeners() {
-    // Navigation - simple and clean
-    document.querySelectorAll('.nav-item').forEach(item => {
-        // Remove any existing click listeners by cloning
-        const newItem = item.cloneNode(true);
-        item.parentNode.replaceChild(newItem, item);
+    console.log('Setting up navigation listeners...');
+    
+    // Navigation - simple direct approach
+    const navItems = document.querySelectorAll('.nav-item');
+    console.log(`Found ${navItems.length} nav items`);
+    
+    if (navItems.length === 0) {
+        console.error('No nav items found! Make sure the HTML is loaded.');
+        // Try again after a short delay
+        setTimeout(initializeEventListeners, 100);
+        return;
+    }
+    
+    navItems.forEach((item, index) => {
+        const viewName = item.getAttribute('data-view');
+        console.log(`Setting up nav item ${index}: ${viewName}`);
         
-        // Add click listener
-        newItem.addEventListener('click', function(e) {
+        if (!viewName) {
+            console.warn(`Nav item ${index} has no data-view attribute`);
+            return;
+        }
+        
+        // Add click listener directly (don't clone, just attach)
+        item.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            const viewName = this.dataset.view;
-            if (viewName) {
-                switchView(viewName);
+            
+            const clickedViewName = this.getAttribute('data-view');
+            console.log(`✅ Nav item clicked: ${clickedViewName}`);
+            
+            if (clickedViewName) {
+                switchView(clickedViewName);
             }
         });
+        
+        // Make it clearly clickable
+        item.style.cursor = 'pointer';
+        item.style.userSelect = 'none';
     });
     
-    // Add more event listeners as needed
+    console.log('✅ Navigation listeners set up successfully');
 }
 
 function switchView(viewName) {
+    console.log(`switchView called with: ${viewName}`);
+    
     if (!viewName) {
         console.error('switchView called without viewName');
         return;
@@ -414,7 +464,9 @@ function switchView(viewName) {
     currentView = viewName;
     
     // Hide ALL views and pages
-    document.querySelectorAll('.view').forEach(view => {
+    const allViews = document.querySelectorAll('.view');
+    console.log(`Hiding ${allViews.length} views`);
+    allViews.forEach(view => {
         view.classList.add('hidden');
     });
     
@@ -426,13 +478,17 @@ function switchView(viewName) {
     
     if (selectedView) {
         selectedView.classList.remove('hidden');
+        console.log(`✅ Showing view: ${viewName}`);
     } else {
-        console.warn(`View not found: ${viewName}-view or ${viewName}-page`);
+        console.error(`❌ View not found: ${viewName}-view or ${viewName}-page`);
+        // List all available views for debugging
+        const availableViews = Array.from(allViews).map(v => v.id).filter(id => id);
+        console.log('Available views:', availableViews);
     }
     
     // Update navigation styling
     document.querySelectorAll('.nav-item').forEach(item => {
-        const itemView = item.dataset.view;
+        const itemView = item.getAttribute('data-view');
         if (itemView === viewName) {
             // Active state
             item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';

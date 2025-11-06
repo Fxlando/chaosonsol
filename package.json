@@ -1,16 +1,22 @@
 {
-  "name": "simple-solana-wallet-manager",
-  "version": "1.0.0",
-  "description": "Simple Solana Wallet Manager with Command Center - Telegram Bot",
-  "main": "simple-bot.js",
+  "name": "chaos-bot-solana-platform",
+  "version": "2.0.0",
+  "description": "Production-ready Solana trading platform with PumpFun, Raydium DEX, and optimized RPC",
+  "type": "module",
+  "main": "src/index.js",
   "scripts": {
     "start": "node simple-bot.js",
     "start:production": "node start-production-system.js",
     "dev": "node --watch simple-bot.js",
     "web": "node webapp/api-server.js",
     "web:production": "node webapp/production-api-server.js",
-    "build": "echo 'Production build complete - ready for deployment'",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.js",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:e2e": "jest tests/e2e",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write \"src/**/*.js\""
   },
   "keywords": [
     "solana",

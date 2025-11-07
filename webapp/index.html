@@ -3264,62 +3264,55 @@
             ? 'http://localhost:3000' 
             : '/.netlify/functions';
 
-        // Expose critical functions globally for inline onclick handlers
-        const globalFunctionMap = {
-            navigateToPage,
-            executeGenerateWallets,
-            executeFundWallets,
-            executeWithdrawWallets,
-            selectFundMode,
-            selectTagExecutor,
-            toggleTag,
-            executeTagWallets,
-            selectWarmExecutor,
-            executeWarmWallets,
-            selectRedistributeMode,
-            executeRedistributeWallets,
-            switchTokenTab,
-            selectTokenPlatform,
-            selectCopyPlatform,
-            selectBlockZeroMode,
-            uploadTokenImage,
-            executeCreateToken,
-            executeCopyToken,
-            executeImportToken,
-            loadWalletsForTokenCreation,
-            selectTokenByMint,
-            collectAllFees,
-            collectTradingFees,
-            collectRentFees,
-            toggleAutoCollect,
-            executeQuickBuy,
-            executeQuickSell,
-            executeCreateAndLaunchToken,
-            executePumpFunBuy,
-            executePumpFunSell,
-            executeAddLiquidity,
-            executeRemoveLiquidity,
-            executeManualSwap,
-            runQuickAction,
-            openModal,
-            closeModal,
-            refreshBalances,
-            exportWallets,
-            deactivateWallets,
-            refreshFeeWallet,
-            copyFeeWalletAddress,
-            copyFeeWalletKey,
-            openDocumentation,
-            sharePlatform
-        };
+        const functionsToExpose = [
+            'navigateToPage',
+            'executeGenerateWallets',
+            'executeFundWallets',
+            'executeWithdrawWallets',
+            'selectFundMode',
+            'selectTagExecutor',
+            'toggleTag',
+            'executeTagWallets',
+            'selectWarmExecutor',
+            'executeWarmWallets',
+            'selectRedistributeMode',
+            'executeRedistributeWallets',
+            'switchTokenTab',
+            'selectTokenPlatform',
+            'selectCopyPlatform',
+            'selectBlockZeroMode',
+            'uploadTokenImage',
+            'executeCreateToken',
+            'executeCopyToken',
+            'executeImportToken',
+            'loadWalletsForTokenCreation',
+            'selectTokenByMint',
+            'collectAllFees',
+            'collectTradingFees',
+            'collectRentFees',
+            'toggleAutoCollect',
+            'executeQuickBuy',
+            'executeQuickSell',
+            'executeCreateAndLaunchToken',
+            'executePumpFunBuy',
+            'executePumpFunSell',
+            'executeAddLiquidity',
+            'executeRemoveLiquidity',
+            'executeManualSwap',
+            'runQuickAction',
+            'openModal',
+            'closeModal',
+            'refreshBalances',
+            'exportWallets',
+            'deactivateWallets',
+            'refreshFeeWallet',
+            'copyFeeWalletAddress',
+            'copyFeeWalletKey',
+            'openDocumentation',
+            'sharePlatform'
+        ];
 
-        Object.entries(globalFunctionMap).forEach(([name, fn]) => {
-            if (typeof fn === 'function') {
-                window[name] = fn;
-            } else {
-                console.warn(`Global function "${name}" is not defined when exporting`, fn);
-            }
-        });
+        functionsToExpose.forEach(exposeFunction);
 
         // Method Selection Functions
         function selectMethod(taskType, method) {

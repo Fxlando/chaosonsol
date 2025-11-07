@@ -172,6 +172,7 @@ function updateDashboardStats() {
     } else {
         solPriceEl.textContent = 'N/A';
     }
+    solPriceEl.setAttribute('data-source', stats.priceSource || 'unknown');
 }
 
 async function updateSystemStatus() {
@@ -598,6 +599,7 @@ function startAutoRefresh() {
             } else {
                 solPriceEl.textContent = 'N/A';
             }
+            solPriceEl.setAttribute('data-source', data.priceSource || 'unknown');
         } catch (error) {}
     }, 5000);
 }

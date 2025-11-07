@@ -73,7 +73,7 @@ function extractPriceFromResponse(responseData) {
   return null;
 }
 
-async function getSolPrice() {
+async function getSolPriceFromJupiter() {
   let lastError;
 
   for (const endpoint of JUPITER_PRICE_ENDPOINTS) {
@@ -97,6 +97,43 @@ async function getSolPrice() {
   throw lastError || new Error('Unable to fetch SOL price from Jupiter');
 }
 
+async function getSolPriceFromCoinbase() {
+  try {
+    const response = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL', {
+      timeout: 5000
+    });
+
+    if (
+      response.data &&
+      response.data.data &&
+      response.data.data.rates &&
+      response.data.data.rates.USD
+    ) {
+      const price = Number(response.data.data.rates.USD);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+
+    throw new Error('Invalid response from Coinbase rate endpoint');
+  } catch (error) {
+    console.error('Error fetching SOL price from Coinbase:', error.message);
+    throw error;
+  }
+}
+
+async function getSolPrice() {
+  try {
+    const price = await getSolPriceFromJupiter();
+    return { price, source: 'jupiter' };
+  } catch (jupiterError) {
+    console.error('Jupiter price fetch failed, attempting Coinbase fallback:', jupiterError.message);
+
+    const fallbackPrice = await getSolPriceFromCoinbase();
+    return { price: fallbackPrice, source: 'coinbase' };
+  }
+}
+
 exports.handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -117,7 +154,7 @@ exports.handler = async (event, context) => {
     ];
 
     // Get SOL price
-    const solPrice = await getSolPrice();
+    const { price: solPrice, source: priceSource } = await getSolPrice();
 
     // Fetch balances (limit to first 10 to avoid timeout)
     let totalBalance = 0;
@@ -143,7 +180,7 @@ exports.handler = async (event, context) => {
       },
       groups: 2,
       solPrice,
-      priceSource: 'jupiter',
+      priceSource,
       network: 'mainnet-beta'
     };
 

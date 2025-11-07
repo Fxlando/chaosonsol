@@ -18,6 +18,8 @@ const SOL_PRICE_KEYS = [
   'So11111111111111111111111111111111111111112'
 ];
 
+const COINBASE_PRICE_ENDPOINT = 'https://api.coinbase.com/v2/exchange-rates?currency=SOL';
+
 function extractPriceFromResponse(responseData) {
   if (!responseData || typeof responseData !== 'object') {
     return null;
@@ -77,13 +79,44 @@ export async function getSOLPriceFromJupiter() {
   throw lastError || new Error('Unable to fetch SOL price from Jupiter');
 }
 
+export async function getSOLPriceFromCoinbase() {
+  try {
+    const response = await axios.get(COINBASE_PRICE_ENDPOINT, { timeout: 5000 });
+
+    if (
+      response.data &&
+      response.data.data &&
+      response.data.data.rates &&
+      response.data.data.rates.USD
+    ) {
+      const price = Number(response.data.data.rates.USD);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+
+    throw new Error('Invalid response from Coinbase rate endpoint');
+  } catch (error) {
+    logger.warn(`Coinbase price fetch failed: ${error.message}`);
+    throw error;
+  }
+}
+
 /**
  * Get real SOL price with fallback
  */
 export async function getRealSOLPrice() {
-  const price = await getSOLPriceFromJupiter();
-  logger.info(`✅ Real SOL price from Jupiter: $${price}`);
-  return price;
+  try {
+    const price = await getSOLPriceFromJupiter();
+    logger.info(`✅ Real SOL price from Jupiter: $${price}`);
+    return price;
+  } catch (jupiterError) {
+    logger.warn(`Jupiter price fetch failed, attempting Coinbase fallback: ${jupiterError.message}`);
+
+    const coinbasePrice = await getSOLPriceFromCoinbase();
+    logger.info(`✅ Real SOL price from Coinbase fallback: $${coinbasePrice}`);
+    return coinbasePrice;
+  }
 }
 
 /**
@@ -125,6 +158,7 @@ export const solPriceCache = new SOLPriceCache();
 
 export default {
   getSOLPriceFromJupiter,
+  getSOLPriceFromCoinbase,
   getRealSOLPrice,
   solPriceCache
 };

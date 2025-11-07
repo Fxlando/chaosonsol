@@ -5,6 +5,9 @@
  * No mocks, no fakes, no placeholders
  */
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 const { Connection, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
 const fs = require('fs');
 const path = require('path');
@@ -127,17 +130,19 @@ async function validateOnChain() {
   if (issues.length === 0 && warnings.length === 0) {
     log('✅ All checks passed! Everything is on-chain.', 'green');
     return true;
-  } else {
-    if (issues.length > 0) {
-      log(`❌ Found ${issues.length} critical issues:`, 'red');
-      issues.forEach(issue => log(`   - ${issue}`, 'red'));
-    }
-    if (warnings.length > 0) {
-      log(`⚠️  Found ${warnings.length} warnings:`, 'yellow');
-      warnings.forEach(warning => log(`   - ${warning}`, 'yellow'));
-    }
-    return false;
   }
+
+  if (issues.length > 0) {
+    log(`❌ Found ${issues.length} critical issues:`, 'red');
+    issues.forEach(issue => log(`   - ${issue}`, 'red'));
+  }
+
+  if (warnings.length > 0) {
+    log(`⚠️  Found ${warnings.length} warnings:`, 'yellow');
+    warnings.forEach(warning => log(`   - ${warning}`, 'yellow'));
+  }
+
+  return issues.length === 0;
 }
 
 // Run validation

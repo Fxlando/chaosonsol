@@ -3312,7 +3312,15 @@
             'sharePlatform'
         ];
 
-        functionsToExpose.forEach(exposeFunction);
+        function exposeFunction(functionName) {
+            if (typeof window[functionName] !== 'function') {
+                console.warn(`Function ${functionName} is not defined globally`);
+            }
+        }
+
+        window.addEventListener('load', () => {
+            functionsToExpose.forEach(exposeFunction);
+        });
 
         // Method Selection Functions
         function selectMethod(taskType, method) {
@@ -3531,78 +3539,74 @@
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
-        
-        // Real On-Chain Trading UI - Replaces fake data
-        <script src="real-trading-ui.js"></script>
-        
+    </script>
+    <script src="real-trading-ui.js"></script>
+    <script>
         // Inline navigation fallback - ensures navigation works even if other scripts fail
-        <script>
-            // Ensure navigation works - this runs after DOM is loaded
-            (function() {
-                function setupNavigation() {
-                    console.log('🔧 Setting up navigation (inline fallback)...');
-                    const navItems = document.querySelectorAll('.nav-item');
-                    console.log(`Found ${navItems.length} nav items`);
-                    
-                    if (navItems.length === 0) {
-                        console.warn('No nav items found, retrying...');
-                        setTimeout(setupNavigation, 200);
-                        return;
-                    }
-                    
-                    navItems.forEach(function(item) {
-                        const viewName = item.getAttribute('data-view');
-                        if (!viewName) return;
-                        
-                        // Remove any existing listeners by cloning
-                        const newItem = item.cloneNode(true);
-                        item.parentNode.replaceChild(newItem, item);
-                        
-                        // Add click handler
-                        newItem.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('📱 Navigation clicked:', viewName);
-                            
-                            // Call switchView if it exists, otherwise do it manually
-                            if (typeof switchView === 'function') {
-                                switchView(viewName);
-                            } else {
-                                // Manual view switching
-                                document.querySelectorAll('.view').forEach(function(v) {
-                                    v.classList.add('hidden');
-                                });
-                                const targetView = document.getElementById(viewName + '-view') || document.getElementById(viewName + '-page');
-                                if (targetView) {
-                                    targetView.classList.remove('hidden');
-                                }
-                                
-                                // Update nav styling
-                                document.querySelectorAll('.nav-item').forEach(function(nav) {
-                                    if (nav.getAttribute('data-view') === viewName) {
-                                        nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
-                                    } else {
-                                        nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
-                                    }
-                                });
+        (function() {
+            function setupNavigation() {
+                console.log('🔧 Setting up navigation (inline fallback)...');
+                const navItems = document.querySelectorAll('.nav-item');
+                console.log(`Found ${navItems.length} nav items`);
+
+                if (navItems.length === 0) {
+                    console.warn('No nav items found, retrying...');
+                    setTimeout(setupNavigation, 200);
+                    return;
+                }
+
+                navItems.forEach(function(item) {
+                    const viewName = item.getAttribute('data-view');
+                    if (!viewName) return;
+
+                    // Remove any existing listeners by cloning
+                    const newItem = item.cloneNode(true);
+                    item.parentNode.replaceChild(newItem, item);
+
+                    // Add click handler
+                    newItem.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('📱 Navigation clicked:', viewName);
+
+                        // Call switchView if it exists, otherwise do it manually
+                        if (typeof switchView === 'function') {
+                            switchView(viewName);
+                        } else {
+                            // Manual view switching
+                            document.querySelectorAll('.view').forEach(function(v) {
+                                v.classList.add('hidden');
+                            });
+                            const targetView = document.getElementById(viewName + '-view') || document.getElementById(viewName + '-page');
+                            if (targetView) {
+                                targetView.classList.remove('hidden');
                             }
-                        });
+
+                            // Update nav styling
+                            document.querySelectorAll('.nav-item').forEach(function(nav) {
+                                if (nav.getAttribute('data-view') === viewName) {
+                                    nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition bg-purple-900 text-white';
+                                } else {
+                                    nav.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
+                                }
+                            });
+                        }
                     });
-                    
-                    console.log('✅ Navigation setup complete');
-                }
-                
-                // Run immediately if DOM is ready, otherwise wait
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', setupNavigation);
-                } else {
-                    setupNavigation();
-                }
-                
-                // Also run after a short delay to catch any late-loading elements
-                setTimeout(setupNavigation, 500);
-            })();
-        </script>
+                });
+
+                console.log('✅ Navigation setup complete');
+            }
+
+            // Run immediately if DOM is ready, otherwise wait
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setupNavigation);
+            } else {
+                setupNavigation();
+            }
+
+            // Also run after a short delay to catch any late-loading elements
+            setTimeout(setupNavigation, 500);
+        })();
     </script>
 </body>
 </html>

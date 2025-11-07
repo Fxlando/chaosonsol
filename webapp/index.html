@@ -606,6 +606,81 @@
             </div>
         </div>
 
+        <!-- Import Page -->
+        <div id="import-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Import</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">⬇️</span>
+                    <div>
+                        <h1 class="text-2xl font-semibold">Import Wallet</h1>
+                        <p class="text-sm text-gray-400">Bring an existing Solana keypair into Chaos Bot</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid gap-6 max-w-3xl">
+                    <div class="bg-yellow-900/20 border border-yellow-700 text-yellow-200 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">Security reminder</h2>
+                        <p class="text-xs text-yellow-100">
+                            Only import wallets that you control. Private keys are stored encrypted in your browser and transmitted securely to the
+                            Chaos Bot backend for transaction signing. Never paste seed phrases for wallets that protect large balances.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="md:col-span-2">
+                            <label class="block mb-2 text-sm font-medium">Private Key (Base58 or JSON array)</label>
+                            <textarea
+                                id="import-private-key"
+                                rows="4"
+                                placeholder="2P9FUckSohxUUDGr9Y5QMcFvYVycQZn+WxXpeU3sDuKyADDvXDenXNeF ..."
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-3 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            ></textarea>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Paste the wallet's secret key in Base58 or the 64-number JSON array exported from Phantom/Solflare.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Wallet Name (optional)</label>
+                            <input
+                                type="text"
+                                id="import-wallet-name"
+                                placeholder="Volume_Alpha"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="block mb-2 text-sm font-medium">Tags (optional)</label>
+                            <input
+                                type="text"
+                                id="import-wallet-tags"
+                                placeholder="Photon,GMGN"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                            />
+                            <p class="text-xs text-gray-500 mt-2">Comma separated tags will be added to this wallet for quick filtering.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button class="bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeImportWallet()">
+                            Import Wallet
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 font-medium py-2.5 px-4 rounded-lg transition" onclick="navigateToPage('wallets')">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Fund Page -->
         <div id="fund-page" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
@@ -1039,6 +1114,235 @@
                     <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeRedistributeWallets()">
                         Redistribute Funds
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reclaim Rent Page -->
+        <div id="reclaim-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Reclaim Rent</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🏠</span>
+                    <h1 class="text-2xl font-semibold">Reclaim Rent From <span id="reclaim-selected-count">0</span> Wallets</h1>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid gap-6 max-w-3xl">
+                    <div class="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">How rent reclaim works</h2>
+                        <p class="text-sm text-gray-300">
+                            Chaos Bot will close inactive token accounts across the selected wallets and consolidate the recovered SOL into the destination
+                            address. The operation runs entirely on-chain and can take a few minutes depending on RPC throughput.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="md:col-span-2">
+                            <label class="block mb-2 text-sm font-medium">Destination Wallet Address</label>
+                            <input
+                                type="text"
+                                id="reclaim-target-address"
+                                placeholder="Enter the SOL address to receive reclaimed rent"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            />
+                            <p class="text-xs text-gray-500 mt-2">All reclaimed SOL (minus transaction fees) will be sent here.</p>
+                        </div>
+
+                        <div>
+                            <label class="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" id="reclaim-close-empty" class="rounded" checked />
+                                Close empty token accounts automatically
+                            </label>
+                            <p class="text-xs text-gray-500 mt-2">
+                                When enabled, Chaos Bot closes token accounts with zero balance to return their rent deposit.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" id="reclaim-include-active" class="rounded" />
+                                Include currently active wallets
+                            </label>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Leave unchecked to reclaim rent only from the wallets you have selected in the table.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button class="bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeReclaimRent()">
+                            Reclaim Rent
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 font-medium py-2.5 px-4 rounded-lg transition" onclick="navigateToPage('wallets')">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Page -->
+        <div id="export-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Export</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">📦</span>
+                    <h1 class="text-2xl font-semibold">Export <span id="export-selected-count">0</span> Wallets</h1>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid gap-6 max-w-3xl">
+                    <div class="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">Choose export format</h2>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <button id="export-format-json" class="border border-purple-500 bg-purple-900/20 rounded-lg p-4 text-left transition hover:border-purple-400">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-lg">🗂️</span>
+                                    <span class="text-xs text-purple-200">Recommended</span>
+                                </div>
+                                <h3 class="font-semibold">JSON</h3>
+                                <p class="text-xs text-gray-400 mt-1">Includes wallet names, addresses, private keys, tags and grouping metadata.</p>
+                            </button>
+                            <button id="export-format-csv" class="border border-neutral-700 rounded-lg p-4 text-left transition hover:border-neutral-600" onclick="showToast('CSV export is coming soon. JSON export is available today.', 'warning')">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-lg">📄</span>
+                                    <span class="text-xs text-gray-400">Coming soon</span>
+                                </div>
+                                <h3 class="font-semibold">CSV</h3>
+                                <p class="text-xs text-gray-400 mt-1">Use in spreadsheets or external analytics tools.</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-900/20 border border-yellow-700 text-yellow-200 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">Keep your keys safe</h2>
+                        <p class="text-xs text-yellow-100">
+                            The exported file contains private keys. Store it securely and remove it when finished. Do not share exports with anyone you do not fully trust.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button class="bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeExportWallets()">
+                            Download Export
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 font-medium py-2.5 px-4 rounded-lg transition" onclick="navigateToPage('wallets')">
+                            Back to Wallets
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activate / Deactivate Page -->
+        <div id="activate-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Activate / Deactivate</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">⚡</span>
+                    <h1 class="text-2xl font-semibold">Update Status for <span id="activate-selected-count">0</span> Wallets</h1>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid gap-6 max-w-2xl">
+                    <div class="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">Bulk status management</h2>
+                        <p class="text-sm text-gray-300">
+                            Activate wallets to include them in automations and funding operations. Deactivated wallets stay in your account but are excluded
+                            from automated tasks until reactivated.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <button class="bg-green-600 hover:bg-green-500 text-white font-medium py-3 px-4 rounded-lg transition" onclick="executeActivateWallets()">
+                            Activate Selected
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 font-medium py-3 px-4 rounded-lg transition" onclick="deactivateWallets()">
+                            Deactivate Selected
+                        </button>
+                    </div>
+
+                    <div class="text-xs text-gray-500">
+                        Newly activated wallets refresh automatically. You can always change status from the wallet table sidebar.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grouping Page -->
+        <div id="grouping-page" class="view flex-1 flex flex-col hidden">
+            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('wallets')">Wallets</span>
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <span class="text-white">Grouping</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">👥</span>
+                    <h1 class="text-2xl font-semibold">Assign <span id="grouping-selected-count">0</span> Wallets to a Group</h1>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-6">
+                <div class="grid gap-6 max-w-3xl">
+                    <div class="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+                        <h2 class="text-sm font-semibold mb-2">Organise your wallets</h2>
+                        <p class="text-sm text-gray-300">
+                            Groups power funding, redistribution and automation presets. Assign selected wallets to an existing group or create a new one on the fly.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="md:col-span-2">
+                            <label class="block mb-2 text-sm font-medium">Group Name</label>
+                            <input
+                                type="text"
+                                id="grouping-name"
+                                placeholder="Enter group name (e.g. Volume, Sniping, Treasury)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" id="grouping-create-if-missing" class="rounded" checked />
+                                Create group if it does not exist
+                            </label>
+                            <p class="text-xs text-gray-500 mt-2">Chaos Bot will automatically create the group name provided if it is new.</p>
+                        </div>
+
+                        <div>
+                            <label class="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" id="grouping-keep-existing" class="rounded" />
+                                Keep current groups
+                            </label>
+                            <p class="text-xs text-gray-500 mt-2">Leave enabled to add an additional group without removing existing assignments.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button class="bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeGroupWallets()">
+                            Save Grouping
+                        </button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 font-medium py-2.5 px-4 rounded-lg transition" onclick="navigateToPage('wallets')">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -3421,6 +3725,7 @@
         const functionsToExpose = [
             'navigateToPage',
             'executeGenerateWallets',
+            'executeImportWallet',
             'executeFundWallets',
             'executeWithdrawWallets',
             'selectFundMode',
@@ -3431,6 +3736,10 @@
             'executeWarmWallets',
             'selectRedistributeMode',
             'executeRedistributeWallets',
+            'executeReclaimRent',
+            'executeExportWallets',
+            'executeActivateWallets',
+            'executeGroupWallets',
             'switchTokenTab',
             'selectTokenPlatform',
             'selectCopyPlatform',

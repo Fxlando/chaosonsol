@@ -801,7 +801,7 @@ function stopBlueprint(blueprintId) {
 // ==================== FEE COLLECTION FUNCTIONS ====================
 
 // Collect all fees
-async function collectAllFees() {
+async function collectAllFees(options = {}) {
     initializeMultiWallet();
     
     if (!solana.wallets || solana.wallets.length === 0) {
@@ -810,13 +810,26 @@ async function collectAllFees() {
         return;
     }
     
+    const config = {
+        targetWallet: options.targetWallet || window.__reclaimRentConfig?.targetAddress || null,
+        walletIds: Array.isArray(options.walletIds) ? options.walletIds : null,
+        closeEmptyAccounts: options.closeEmptyAccounts ?? window.__reclaimRentConfig?.closeEmptyAccounts ?? true,
+        includeActive: options.includeActive ?? window.__reclaimRentConfig?.includeActive ?? true,
+        confirmMessage: options.confirmMessage || null
+    };
+
     // Ask for target wallet
-    const targetWallet = prompt('Enter target wallet address to collect fees to:');
+    let targetWallet = config.targetWallet;
+    if (!targetWallet) {
+        targetWallet = prompt('Enter target wallet address to collect fees to:');
+    }
     if (!targetWallet) return;
     
     // Confirm
+    const walletCount = config.walletIds ? config.walletIds.length : solana.wallets.length;
     const confirm = window.confirm(
-        `Collect SOL from ${solana.wallets.length} wallets to ${targetWallet}?\n\nThis will transfer all available SOL (minus rent) to the target wallet.`
+        config.confirmMessage
+            || `Collect SOL from ${walletCount} wallet${walletCount === 1 ? '' : 's'} to ${targetWallet}?\n\nThis will transfer all available SOL (minus rent) to the target wallet.`
     );
     
     if (!confirm) return;
@@ -849,10 +862,16 @@ async function collectTradingFees() {
 }
 
 // Collect rent fees
-async function collectRentFees() {
+async function collectRentFees(targetWallet = null, options = {}) {
     addConsoleLog('🏠 Collecting rent fees...', 'info');
     // TODO: Implement specific rent fee collection
-    await collectAllFees();
+    const config = window.__reclaimRentConfig || {};
+    await collectAllFees({
+        targetWallet: targetWallet || config.targetAddress,
+        walletIds: options.walletIds || config.walletIds,
+        closeEmptyAccounts: options.closeEmptyAccounts ?? config.closeEmptyAccounts,
+        includeActive: options.includeActive ?? config.includeActive
+    });
 }
 
 // Toggle auto-collect

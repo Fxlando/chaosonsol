@@ -348,8 +348,31 @@ function updateBulkActions() {
       }
     } else {
       bulkActions.style.display = 'none';
+      const selectedCount = document.getElementById('selected-count');
+      if (selectedCount) {
+        selectedCount.textContent = '0 wallets selected';
+      }
     }
   }
+
+  const actionTargets = [
+    'fund-selected-count',
+    'withdraw-selected-count',
+    'tag-selected-count',
+    'warm-selected-count',
+    'redistribute-selected-count',
+    'reclaim-selected-count',
+    'export-selected-count',
+    'activate-selected-count',
+    'grouping-selected-count'
+  ];
+
+  actionTargets.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = selectedWallets.size;
+    }
+  });
 }
 
 /**
@@ -410,6 +433,82 @@ async function executeGenerateWallets() {
 }
 
 /**
+ * Import a wallet from an existing private key
+ */
+async function executeImportWallet() {
+  try {
+    const keyInput = document.getElementById('import-private-key');
+    if (!keyInput || !keyInput.value.trim()) {
+      showToast('Please provide the wallet private key to import', 'error');
+      return;
+    }
+
+    const nameInput = document.getElementById('import-wallet-name');
+    const tagsInput = document.getElementById('import-wallet-tags');
+
+    let privateKeyRaw = keyInput.value.trim();
+    let privateKeyPayload = privateKeyRaw;
+
+    if (privateKeyRaw.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(privateKeyRaw);
+        if (!Array.isArray(parsed) || parsed.length !== 64) {
+          throw new Error('Invalid JSON key format');
+        }
+        privateKeyPayload = parsed;
+      } catch (error) {
+        showToast('Private key JSON is not valid', 'error');
+        addConsoleLog(`Failed to parse private key JSON: ${error.message}`, 'error');
+        return;
+      }
+    }
+
+    const name = nameInput?.value.trim();
+    const tags = (tagsInput?.value || '')
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean);
+
+    showToast('Importing wallet...', 'info');
+    addConsoleLog('Importing wallet from provided private key', 'info');
+
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/import`
+      : `${API_BASE}/api/wallets/import`;
+
+    const payload = { privateKey: privateKeyPayload };
+    if (name) payload.name = name;
+    if (tags.length > 0) payload.tags = tags;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || `API returned ${response.status}`);
+    }
+
+    showToast('Wallet imported successfully!', 'success');
+    addConsoleLog(`Imported wallet ${result.wallet?.publicKey || ''}`, 'success');
+
+    keyInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (tagsInput) tagsInput.value = '';
+
+    await loadWallets();
+    navigateToPage('wallets');
+  } catch (error) {
+    console.error('Error importing wallet:', error);
+    showToast(`Failed to import wallet: ${error.message}`, 'error');
+    addConsoleLog(`Error importing wallet: ${error.message}`, 'error');
+  }
+}
+
+/**
  * Export wallets
  */
 async function exportWallets() {
@@ -457,6 +556,13 @@ async function exportWallets() {
 }
 
 /**
+ * Convenience wrapper for export action button
+ */
+function executeExportWallets() {
+  exportWallets();
+}
+
+/**
  * Deactivate wallets
  */
 async function deactivateWallets() {
@@ -501,6 +607,164 @@ async function deactivateWallets() {
     console.error('Error deactivating wallets:', error);
     showToast(`Failed to deactivate wallets: ${error.message}`, 'error');
     addConsoleLog(`Error deactivating wallets: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Activate wallets
+ */
+async function executeActivateWallets() {
+  try {
+    if (selectedWallets.size === 0) {
+      showToast('Please select wallets to activate', 'error');
+      return;
+    }
+
+    showToast(`Activating ${selectedWallets.size} wallets...`, 'info');
+    addConsoleLog(`Activating ${selectedWallets.size} wallets`, 'info');
+
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/activate`
+      : `${API_BASE}/api/wallets/activate`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletIds: Array.from(selectedWallets) })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || `API returned ${response.status}`);
+    }
+
+    wallets.forEach(wallet => {
+      const walletId = wallet.id || wallet.address || wallet.publicKey;
+      if (selectedWallets.has(walletId)) {
+        wallet.status = 'active';
+      }
+    });
+
+    selectedWallets.clear();
+    await loadWallets();
+
+    showToast(`Activated ${result.activated || 0} wallets`, 'success');
+    addConsoleLog(`Activated ${result.activated || 0} wallets`, 'success');
+  } catch (error) {
+    console.error('Error activating wallets:', error);
+    showToast(`Failed to activate wallets: ${error.message}`, 'error');
+    addConsoleLog(`Error activating wallets: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Group wallets under a shared label
+ */
+async function executeGroupWallets() {
+  try {
+    if (selectedWallets.size === 0) {
+      showToast('Select at least one wallet to group', 'error');
+      return;
+    }
+
+    const nameInput = document.getElementById('grouping-name');
+    if (!nameInput || !nameInput.value.trim()) {
+      showToast('Enter a group name', 'error');
+      return;
+    }
+
+    const groupName = nameInput.value.trim();
+    const keepExisting = document.getElementById('grouping-keep-existing')?.checked;
+
+    showToast(`Assigning ${selectedWallets.size} wallets to ${groupName}...`, 'info');
+    addConsoleLog(`Grouping wallets into ${groupName} (keep existing: ${keepExisting ? 'yes' : 'no'})`, 'info');
+
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/group`
+      : `${API_BASE}/api/wallets/group`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletIds: Array.from(selectedWallets),
+        groupName
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || `API returned ${response.status}`);
+    }
+
+    wallets.forEach(wallet => {
+      const walletId = wallet.id || wallet.address || wallet.publicKey;
+      if (selectedWallets.has(walletId)) {
+        wallet.group = groupName;
+        wallet.groupName = groupName;
+      }
+    });
+
+    showToast(`Grouped ${result.grouped || selectedWallets.size} wallets`, 'success');
+    addConsoleLog(`Grouped ${result.grouped || selectedWallets.size} wallets`, 'success');
+
+    selectedWallets.clear();
+    await loadWallets();
+    navigateToPage('wallets');
+  } catch (error) {
+    console.error('Error grouping wallets:', error);
+    showToast(`Failed to group wallets: ${error.message}`, 'error');
+    addConsoleLog(`Error grouping wallets: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Reclaim rent from selected wallets
+ */
+async function executeReclaimRent() {
+  try {
+    const targetInput = document.getElementById('reclaim-target-address');
+    const includeActive = document.getElementById('reclaim-include-active')?.checked;
+    const closeEmptyAccounts = document.getElementById('reclaim-close-empty')?.checked;
+
+    if (!targetInput || !targetInput.value.trim()) {
+      showToast('Enter the destination address for reclaimed rent', 'error');
+      return;
+    }
+
+    if (selectedWallets.size === 0 && !includeActive) {
+      showToast('Select wallets to reclaim from or enable "Include currently active wallets"', 'warning');
+      return;
+    }
+
+    const targetAddress = targetInput.value.trim();
+
+    const scopeDescription = includeActive ? 'all active wallets' : `${selectedWallets.size} selected wallet(s)`;
+
+    addConsoleLog(`Preparing rent reclaim to ${targetAddress} from ${scopeDescription}`, 'info');
+    addConsoleLog(`Close empty token accounts: ${closeEmptyAccounts ? 'yes' : 'no'}`, 'info');
+    showToast('Launching rent reclaim workflow...', 'info');
+
+    window.__reclaimRentConfig = {
+      targetAddress,
+      includeActive,
+      closeEmptyAccounts,
+      walletIds: includeActive ? null : Array.from(selectedWallets)
+    };
+
+    if (typeof collectRentFees === 'function') {
+      await collectRentFees();
+      showToast('Rent reclaim initiated via fee collector. Follow on-screen prompts.', 'success');
+    } else {
+      showToast('Rent reclaim requires the advanced fee collector, which is not loaded.', 'error');
+      addConsoleLog('collectRentFees function unavailable. Ensure advanced modules are loaded.', 'error');
+    }
+  } catch (error) {
+    console.error('Error reclaiming rent:', error);
+    showToast(`Failed to reclaim rent: ${error.message}`, 'error');
+    addConsoleLog(`Error reclaiming rent: ${error.message}`, 'error');
   }
 }
 
@@ -631,8 +895,11 @@ window.walletOperations = {
 // Also expose functions globally for onclick handlers
 window.loadWallets = loadWallets;
 window.executeGenerateWallets = executeGenerateWallets;
+window.executeImportWallet = executeImportWallet;
 window.exportWallets = exportWallets;
+window.executeExportWallets = executeExportWallets;
 window.deactivateWallets = deactivateWallets;
+window.executeActivateWallets = executeActivateWallets;
 window.refreshBalances = refreshBalances;
 window.toggleWalletSelection = toggleWalletSelection;
 window.toggleSelectAll = toggleSelectAll;
@@ -640,4 +907,6 @@ window.switchTab = switchTab;
 window.filterWallets = filterWallets;
 window.renderWallets = renderWallets;
 window.updateTotalBalance = updateTotalBalance;
+window.executeGroupWallets = executeGroupWallets;
+window.executeReclaimRent = executeReclaimRent;
 

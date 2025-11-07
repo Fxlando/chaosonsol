@@ -71,7 +71,6 @@ function switchView(viewName) {
         'analytics': 'Analytics',
         'volume': 'Volume Trading',
         'smartsell': 'Smart Sell AI',
-        'instant': 'Instant Trading',
         'pumpfun': 'Pump.fun Sniper',
         'trade': 'Manual Trade',
         'history': 'Trade History'
@@ -83,7 +82,6 @@ function switchView(viewName) {
         'analytics': 'Performance Insights',
         'volume': 'Coordinated Trading',
         'smartsell': 'AI-Powered Selling',
-        'instant': '10s Detection System',
         'pumpfun': 'Early Launch Sniping',
         'trade': 'Jupiter V6 Swaps',
         'history': 'Transaction Logs'
@@ -110,9 +108,6 @@ async function loadViewData(viewName) {
             break;
         case 'smartsell':
             await loadSmartSellView();
-            break;
-        case 'instant':
-            await loadInstantTradingView();
             break;
     }
 }
@@ -425,64 +420,6 @@ async function stopVolume() {
 // Smart Sell
 async function loadSmartSellView() {
     // Settings are pre-populated
-}
-
-// Instant Trading
-async function loadInstantTradingView() {
-    try {
-        const endpoint = API_BASE.includes('netlify') 
-            ? `${API_BASE}/instant-trading/status` 
-            : `${API_BASE}/api/instant-trading/status`;
-        
-        const response = await fetch(endpoint);
-        
-        if (response.ok) {
-            const data = await response.json();
-            updateInstantTradingStatus(data);
-        } else {
-            console.error('Failed to load instant trading status');
-            updateInstantTradingStatus({
-                available: false,
-                connected: false,
-                isRunning: false
-            });
-        }
-    } catch (error) {
-        console.error('Error loading instant trading view:', error);
-        updateInstantTradingStatus({
-            available: false,
-            connected: false,
-            isRunning: false,
-            error: error.message
-        });
-    }
-}
-
-function updateInstantTradingStatus(data) {
-    const statusEl = document.getElementById('instant-trading-status');
-    if (!statusEl) return;
-    
-    if (data.available && data.connected) {
-        statusEl.innerHTML = `
-            <div class="status-card ${data.isRunning ? 'active' : 'inactive'}">
-                <h3>Instant Trading System</h3>
-                <p>Status: ${data.isRunning ? '🟢 Running' : '🟡 Stopped'}</p>
-                ${data.currentToken ? `<p>Token: ${data.currentToken.substring(0, 8)}...${data.currentToken.substring(-6)}</p>` : ''}
-                ${data.stats ? `
-                    <p>Detections: ${data.stats.totalDetections || 0}</p>
-                    <p>Successful Sells: ${data.stats.successfulSells || 0}</p>
-                ` : ''}
-            </div>
-        `;
-    } else {
-        statusEl.innerHTML = `
-            <div class="status-card inactive">
-                <h3>Instant Trading System</h3>
-                <p>Status: ${data.available ? '🟡 Available but not connected' : '🔴 Not available'}</p>
-                <p>${data.message || 'Start the bot to activate instant trading'}</p>
-            </div>
-        `;
-    }
 }
 
 async function enableSmartSell() {

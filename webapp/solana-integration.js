@@ -200,13 +200,14 @@ class SolanaIntegration {
 
     // Get all wallets with real balances
     async getAllWalletsWithBalances() {
+        const price = await this.getSolPrice();
         const walletsWithBalances = await Promise.all(
             this.wallets.map(async (wallet) => {
                 const balance = await this.getBalance(wallet.publicKey);
                 return {
                     ...wallet,
-                    balance: balance,
-                    usdValue: balance * (await this.getSolPrice())
+                    balance,
+                    usdValue: balance * price
                 };
             })
         );
@@ -215,14 +216,79 @@ class SolanaIntegration {
 
     // Real SOL price from API
     async getSolPrice() {
+        const cacheKey = 'chaosbot_last_sol_price';
+        const cacheWindow = 60_000; // 60 seconds
+
         try {
-            const response = await fetch('https://api.coinbase.com/v2/exchange-rates?currency=SOL');
-            const data = await response.json();
-            return parseFloat(data.data.rates.USD);
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && Date.now() - parsed.timestamp < cacheWindow) {
+                    return parsed.price;
+                }
+            }
         } catch (error) {
-            console.error('Error fetching SOL price:', error);
-            return 0;
+            console.warn('Unable to read cached SOL price:', error);
         }
+
+        const fetchers = [
+            async () => {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+                const data = await response.json();
+                const price = data?.solana?.usd;
+                if (typeof price === 'number' && !Number.isNaN(price)) {
+                    return price;
+                }
+                throw new Error('Coingecko response missing price');
+            },
+            async () => {
+                const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
+                const data = await response.json();
+                const price = parseFloat(data?.price);
+                if (!Number.isNaN(price)) {
+                    return price;
+                }
+                throw new Error('Binance response missing price');
+            },
+            async () => {
+                const response = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot');
+                const data = await response.json();
+                const price = parseFloat(data?.data?.amount);
+                if (!Number.isNaN(price)) {
+                    return price;
+                }
+                throw new Error('Coinbase response missing price');
+            }
+        ];
+
+        for (const fetcher of fetchers) {
+            try {
+                const price = await fetcher();
+                try {
+                    localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
+                } catch (error) {
+                    console.warn('Unable to cache SOL price:', error);
+                }
+                return price;
+            } catch (error) {
+                console.warn('SOL price fetch failed, trying next source:', error.message);
+            }
+        }
+
+        console.error('All SOL price providers failed. Returning last cached value if available.');
+        try {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && typeof parsed.price === 'number') {
+                    return parsed.price;
+                }
+            }
+        } catch (error) {
+            console.warn('Unable to use cached SOL price:', error);
+        }
+
+        return 0;
     }
 
     // Real token balance fetching

@@ -1073,12 +1073,9 @@ window.importSettings = importSettings;
 // Instant Trading Functions
 async function loadInstantTradingData() {
     try {
-        const API_BASE = window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000' 
-            : '/.netlify/functions';
-        
-        const endpoint = API_BASE.includes('netlify') 
-            ? `${API_BASE}/api/instant-trading/status` 
+        const API_BASE = getApiBase();
+        const endpoint = API_BASE.includes('/.netlify/functions') 
+            ? `${API_BASE}/instant-trading/status` 
             : `${API_BASE}/api/instant-trading/status`;
         
         console.log('Loading instant trading data from:', endpoint);
@@ -1230,6 +1227,16 @@ const uiHelperState = {
 };
 
 const VANITY_STORAGE_KEY = 'chaosbot_vanity_keys';
+
+function getApiBase() {
+    if (window.location.hostname === 'localhost') {
+        return 'http://localhost:3000';
+    }
+    if (window.__CHAOSBOT_API_BASE__) {
+        return window.__CHAOSBOT_API_BASE__;
+    }
+    return '/.netlify/functions';
+}
 
 const blueprintTemplates = {
     custom: {

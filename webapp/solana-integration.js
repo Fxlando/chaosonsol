@@ -216,47 +216,46 @@ class SolanaIntegration {
 
     // Real SOL price from API
     async getSolPrice() {
-        const cacheKey = 'chaosbot_last_sol_price';
-        const cacheWindow = 60_000; // 60 seconds
+        const PYTH_SOL_FEED = '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace';
 
         try {
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && Date.now() - parsed.timestamp < cacheWindow) {
-                    return parsed.price;
-                }
+            const response = await fetch(`https://hermes.pyth.network/api/latest_price_feeds?ids[]=${PYTH_SOL_FEED}`);
+
+            if (!response.ok) {
+                throw new Error(`Pyth price feed request failed with status ${response.status}`);
             }
+
+            const data = await response.json();
+            const priceInfo = Array.isArray(data) ? data[0]?.price : undefined;
+
+            if (!priceInfo || typeof priceInfo.price !== 'number' || typeof priceInfo.expo !== 'number') {
+                throw new Error('Malformed Pyth price payload');
+            }
+
+            const price = priceInfo.price * Math.pow(10, priceInfo.expo);
+
+            if (!Number.isFinite(price)) {
+                throw new Error('Computed Pyth price is not finite');
+            }
+
+            return price;
         } catch (error) {
-            console.warn('Unable to read cached SOL price:', error);
+            console.error('Primary SOL price fetch failed:', error);
         }
 
         try {
             const response = await fetch('https://price.jup.ag/v4/price?ids=SOL');
+            if (!response.ok) {
+                throw new Error(`Jupiter price request failed with status ${response.status}`);
+            }
             const data = await response.json();
             const price = data?.data?.SOL?.price;
-            if (typeof price === 'number' && !Number.isNaN(price)) {
-                try {
-                    localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
-                } catch (error) {
-                    console.warn('Unable to cache SOL price:', error);
-                }
+            if (typeof price === 'number' && Number.isFinite(price)) {
                 return price;
             }
+            throw new Error('Malformed Jupiter price payload');
         } catch (error) {
-            console.error('Error fetching SOL price from Jupiter API:', error);
-        }
-
-        try {
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed && typeof parsed.price === 'number') {
-                    return parsed.price;
-                }
-            }
-        } catch (error) {
-            console.warn('Unable to use cached SOL price:', error);
+            console.error('Fallback SOL price fetch failed:', error);
         }
 
         return 0;

@@ -284,12 +284,29 @@ export const handler = async (event, context) => {
   }
 
   try {
-    const path = event.path.replace('/.netlify/functions/wallets', '');
-    const method = event.httpMethod;
-    const body = event.body ? JSON.parse(event.body) : {};
+    const method = event.httpMethod || 'GET';
+
+    const originalPath =
+      typeof event.path === 'string'
+        ? event.path
+        : (event.rawUrl ? new URL(event.rawUrl).pathname : '');
+
+    const path = (originalPath || '')
+      .replace('/.netlify/functions/wallets', '')
+      .replace('/wallets', '');
+
+    let body = {};
+    if (typeof event.body === 'string' && event.body.trim().length > 0) {
+      try {
+        body = JSON.parse(event.body);
+      } catch (parseError) {
+        console.error('Failed to parse request body:', parseError.message);
+        body = {};
+      }
+    }
 
     // GET /wallets - Get all wallets
-    if (path === '' && method === 'GET') {
+    if ((path === '' || path === '/') && method === 'GET') {
       const wallets = await getAllWalletsWithBalances();
       return {
         statusCode: 200,
@@ -299,7 +316,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/generate - Generate new wallets
-    if (path === '/generate' && method === 'POST') {
+    if ((path === '/generate' || path === 'generate') && method === 'POST') {
       const count = body.count || 1;
       const name = body.name || null;
       const tags = body.tags || [];
@@ -327,7 +344,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/import - Import wallet
-    if (path === '/import' && method === 'POST') {
+    if ((path === '/import' || path === 'import') && method === 'POST') {
       const result = await importWallet(
         body.privateKey,
         body.name || null,
@@ -342,7 +359,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/deactivate - Deactivate wallets
-    if (path === '/deactivate' && method === 'POST') {
+    if ((path === '/deactivate' || path === 'deactivate') && method === 'POST') {
       const walletIds = body.walletIds || [];
       let deactivated = 0;
       
@@ -366,7 +383,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/activate - Activate wallets
-    if (path === '/activate' && method === 'POST') {
+    if ((path === '/activate' || path === 'activate') && method === 'POST') {
       const walletIds = body.walletIds || [];
       let activated = 0;
       
@@ -390,7 +407,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/tag - Tag wallets
-    if (path === '/tag' && method === 'POST') {
+    if ((path === '/tag' || path === 'tag') && method === 'POST') {
       const walletIds = body.walletIds || [];
       const tags = body.tags || [];
       let tagged = 0;
@@ -415,7 +432,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /wallets/group - Group wallets
-    if (path === '/group' && method === 'POST') {
+    if ((path === '/group' || path === 'group') && method === 'POST') {
       const walletIds = body.walletIds || [];
       const groupName = body.groupName || 'default';
       let grouped = 0;

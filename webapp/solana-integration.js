@@ -227,77 +227,91 @@ class SolanaIntegration {
             return this.cachedSolPrice;
         }
 
-        const PYTH_SOL_FEED = '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace';
+        const JUPITER_PRICE_ENDPOINTS = [
+            'https://price.jup.ag/v6/price?ids=SOL',
+            'https://price.jup.ag/v4/price?ids=SOL'
+        ];
+
+        const SOL_PRICE_KEYS = [
+            'SOL',
+            'So11111111111111111111111111111111111111112'
+        ];
+
+        const tryJupiter = async () => {
+            let lastError;
+
+            for (const endpoint of JUPITER_PRICE_ENDPOINTS) {
+                try {
+                    const response = await fetch(endpoint);
+                    if (!response.ok) {
+                        throw new Error(`Jupiter request failed with status ${response.status}`);
+                    }
+
+                    const payload = await response.json();
+                    const data = payload?.data;
+
+                    if (data && typeof data === 'object') {
+                        for (const key of SOL_PRICE_KEYS) {
+                            const entry = data[key];
+                            const priceCandidate = entry?.price ?? entry?.usd;
+                            const price = Number(priceCandidate);
+
+                            if (Number.isFinite(price) && price > 0) {
+                                return price;
+                            }
+                        }
+                    }
+
+                    lastError = new Error('Jupiter payload missing SOL price');
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Jupiter price fetch failed for ${endpoint}:`, error.message);
+                }
+            }
+
+            if (lastError) {
+                throw lastError;
+            }
+
+            throw new Error('Unable to fetch SOL price from Jupiter');
+        };
+
+        const tryCoinGecko = async () => {
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+            if (!response.ok) {
+                throw new Error(`CoinGecko request failed with status ${response.status}`);
+            }
+
+            const payload = await response.json();
+            const price = Number(payload?.solana?.usd);
+
+            if (!Number.isFinite(price) || price <= 0) {
+                throw new Error('CoinGecko payload missing SOL price');
+            }
+
+            return price;
+        };
 
         try {
-            const response = await fetch(`https://hermes.pyth.network/api/latest_price_feeds?ids[]=${PYTH_SOL_FEED}`);
-
-            if (!response.ok) {
-                throw new Error(`Pyth price feed request failed with status ${response.status}`);
-            }
-
-            const data = await response.json();
-            const priceInfo = Array.isArray(data) ? data[0]?.price : undefined;
-
-            if (!priceInfo || priceInfo.price === undefined || priceInfo.expo === undefined) {
-                throw new Error('Malformed Pyth price payload');
-            }
-
-            const rawPrice = Number(priceInfo.price);
-            const expo = Number(priceInfo.expo);
-
-            if (!Number.isFinite(rawPrice) || !Number.isFinite(expo)) {
-                throw new Error('Pyth price payload contained non-numeric values');
-            }
-
-            const price = rawPrice * Math.pow(10, expo);
-
-            if (!Number.isFinite(price)) {
-                throw new Error('Computed Pyth price is not finite');
-            }
-
+            const price = await tryJupiter();
             this.cachedSolPrice = price;
             this.cachedSolPriceTimestamp = Date.now();
             return price;
-        } catch (error) {
-            console.error('Primary SOL price fetch failed:', error);
+        } catch (jupiterError) {
+            console.warn('Primary SOL price fetch failed, falling back:', jupiterError.message);
         }
 
         try {
-            const response = await fetch('https://price.jup.ag/v4/price?ids=SOL');
-            if (!response.ok) {
-                throw new Error(`Jupiter price request failed with status ${response.status}`);
-            }
-            const data = await response.json();
-            const price = data?.data?.SOL?.price;
-            if (typeof price === 'number' && Number.isFinite(price)) {
-                this.cachedSolPrice = price;
-                this.cachedSolPriceTimestamp = Date.now();
-                return price;
-            }
-            throw new Error('Malformed Jupiter price payload');
-        } catch (error) {
-            console.error('Fallback SOL price fetch failed:', error);
-        }
-
-        try {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-            if (!response.ok) {
-                throw new Error(`CoinGecko price request failed with status ${response.status}`);
-            }
-            const data = await response.json();
-            const price = data?.solana?.usd;
-            if (typeof price === 'number' && Number.isFinite(price)) {
-                this.cachedSolPrice = price;
-                this.cachedSolPriceTimestamp = Date.now();
-                return price;
-            }
-            throw new Error('Malformed CoinGecko price payload');
-        } catch (error) {
-            console.error('Secondary fallback SOL price fetch failed:', error);
+            const price = await tryCoinGecko();
+            this.cachedSolPrice = price;
+            this.cachedSolPriceTimestamp = Date.now();
+            return price;
+        } catch (fallbackError) {
+            console.error('Fallback SOL price fetch failed:', fallbackError.message);
         }
 
         if (this.cachedSolPrice !== null) {
+            console.warn('Serving cached SOL price due to fetch failures');
             return this.cachedSolPrice;
         }
 

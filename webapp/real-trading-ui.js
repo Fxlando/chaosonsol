@@ -1237,21 +1237,23 @@ function getElement(id) {
 registerGlobalHandler('navigateToPage', (page) => {
     if (!page) return;
 
-    const modalId = `${page}-modal`;
+    let targetPage = page === 'automations' ? 'create-token' : page;
+
+    const modalId = `${targetPage}-modal`;
     if (getElement(modalId)) {
         window.openModal(modalId);
         return;
     }
 
-    const targetView = getElement(`${page}-view`) || getElement(`${page}-page`);
+    const targetView = getElement(`${targetPage}-view`) || getElement(`${targetPage}-page`);
     if (targetView && typeof switchView === 'function') {
-        const parentView = targetView.id.endsWith('-page') ? targetView.id.replace('-page', '') : page;
+        const parentView = targetView.id.endsWith('-page') ? targetView.id.replace('-page', '') : targetPage;
         switchView(parentView);
         setTimeout(() => targetView.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
         return;
     }
 
-    notify(`Unknown page: ${page}`, 'warning');
+    notify(`Unknown page: ${targetPage}`, 'warning');
 });
 
 registerGlobalHandler('openModal', (modalId) => {
@@ -1401,15 +1403,54 @@ registerGlobalHandler('uploadTokenImage', () => {
     notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');
 });
 
-function handleAutomationTask(taskName) {
-    navigateToPage('automations');
-    notify(`${taskName} task queued`, 'info');
+function focusAutomationSection() {
+    const section = getElement('launch-automations-section');
+    if (!section) return;
+
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    section.classList.add('ring-2', 'ring-purple-500', 'ring-offset-2', 'ring-offset-neutral-900');
+    setTimeout(() => {
+        section.classList.remove('ring-2', 'ring-purple-500', 'ring-offset-2', 'ring-offset-neutral-900');
+    }, 1800);
 }
 
-registerGlobalHandler('executeAddVolumeTask', () => handleAutomationTask('Volume generation'));
-registerGlobalHandler('executeBulkSellTask', () => handleAutomationTask('Bulk sell'));
+function configureAutomationOptions(options = {}) {
+    if (typeof options.smartSell === 'boolean') {
+        const smartSellToggle = getElement('enable-smart-sell');
+        if (smartSellToggle) {
+            smartSellToggle.checked = options.smartSell;
+            if (typeof toggleSmartSellConfig === 'function') {
+                toggleSmartSellConfig();
+            }
+        }
+    }
+
+    if (typeof options.volumeBot === 'boolean') {
+        const volumeToggle = getElement('enable-volume-bot');
+        if (volumeToggle) {
+            volumeToggle.checked = options.volumeBot;
+            if (typeof toggleVolumeBotConfig === 'function') {
+                toggleVolumeBotConfig();
+            }
+        }
+    }
+}
+
+function handleAutomationTask(taskName, automationOptions) {
+    navigateToPage('create-token');
+
+    setTimeout(() => {
+        configureAutomationOptions(automationOptions);
+        focusAutomationSection();
+    }, 200);
+
+    notify(`${taskName} automation ready. Review settings in Launch Automations.`, 'info');
+}
+
+registerGlobalHandler('executeAddVolumeTask', () => handleAutomationTask('Volume generation', { volumeBot: true }));
+registerGlobalHandler('executeBulkSellTask', () => handleAutomationTask('Bulk sell', { smartSell: true }));
 registerGlobalHandler('executeBumpTask', () => handleAutomationTask('Bump'));
-registerGlobalHandler('executeSellBuybackTask', () => handleAutomationTask('Sell/Buyback'));
+registerGlobalHandler('executeSellBuybackTask', () => handleAutomationTask('Sell/Buyback', { smartSell: true, volumeBot: true }));
 
 registerGlobalHandler('refreshFeeWallet', async () => {
     notify('Refreshing fee wallet...', 'info');

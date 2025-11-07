@@ -216,10 +216,6 @@
                     <i data-lucide="wallet" class="w-4 h-4"></i>
                     <span class="text-sm">Wallets</span>
                 </div>
-                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="automations">
-                    <i data-lucide="zap" class="w-4 h-4"></i>
-                    <span class="text-sm">Automations</span>
-                </div>
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="instant">
                     <i data-lucide="activity" class="w-4 h-4"></i>
                     <span class="text-sm">Instant Trading</span>
@@ -1091,7 +1087,7 @@
                     </div>
                     
                     <!-- AUTOMATIONS SECTION - Smart Sell & Volume Bot -->
-                    <div class="border-t-2 border-neutral-800 pt-6 mb-6">
+                    <div class="border-t-2 border-neutral-800 pt-6 mb-6" id="launch-automations-section">
                         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
                             <span>🤖</span>
                             <span>Launch Automations</span>
@@ -2317,94 +2313,6 @@
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Automations View -->
-        <div id="automations-view" class="view flex-1 flex flex-col hidden">
-            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <span class="text-3xl">🤖</span>
-                        <h1 class="text-2xl font-semibold">Automations</h1>
-                    </div>
-                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-3 rounded flex items-center gap-2 transition" onclick="openModal('create-automation-modal')">
-                        <i data-lucide="plus" class="w-4 h-4"></i>
-                        <span>Create Automation</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="flex-1 p-6">
-                <!-- Automation Templates -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-purple-500 transition">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-purple-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="zap" class="w-6 h-6 text-purple-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">Auto Buy/Sell</h3>
-                                <p class="text-sm text-gray-400">Automated trading strategy</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Price-based triggers</li>
-                            <li>• Volume monitoring</li>
-                            <li>• Stop loss protection</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-blue-500 transition">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="refresh-cw" class="w-6 h-6 text-blue-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">DCA Strategy</h3>
-                                <p class="text-sm text-gray-400">Dollar cost averaging</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Scheduled purchases</li>
-                            <li>• Fixed amount intervals</li>
-                            <li>• Market condition filters</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700 cursor-pointer hover:border-green-500 transition">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 bg-green-900 rounded-lg flex items-center justify-center">
-                                <i data-lucide="shield" class="w-6 h-6 text-green-200"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold">Risk Management</h3>
-                                <p class="text-sm text-gray-400">Portfolio protection</p>
-                            </div>
-                        </div>
-                        <ul class="text-xs text-gray-500 space-y-1">
-                            <li>• Portfolio rebalancing</li>
-                            <li>• Risk monitoring</li>
-                            <li>• Emergency stops</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Active Automations -->
-                <div class="bg-neutral-800 rounded-lg border border-neutral-700">
-                    <div class="p-4 border-b border-neutral-700">
-                        <h3 class="text-lg font-semibold">Active Automations</h3>
-                    </div>
-                    <div class="p-4">
-                        <div class="text-center py-8">
-                            <div class="text-4xl mb-4">🤖</div>
-                            <p class="text-gray-500">No automations running</p>
-                            <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="openModal('create-automation-modal')">
-                                Create Your First Automation
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>

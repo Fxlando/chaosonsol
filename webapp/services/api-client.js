@@ -262,7 +262,6 @@ class APIClient {
 
   async removeSmartSellPosition(walletId, tokenMint) {
     const response = await fetch(this.buildUrl(`/smartsell/positions/${walletId}/${tokenMint}`), {
-    const response = await fetch(this.buildUrl(`/smartsell/positions/${walletId}/${tokenMint}`), {
       method: 'DELETE'
     });
     return await response.json();

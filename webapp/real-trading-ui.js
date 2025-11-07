@@ -514,7 +514,11 @@ function switchView(viewName) {
         // Stop refresh when leaving instant view
         stopInstantTradingRefresh();
     }
-    
+
+    if (viewName === 'blueprint') {
+        renderBlueprintList();
+    }
+
     // Re-initialize Lucide icons for the new view
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -1041,6 +1045,11 @@ window.stopAutomation = stopAutomation;
 window.createBlueprint = createBlueprint;
 window.executeBlueprint = executeBlueprint;
 window.stopBlueprint = stopBlueprint;
+window.openCreateBlueprintModal = openCreateBlueprintModal;
+window.submitBlueprintForm = submitBlueprintForm;
+window.applyBlueprint = applyBlueprint;
+window.deleteBlueprint = deleteBlueprint;
+window.renderBlueprintList = renderBlueprintList;
 window.collectAllFees = collectAllFees;
 window.collectTradingFees = collectTradingFees;
 window.collectRentFees = collectRentFees;
@@ -1212,6 +1221,118 @@ const uiHelperState = {
     blockZeroMode: 'bundled',
     tagFilters: new Set()
 };
+
+const blueprintTemplates = {
+    custom: {
+        name: '',
+        type: 'custom',
+        description: '',
+        launch: {
+            devBuyAmount: 0.2,
+            initialBuyAmount: 0.5,
+            useVanity: false,
+            priorityFee: 0.0005
+        },
+        automations: {
+            smartSell: {
+                enabled: false,
+                profitTarget: 30,
+                stopLoss: -15
+            },
+            volumeBot: {
+                enabled: false,
+                buyAmount: 0.02,
+                cycles: 10,
+                sellDelay: 45
+            }
+        },
+        notes: ''
+    },
+    'pumpfun-sniper': {
+        name: 'Pump.fun Sniper Blueprint',
+        type: 'sniper',
+        description: 'Instant Pump.fun entry with smart sell protection.',
+        launch: {
+            devBuyAmount: 0.25,
+            initialBuyAmount: 0.35,
+            useVanity: true,
+            priorityFee: 0.001
+        },
+        automations: {
+            smartSell: {
+                enabled: true,
+                profitTarget: 35,
+                stopLoss: -20
+            },
+            volumeBot: {
+                enabled: false,
+                buyAmount: 0.02,
+                cycles: 8,
+                sellDelay: 40
+            }
+        },
+        notes: 'Use Jito bundle for guaranteed first fills.'
+    },
+    'volume-generator': {
+        name: 'Volume Generator Blueprint',
+        type: 'volume',
+        description: 'Organic volume cycling across warm wallets.',
+        launch: {
+            devBuyAmount: 0.15,
+            initialBuyAmount: 0.4,
+            useVanity: false,
+            priorityFee: 0.0007
+        },
+        automations: {
+            smartSell: {
+                enabled: true,
+                profitTarget: 28,
+                stopLoss: -18
+            },
+            volumeBot: {
+                enabled: true,
+                buyAmount: 0.03,
+                cycles: 15,
+                sellDelay: 55
+            }
+        },
+        notes: 'Pairs well with mixer funding mode and multiple wallets.'
+    },
+    'arbitrage-bot': {
+        name: 'Arbitrage Launch Blueprint',
+        type: 'arbitrage',
+        description: 'Prepare for cross-DEX spreads right after launch.',
+        launch: {
+            devBuyAmount: 0.3,
+            initialBuyAmount: 0.25,
+            useVanity: true,
+            priorityFee: 0.0012
+        },
+        automations: {
+            smartSell: {
+                enabled: true,
+                profitTarget: 25,
+                stopLoss: -12
+            },
+            volumeBot: {
+                enabled: true,
+                buyAmount: 0.015,
+                cycles: 12,
+                sellDelay: 35
+            }
+        },
+        notes: 'Monitor spread between Raydium and Jupiter pools.'
+    }
+};
+
+function ensureMultiWalletReady() {
+    initializeMultiWallet();
+    if (!multiWalletManager) {
+        notify('Initialize Solana integration before managing blueprints.', 'error');
+        return false;
+    }
+    return true;
+}
 
 function registerGlobalHandler(name, handler) {
     if (typeof window[name] !== 'function') {
@@ -1399,6 +1520,11 @@ registerGlobalHandler('selectBlockZeroMode', (mode) => {
     notify(`Block zero mode set to ${mode}`, 'info');
 });
 
+registerGlobalHandler('openCreateBlueprintModal', openCreateBlueprintModal);
+registerGlobalHandler('submitBlueprintForm', submitBlueprintForm);
+registerGlobalHandler('applyBlueprint', applyBlueprint);
+registerGlobalHandler('deleteBlueprint', deleteBlueprint);
+
 registerGlobalHandler('uploadTokenImage', () => {
     notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');
 });
@@ -1408,10 +1534,12 @@ function focusAutomationSection() {
     if (!section) return;
 
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    section.classList.add('ring-2', 'ring-purple-500', 'ring-offset-2', 'ring-offset-neutral-900');
+    const originalShadow = section.style.boxShadow;
+    section.style.transition = section.style.transition || 'box-shadow 0.3s ease';
+    section.style.boxShadow = '0 0 0 2px rgba(168, 85, 247, 0.6)';
     setTimeout(() => {
-        section.classList.remove('ring-2', 'ring-purple-500', 'ring-offset-2', 'ring-offset-neutral-900');
-    }, 1800);
+        section.style.boxShadow = originalShadow || 'none';
+    }, 1600);
 }
 
 function configureAutomationOptions(options = {}) {
@@ -1434,6 +1562,356 @@ function configureAutomationOptions(options = {}) {
             }
         }
     }
+}
+
+function setBlueprintFormValue(id, value) {
+    const element = getElement(id);
+    if (!element) return;
+    if (element.type === 'checkbox') {
+        element.checked = Boolean(value);
+    } else {
+        element.value = value;
+    }
+}
+
+function getBlueprintFormValues() {
+    const template = getElement('blueprint-template')?.value || 'custom';
+    const name = getElement('blueprint-name')?.value.trim();
+    const type = getElement('blueprint-type')?.value || 'custom';
+    const description = getElement('blueprint-description')?.value.trim();
+    const notes = getElement('blueprint-notes')?.value.trim();
+
+    if (!name) {
+        throw new Error('Blueprint name is required');
+    }
+
+    return {
+        template,
+        name,
+        type,
+        description,
+        notes,
+        settings: {
+            launch: {
+                devBuyAmount: parseFloat(getElement('blueprint-dev-buy')?.value || '0') || 0,
+                initialBuyAmount: parseFloat(getElement('blueprint-initial-buy')?.value || '0') || 0,
+                useVanity: Boolean(getElement('blueprint-use-vanity')?.checked),
+                priorityFee: parseFloat(getElement('blueprint-priority-fee')?.value || '0') || 0
+            },
+            automations: {
+                smartSell: {
+                    enabled: Boolean(getElement('blueprint-smart-sell-enabled')?.checked),
+                    profitTarget: parseFloat(getElement('blueprint-smart-sell-profit')?.value || '0') || 0,
+                    stopLoss: parseFloat(getElement('blueprint-smart-sell-stoploss')?.value || '0') || 0
+                },
+                volumeBot: {
+                    enabled: Boolean(getElement('blueprint-volume-enabled')?.checked),
+                    buyAmount: parseFloat(getElement('blueprint-volume-amount')?.value || '0') || 0,
+                    cycles: parseInt(getElement('blueprint-volume-cycles')?.value || '0', 10) || 0,
+                    sellDelay: parseInt(getElement('blueprint-volume-delay')?.value || '0', 10) || 0
+                }
+            }
+        }
+    };
+}
+
+function applyBlueprintPreset(templateKey) {
+    const preset = blueprintTemplates[templateKey] || blueprintTemplates.custom;
+
+    setBlueprintFormValue('blueprint-type', preset.type || 'custom');
+    setBlueprintFormValue('blueprint-description', preset.description || '');
+    setBlueprintFormValue('blueprint-notes', preset.notes || '');
+    const nameField = getElement('blueprint-name');
+    if (nameField) {
+        nameField.value = preset.name || '';
+    }
+
+    // Launch defaults
+    setBlueprintFormValue('blueprint-dev-buy', preset.launch.devBuyAmount);
+    setBlueprintFormValue('blueprint-initial-buy', preset.launch.initialBuyAmount);
+    setBlueprintFormValue('blueprint-use-vanity', preset.launch.useVanity);
+    setBlueprintFormValue('blueprint-priority-fee', preset.launch.priorityFee);
+
+    // Automations
+    setBlueprintFormValue('blueprint-smart-sell-enabled', preset.automations.smartSell.enabled);
+    setBlueprintFormValue('blueprint-smart-sell-profit', preset.automations.smartSell.profitTarget);
+    setBlueprintFormValue('blueprint-smart-sell-stoploss', preset.automations.smartSell.stopLoss);
+
+    setBlueprintFormValue('blueprint-volume-enabled', preset.automations.volumeBot.enabled);
+    setBlueprintFormValue('blueprint-volume-amount', preset.automations.volumeBot.buyAmount);
+    setBlueprintFormValue('blueprint-volume-cycles', preset.automations.volumeBot.cycles);
+    setBlueprintFormValue('blueprint-volume-delay', preset.automations.volumeBot.sellDelay);
+}
+
+function openCreateBlueprintModal(template = 'custom') {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    setBlueprintFormValue('blueprint-template', template);
+    applyBlueprintPreset(template);
+
+    window.openModal('create-blueprint-modal');
+    setTimeout(() => {
+        getElement('blueprint-name')?.focus();
+    }, 120);
+}
+
+function resetBlueprintForm() {
+    const form = getElement('create-blueprint-form');
+    form?.reset();
+    setBlueprintFormValue('blueprint-template', 'custom');
+    applyBlueprintPreset('custom');
+}
+
+function submitBlueprintForm() {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    let formData;
+    try {
+        formData = getBlueprintFormValues();
+    } catch (error) {
+        notify(error.message, 'error');
+        return;
+    }
+
+    const blueprint = multiWalletManager.createBlueprint({
+        name: formData.name,
+        type: formData.type,
+        template: formData.template,
+        description: formData.description,
+        notes: formData.notes,
+        wallets: solana?.wallets || [],
+        settings: formData.settings
+    });
+
+    addConsoleLog(`✅ Blueprint created: ${blueprint.name}`, 'success');
+    notify(`Blueprint "${blueprint.name}" saved.`, 'success');
+
+    closeModal('create-blueprint-modal');
+    resetBlueprintForm();
+    renderBlueprintList();
+}
+
+function formatTimestamp(value) {
+    if (!value) return '—';
+    try {
+        return new Date(value).toLocaleString();
+    } catch (error) {
+        return '—';
+    }
+}
+
+function buildBlueprintCard(blueprint) {
+    const card = document.createElement('div');
+    card.className = 'bg-neutral-900 border border-neutral-800 rounded-lg p-4';
+
+    const header = document.createElement('div');
+    header.className = 'flex items-start justify-between gap-3';
+
+    const title = document.createElement('div');
+    title.innerHTML = `<h4 class="text-lg font-semibold text-white">${blueprint.name}</h4>
+        <p class="text-xs text-gray-400">${(blueprint.template || blueprint.type || 'custom').replace(/-/g, ' ')}</p>`;
+
+    const meta = document.createElement('div');
+    meta.className = 'text-right text-xs text-gray-500 space-y-1';
+    meta.innerHTML = `
+        <div>Created: ${formatTimestamp(blueprint.createdAt)}</div>
+        <div>Last used: ${formatTimestamp(blueprint.lastApplied)}</div>
+        <div>Applied ${blueprint.stats?.appliedCount || 0} time(s)</div>
+    `;
+
+    header.appendChild(title);
+    header.appendChild(meta);
+
+    const body = document.createElement('div');
+    body.className = 'mt-4 space-y-3 text-sm text-gray-300';
+
+    if (blueprint.description) {
+        const desc = document.createElement('p');
+        desc.textContent = blueprint.description;
+        body.appendChild(desc);
+    }
+
+    const launch = document.createElement('div');
+    const launchSettings = blueprint.settings?.launch || {};
+    launch.innerHTML = `
+        <div class="text-xs text-gray-400">Launch defaults</div>
+        <div class="text-xs text-gray-300">Dev Buy: ${launchSettings.devBuyAmount ?? '—'} SOL • Initial Buy: ${launchSettings.initialBuyAmount ?? '—'} SOL • Vanity: ${launchSettings.useVanity ? 'On' : 'Off'}</div>
+    `;
+    body.appendChild(launch);
+
+    const automationSettings = blueprint.settings?.automations || {};
+    const automationSummary = document.createElement('div');
+    automationSummary.className = 'text-xs text-gray-300';
+    automationSummary.innerHTML = `
+        <span class="text-gray-400">Automations:</span>
+        Smart Sell ${automationSettings.smartSell?.enabled ? '✅' : '❌'} • Volume Bot ${automationSettings.volumeBot?.enabled ? '✅' : '❌'}
+    `;
+    body.appendChild(automationSummary);
+
+    if (blueprint.notes) {
+        const notes = document.createElement('div');
+        notes.className = 'text-xs text-gray-400 italic';
+        notes.textContent = blueprint.notes;
+        body.appendChild(notes);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'mt-4 flex items-center gap-3 justify-end';
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'bg-purple-700 hover:bg-purple-600 text-white text-xs px-3 py-2 rounded transition';
+    applyBtn.textContent = 'Apply to Launch';
+    applyBtn.onclick = () => applyBlueprint(blueprint.id);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-gray-200 text-xs px-3 py-2 rounded transition';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => deleteBlueprint(blueprint.id);
+
+    actions.appendChild(applyBtn);
+    actions.appendChild(deleteBtn);
+
+    card.appendChild(header);
+    card.appendChild(body);
+    card.appendChild(actions);
+
+    return card;
+}
+
+function renderBlueprintList() {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    const listEl = getElement('blueprints-list');
+    const emptyEl = getElement('blueprints-empty-state');
+    if (!listEl || !emptyEl) {
+        return;
+    }
+
+    const blueprints = multiWalletManager.getBlueprints() || [];
+    listEl.innerHTML = '';
+
+    if (blueprints.length === 0) {
+        emptyEl.classList.remove('hidden');
+        listEl.classList.add('hidden');
+        return;
+    }
+
+    emptyEl.classList.add('hidden');
+    listEl.classList.remove('hidden');
+
+    blueprints
+        .slice()
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        .forEach(blueprint => {
+            listEl.appendChild(buildBlueprintCard(blueprint));
+        });
+}
+
+function deleteBlueprint(blueprintId) {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    if (!blueprint) {
+        notify('Blueprint not found.', 'error');
+        return;
+    }
+
+    if (!window.confirm(`Delete blueprint "${blueprint.name}"?`)) {
+        return;
+    }
+
+    multiWalletManager.deleteBlueprint(blueprintId);
+    notify(`Blueprint "${blueprint.name}" deleted.`, 'success');
+    addConsoleLog(`🗑️ Blueprint deleted: ${blueprint.name}`, 'info');
+    renderBlueprintList();
+}
+
+function applyBlueprint(blueprintId) {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    if (!blueprint) {
+        notify('Blueprint not found.', 'error');
+        return;
+    }
+
+    navigateToPage('create-token');
+
+    setTimeout(() => {
+        applyBlueprintToLaunch(blueprint);
+        multiWalletManager.recordBlueprintUsage(blueprintId);
+        renderBlueprintList();
+    }, 200);
+}
+
+function applyBlueprintToLaunch(blueprint) {
+    const launch = blueprint.settings?.launch || {};
+    const automations = blueprint.settings?.automations || {};
+
+    const devBuyInput = getElement('dev-buy-amount');
+    if (devBuyInput && launch.devBuyAmount !== undefined) {
+        devBuyInput.value = launch.devBuyAmount;
+    }
+
+    const initialBuyInput = getElement('initial-buy-amount');
+    if (initialBuyInput && launch.initialBuyAmount !== undefined) {
+        initialBuyInput.value = launch.initialBuyAmount;
+    }
+
+    const vanityToggle = getElement('use-vanity');
+    if (vanityToggle) {
+        vanityToggle.checked = Boolean(launch.useVanity);
+    }
+
+    const smartSellToggle = getElement('enable-smart-sell');
+    if (smartSellToggle) {
+        smartSellToggle.checked = Boolean(automations.smartSell?.enabled);
+        toggleSmartSellConfig();
+        const profit = getElement('smart-sell-profit');
+        const stopLoss = getElement('smart-sell-stoploss');
+        if (profit && automations.smartSell?.profitTarget !== undefined) {
+            profit.value = automations.smartSell.profitTarget;
+        }
+        if (stopLoss && automations.smartSell?.stopLoss !== undefined) {
+            stopLoss.value = automations.smartSell.stopLoss;
+        }
+    }
+
+    const volumeToggle = getElement('enable-volume-bot');
+    if (volumeToggle) {
+        volumeToggle.checked = Boolean(automations.volumeBot?.enabled);
+        toggleVolumeBotConfig();
+        const volumeAmount = getElement('volume-bot-amount');
+        const volumeCycles = getElement('volume-bot-cycles');
+        const volumeDelay = getElement('volume-bot-delay');
+        if (volumeAmount && automations.volumeBot?.buyAmount !== undefined) {
+            volumeAmount.value = automations.volumeBot.buyAmount;
+        }
+        if (volumeCycles && automations.volumeBot?.cycles !== undefined) {
+            volumeCycles.value = automations.volumeBot.cycles;
+        }
+        if (volumeDelay && automations.volumeBot?.sellDelay !== undefined) {
+            volumeDelay.value = automations.volumeBot.sellDelay;
+        }
+    }
+
+    if (blueprint.notes) {
+        notify(blueprint.notes, 'info');
+    }
+
+    focusAutomationSection();
+    notify(`Blueprint "${blueprint.name}" applied to launch form.`, 'success');
+    addConsoleLog(`📋 Applied blueprint: ${blueprint.name}`, 'info');
 }
 
 function handleAutomationTask(taskName, automationOptions) {

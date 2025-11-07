@@ -13,19 +13,26 @@ class MultiWalletManager {
     
     // Create a blueprint (trading strategy template)
     createBlueprint(config) {
+        const timestamp = Date.now();
         const blueprint = {
-            id: `bp-${Date.now()}`,
+            id: `bp-${timestamp}`,
             name: config.name,
-            type: config.type, // 'sniper', 'volume', 'arbitrage'
+            type: config.type || 'custom',
+            template: config.template || 'custom',
+            description: config.description || '',
+            notes: config.notes || '',
             wallets: config.wallets || [],
-            settings: config.settings,
+            settings: config.settings || {},
             status: 'inactive',
-            createdAt: Date.now(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
             lastRun: null,
+            lastApplied: null,
             stats: {
                 totalRuns: 0,
                 successRate: 0,
-                totalProfit: 0
+                totalProfit: 0,
+                appliedCount: 0
             }
         };
 
@@ -49,6 +56,7 @@ class MultiWalletManager {
 
             blueprint.status = 'active';
             blueprint.lastRun = Date.now();
+            blueprint.updatedAt = Date.now();
             
             // Execute based on type
             switch (blueprint.type) {
@@ -188,6 +196,34 @@ class MultiWalletManager {
         return this.blueprints;
     }
 
+    getBlueprintById(blueprintId) {
+        return this.blueprints.find(bp => bp.id === blueprintId);
+    }
+
+    deleteBlueprint(blueprintId) {
+        const index = this.blueprints.findIndex(bp => bp.id === blueprintId);
+        if (index === -1) {
+            return false;
+        }
+
+        const [removed] = this.blueprints.splice(index, 1);
+        this.saveBlueprints();
+        console.log('🗑️ Blueprint deleted:', removed.id);
+        return true;
+    }
+
+    recordBlueprintUsage(blueprintId) {
+        const blueprint = this.getBlueprintById(blueprintId);
+        if (!blueprint) {
+            return;
+        }
+
+        blueprint.lastApplied = Date.now();
+        blueprint.updatedAt = Date.now();
+        blueprint.stats.appliedCount = (blueprint.stats.appliedCount || 0) + 1;
+        this.saveBlueprints();
+    }
+
     // Save blueprints to localStorage
     saveBlueprints() {
         try {
@@ -202,7 +238,30 @@ class MultiWalletManager {
         try {
             const saved = localStorage.getItem('chaosbot_blueprints');
             if (saved) {
-                this.blueprints = JSON.parse(saved);
+                const parsed = JSON.parse(saved);
+                this.blueprints = Array.isArray(parsed) ? parsed.map(bp => {
+                    return {
+                        id: bp.id,
+                        name: bp.name,
+                        type: bp.type || 'custom',
+                        template: bp.template || 'custom',
+                        description: bp.description || '',
+                        notes: bp.notes || '',
+                        wallets: bp.wallets || [],
+                        settings: bp.settings || {},
+                        status: bp.status || 'inactive',
+                        createdAt: bp.createdAt || Date.now(),
+                        updatedAt: bp.updatedAt || bp.createdAt || Date.now(),
+                        lastRun: bp.lastRun || null,
+                        lastApplied: bp.lastApplied || null,
+                        stats: Object.assign({
+                            totalRuns: 0,
+                            successRate: 0,
+                            totalProfit: 0,
+                            appliedCount: 0
+                        }, bp.stats || {})
+                    };
+                }) : [];
                 console.log(`✅ Loaded ${this.blueprints.length} blueprints`);
             }
         } catch (error) {

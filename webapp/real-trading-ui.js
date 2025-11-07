@@ -4,7 +4,7 @@
 let solana;
 let rtSelectedWallets = new Set();
 let rtCurrentView = 'wallets';
-let vanityKeyStore = [];
+let rtAutoScroll = true;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -47,11 +47,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Add console log
-    if (typeof addConsoleLog === 'function') {
-        addConsoleLog('✅ System initialized - Real on-chain trading ready', 'success');
+    try {
+        if (typeof addConsoleLog === 'function') {
+            addConsoleLog('✅ System initialized - Real on-chain trading ready', 'success');
+        }
+    } catch (error) {
+        console.warn('Error adding console log:', error);
     }
-
-    loadVanityKeysFromStorage();
+    
     console.log('✅ Real Trading Platform Ready');
 });
 
@@ -514,10 +517,6 @@ function switchView(viewName) {
 
     if (viewName === 'blueprint') {
         renderBlueprintList();
-    }
-
-    if (viewName === 'vanities') {
-        renderVanityList();
     }
 
     // Re-initialize Lucide icons for the new view
@@ -1223,8 +1222,6 @@ const uiHelperState = {
     tagFilters: new Set()
 };
 
-const VANITY_STORAGE_KEY = 'chaosbot_vanity_keys';
-
 const blueprintTemplates = {
     custom: {
         name: '',
@@ -1527,9 +1524,6 @@ registerGlobalHandler('openCreateBlueprintModal', openCreateBlueprintModal);
 registerGlobalHandler('submitBlueprintForm', submitBlueprintForm);
 registerGlobalHandler('applyBlueprint', applyBlueprint);
 registerGlobalHandler('deleteBlueprint', deleteBlueprint);
-registerGlobalHandler('saveVanityKeys', saveVanityKeys);
-registerGlobalHandler('clearVanityInput', clearVanityInput);
-registerGlobalHandler('scrollToVanityForm', scrollToVanityForm);
 
 registerGlobalHandler('uploadTokenImage', () => {
     notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');
@@ -1568,158 +1562,6 @@ function configureAutomationOptions(options = {}) {
             }
         }
     }
-}
-
-function loadVanityKeysFromStorage() {
-    try {
-        const saved = localStorage.getItem(VANITY_STORAGE_KEY);
-        vanityKeyStore = saved ? JSON.parse(saved) : [];
-    } catch (error) {
-        console.error('Error loading vanity keys:', error);
-        vanityKeyStore = [];
-    }
-    renderVanityList();
-}
-
-function saveVanityKeys() {
-    const textarea = getElement('vanity-keys-input');
-    if (!textarea) {
-        notify('Vanity form not available.', 'error');
-        return;
-    }
-
-    const entries = textarea.value
-        .split(/\r?\n/)
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
-
-    if (entries.length === 0) {
-        notify('Please enter at least one private key.', 'warning');
-        return;
-    }
-
-    const timestamp = Date.now();
-    let added = 0;
-
-    entries.forEach(key => {
-        if (!vanityKeyStore.some(entry => entry.key === key)) {
-            vanityKeyStore.push({ key, createdAt: timestamp });
-            added++;
-        }
-    });
-
-    if (added === 0) {
-        notify('These vanities are already saved.', 'info');
-        return;
-    }
-
-    try {
-        localStorage.setItem(VANITY_STORAGE_KEY, JSON.stringify(vanityKeyStore));
-    } catch (error) {
-        console.error('Error saving vanity keys:', error);
-        notify('Unable to save vanities to local storage.', 'error');
-        return;
-    }
-
-    textarea.value = '';
-    renderVanityList();
-    notify(`Saved ${added} vanity key${added === 1 ? '' : 's'}.`, 'success');
-}
-
-function renderVanityList() {
-    const container = getElement('vanity-saved-list');
-    if (!container) {
-        return;
-    }
-
-    container.innerHTML = '';
-
-    if (!vanityKeyStore || vanityKeyStore.length === 0) {
-        container.innerHTML = '<div class="text-center py-8 text-sm text-gray-500">No vanities saved yet</div>';
-        return;
-    }
-
-    const list = document.createElement('div');
-    list.className = 'space-y-3';
-
-    vanityKeyStore
-        .slice()
-        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-        .forEach((entry, index) => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'bg-neutral-900 border border-neutral-800 rounded px-3 py-3 flex items-start justify-between gap-3 text-sm text-gray-200';
-
-            const keyPreview = entry.key.length > 16
-                ? `${entry.key.slice(0, 8)}•••${entry.key.slice(-8)}`
-                : entry.key;
-
-            const info = document.createElement('div');
-            info.innerHTML = `<div class="font-mono text-xs text-purple-200">${keyPreview}</div>
-                <div class="text-[11px] text-gray-500">Added ${formatTimestamp(entry.createdAt)}</div>`;
-
-            const actions = document.createElement('div');
-            actions.className = 'flex items-center gap-2';
-
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'bg-purple-700 hover:bg-purple-600 text-white text-xs px-3 py-1.5 rounded transition';
-            copyBtn.textContent = 'Copy';
-            copyBtn.onclick = () => copyVanityKey(index);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-gray-300 text-xs px-3 py-1.5 rounded transition';
-            removeBtn.textContent = 'Remove';
-            removeBtn.onclick = () => removeVanityKey(index);
-
-            actions.appendChild(copyBtn);
-            actions.appendChild(removeBtn);
-
-            wrapper.appendChild(info);
-            wrapper.appendChild(actions);
-
-            list.appendChild(wrapper);
-        });
-
-    container.appendChild(list);
-}
-
-function removeVanityKey(index) {
-    if (index < 0 || index >= vanityKeyStore.length) {
-        return;
-    }
-
-    const [removed] = vanityKeyStore.splice(index, 1);
-    localStorage.setItem(VANITY_STORAGE_KEY, JSON.stringify(vanityKeyStore));
-    renderVanityList();
-    notify('Vanity removed.', 'success');
-    addConsoleLog(`🗑️ Removed vanity key ending ${removed.key.slice(-6)}`, 'info');
-}
-
-function copyVanityKey(index) {
-    const entry = vanityKeyStore[index];
-    if (!entry) {
-        notify('Unable to copy vanity key.', 'error');
-        return;
-    }
-
-    navigator.clipboard.writeText(entry.key)
-        .then(() => notify('Vanity key copied to clipboard.', 'success'))
-        .catch(() => notify('Clipboard copy failed. Copy manually.', 'error'));
-}
-
-function clearVanityInput() {
-    const textarea = getElement('vanity-keys-input');
-    if (textarea) {
-        textarea.value = '';
-        textarea.focus();
-    }
-}
-
-function scrollToVanityForm() {
-    const card = getElement('vanity-form-card');
-    if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    setTimeout(() => getElement('vanity-keys-input')?.focus(), 200);
 }
 
 function setBlueprintFormValue(id, value) {

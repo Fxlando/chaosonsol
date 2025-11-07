@@ -1331,6 +1331,55 @@
                         </div>
                     </div>
 
+                    <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <div>
+                                <h3 class="text-sm font-semibold">Wallet Selection</h3>
+                                <p class="text-xs text-gray-500">Choose which wallets to include in this group.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    id="grouping-search"
+                                    placeholder="Search wallets..."
+                                    class="bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-neutral-600"
+                                />
+                                <button
+                                    id="grouping-clear-selection"
+                                    type="button"
+                                    class="bg-neutral-800 hover:bg-neutral-700 text-gray-200 text-sm px-3 py-1.5 rounded transition"
+                                >
+                                    Clear Selection
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2 mb-3" id="grouping-selected-chips">
+                            <span class="text-xs text-gray-500">No wallets selected yet. Use the checkboxes below to choose wallets.</span>
+                        </div>
+
+                        <div class="border border-neutral-800 rounded-lg overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead class="bg-neutral-900">
+                                    <tr class="border-b border-neutral-800">
+                                        <th class="p-3 text-left w-12">
+                                            <input type="checkbox" id="grouping-select-all" class="rounded" />
+                                        </th>
+                                        <th class="p-3 text-left">Name</th>
+                                        <th class="p-3 text-left">Address</th>
+                                        <th class="p-3 text-left">Balance (SOL)</th>
+                                        <th class="p-3 text-left">Current Group</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="grouping-wallet-table">
+                                    <tr>
+                                        <td colspan="5" class="p-6 text-center text-gray-500">Loading wallets...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <div class="flex flex-wrap items-center gap-3">
                         <button class="bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeGroupWallets()">
                             Save Grouping

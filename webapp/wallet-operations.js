@@ -11,6 +11,7 @@ var API_BASE = window.location.hostname === 'localhost'
 let wallets = [];
 let selectedWallets = new Set();
 let walletGroups = new Map();
+let groupingSearchTerm = '';
 
 // Initialize wallet operations
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,27 +39,46 @@ async function initializeWalletOperations() {
  * Setup event listeners for wallet operations
  */
 function setupWalletEventListeners() {
-  // Search functionality
   const searchInput = document.getElementById('wallet-search');
   if (searchInput) {
-    searchInput.addEventListener('input', filterWallets);
+    searchInput.addEventListener('input', debounce(walletOperationsFilterWallets, 200));
   }
-  
-  // Tab switching
+
   const activeTab = document.getElementById('active-tab');
   const inactiveTab = document.getElementById('inactive-tab');
-  if (activeTab) activeTab.addEventListener('click', () => switchTab('active'));
-  if (inactiveTab) inactiveTab.addEventListener('click', () => switchTab('inactive'));
-  
-  // Select all checkbox
+  if (activeTab) activeTab.addEventListener('click', () => walletOperationsSwitchTab('active'));
+  if (inactiveTab) inactiveTab.addEventListener('click', () => walletOperationsSwitchTab('inactive'));
+
   const selectAll = document.getElementById('select-all');
   if (selectAll) {
-    selectAll.addEventListener('change', toggleSelectAll);
+    selectAll.addEventListener('change', walletOperationsToggleSelectAll);
   }
-  
-  // Wallet search
-  if (searchInput) {
-    searchInput.addEventListener('input', debounce(filterWallets, 300));
+
+  const groupingSearch = document.getElementById('grouping-search');
+  if (groupingSearch) {
+    groupingSearch.addEventListener('input', debounce((event) => {
+      groupingSearchTerm = (event?.target?.value || '').toLowerCase();
+      walletOperationsRenderGroupingTable();
+      walletOperationsSyncSelectionUI({ skipBulkUpdate: true });
+    }, 200));
+  }
+
+  const groupingClear = document.getElementById('grouping-clear-selection');
+  if (groupingClear) {
+    groupingClear.addEventListener('click', () => {
+      if (selectedWallets.size === 0) {
+        showToast('No wallets selected to clear', 'info');
+        return;
+      }
+      selectedWallets.clear();
+      walletOperationsSyncSelectionUI();
+      showToast('Wallet selection cleared', 'success');
+    });
+  }
+
+  const groupingSelectAll = document.getElementById('grouping-select-all');
+  if (groupingSelectAll) {
+    groupingSelectAll.addEventListener('change', walletOperationsToggleGroupingSelectAll);
   }
 }
 
@@ -98,6 +118,10 @@ async function loadWallets() {
     
     // Update total balance
     walletOperationsUpdateTotals();
+
+    // Update grouping view
+    walletOperationsRenderGroupingTable();
+    walletOperationsSyncSelectionUI();
     
     showToast(`Loaded ${wallets.length} wallets`, 'success');
     addConsoleLog(`Loaded ${wallets.length} wallets successfully`, 'success');
@@ -111,6 +135,8 @@ async function loadWallets() {
     wallets = generateDemoWallets();
     walletOperationsRenderTable();
     walletOperationsUpdateTotals();
+    walletOperationsRenderGroupingTable();
+    walletOperationsSyncSelectionUI();
   }
 }
 
@@ -190,18 +216,21 @@ function walletOperationsRenderTable() {
     row.className = 'border-b border-neutral-800 hover:bg-neutral-800/50';
     
     const address = wallet.address || wallet.publicKey || wallet.pubkey || 'N/A';
+    const walletId = wallet.id || wallet.address || wallet.publicKey || wallet.pubkey || address;
     const balance = wallet.balance || 0;
     const tags = Array.isArray(wallet.tags) ? wallet.tags : [];
     const tokenHoldings = wallet.tokenHoldings || 0;
     const unclaimedRent = wallet.unclaimedRent || 0;
+    const isSelected = selectedWallets.has(walletId);
     
     row.innerHTML = `
       <td class="p-4">
         <input 
           type="checkbox" 
-          class="wallet-checkbox rounded" 
-          data-wallet-id="${wallet.id || address}"
-          onchange="toggleWalletSelection('${wallet.id || address}')"
+          class="wallet-checkbox wallet-table-checkbox rounded" 
+          data-wallet-id="${walletId}"
+          ${isSelected ? 'checked' : ''}
+          onchange="walletOperationsToggleSelection('${walletId}', this.checked)"
         />
       </td>
       <td class="p-4">
@@ -235,7 +264,138 @@ function walletOperationsRenderTable() {
     tbody.appendChild(row);
   });
   
-  updateBulkActions();
+  walletOperationsSyncSelectionUI({ skipBulkUpdate: true });
+}
+
+/**
+ * Render grouping wallet table
+ */
+function walletOperationsRenderGroupingTable() {
+  const tbody = document.getElementById('grouping-wallet-table');
+  if (!tbody) return;
+
+  if (!Array.isArray(wallets) || wallets.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="p-6 text-center text-gray-500">
+          No wallets available yet. Generate or import wallets first.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const searchTerm = groupingSearchTerm?.trim() || '';
+  const filtered = wallets.filter((wallet) => {
+    if (!searchTerm) return true;
+    const target = [
+      wallet.name,
+      wallet.address,
+      wallet.publicKey,
+      wallet.group,
+      wallet.groupName,
+      wallet.tags ? wallet.tags.join(' ') : ''
+    ].filter(Boolean).join(' ').toLowerCase();
+    return target.includes(searchTerm.toLowerCase());
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="p-6 text-center text-gray-500">
+          No wallets matched your search.
+        </td>
+      </tr>
+    `;
+    walletOperationsUpdateSelectAllIndicators();
+    return;
+  }
+
+  const rows = filtered.map((wallet) => {
+    const address = wallet.address || wallet.publicKey || wallet.pubkey || '';
+    const walletId = wallet.id || wallet.address || wallet.publicKey || wallet.pubkey || address;
+    const isSelected = selectedWallets.has(walletId);
+    const balance = wallet.balance || 0;
+    const groupLabel = wallet.groupName || wallet.group || '—';
+
+    return `
+      <tr class="border-b border-neutral-800 hover:bg-neutral-800/40">
+        <td class="p-3 align-top">
+          <input
+            type="checkbox"
+            class="wallet-checkbox grouping-wallet-checkbox rounded"
+            data-wallet-id="${walletId}"
+            ${isSelected ? 'checked' : ''}
+            onchange="walletOperationsToggleSelection('${walletId}', this.checked)"
+          />
+        </td>
+        <td class="p-3 align-top">
+          <div class="font-medium">${wallet.name || 'Unnamed Wallet'}</div>
+          <div class="text-xs text-gray-500 mt-1">${wallet.tags && wallet.tags.length ? wallet.tags.join(', ') : 'No tags'}</div>
+        </td>
+        <td class="p-3 align-top">
+          <code class="text-xs font-mono">${truncateAddress(address)}</code>
+        </td>
+        <td class="p-3 align-top">
+          <span class="font-mono">${balance.toFixed(4)}</span>
+        </td>
+        <td class="p-3 align-top">
+          <span class="text-sm ${groupLabel !== '—' ? 'text-purple-300' : 'text-gray-500'}">${groupLabel}</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.innerHTML = rows;
+  walletOperationsUpdateSelectAllIndicators();
+}
+
+/**
+ * Render selected wallet chips on grouping page
+ */
+function walletOperationsRenderGroupingChips() {
+  const container = document.getElementById('grouping-selected-chips');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (selectedWallets.size === 0) {
+    container.innerHTML = `<span class="text-xs text-gray-500">No wallets selected yet. Use the checkboxes below to choose wallets.</span>`;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  let count = 0;
+
+  wallets.forEach((wallet) => {
+    const address = wallet.address || wallet.publicKey || wallet.pubkey;
+    const walletId = wallet.id || wallet.address || wallet.publicKey || wallet.pubkey || address;
+    if (!selectedWallets.has(walletId)) return;
+
+    count += 1;
+    if (count > 25) {
+      return;
+    }
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'flex items-center gap-2 bg-purple-900/40 text-purple-200 text-xs px-3 py-1 rounded-full hover:bg-purple-800/60 transition';
+    chip.innerHTML = `
+      <span>${wallet.name || truncateAddress(address)}</span>
+      <span class="text-purple-200 hover:text-white text-sm" aria-hidden="true">×</span>
+    `;
+    chip.addEventListener('click', () => walletOperationsToggleSelection(walletId, false));
+    fragment.appendChild(chip);
+  });
+
+  container.appendChild(fragment);
+
+  if (selectedWallets.size > 25) {
+    const extra = document.createElement('span');
+    extra.className = 'text-xs text-gray-400';
+    extra.textContent = `+${selectedWallets.size - 25} more selected`;
+    container.appendChild(extra);
+  }
 }
 
 /**
@@ -270,74 +430,155 @@ function updateWalletGroups() {
 /**
  * Filter wallets
  */
-function filterWallets() {
+function walletOperationsFilterWallets() {
   walletOperationsRenderTable();
+  walletOperationsSyncSelectionUI({ skipBulkUpdate: true });
 }
 
 /**
  * Switch tab (active/inactive)
  */
-function switchTab(tab) {
+function walletOperationsSwitchTab(tab) {
   const activeTab = document.getElementById('active-tab');
   const inactiveTab = document.getElementById('inactive-tab');
   
   if (tab === 'active') {
-    activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
-    inactiveTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+    if (activeTab) activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+    if (inactiveTab) inactiveTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
   } else {
-    activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
-    inactiveTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+    if (activeTab) activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+    if (inactiveTab) inactiveTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
   }
   
   walletOperationsRenderTable();
+  walletOperationsSyncSelectionUI({ skipBulkUpdate: true });
 }
 
 /**
- * Toggle select all
+ * Toggle select all in wallets table
  */
-function toggleSelectAll() {
-  const selectAll = document.getElementById('select-all');
-  const checkboxes = document.querySelectorAll('.wallet-checkbox');
-  
-  checkboxes.forEach(cb => {
-    cb.checked = selectAll.checked;
+function walletOperationsToggleSelectAll(event) {
+  const selectAll = event?.target || document.getElementById('select-all');
+  if (!selectAll) return;
+
+  const shouldSelect = !!selectAll.checked;
+  const checkboxes = document.querySelectorAll('#wallets-table-body .wallet-checkbox');
+
+  checkboxes.forEach((cb) => {
     const walletId = cb.dataset.walletId;
-    if (selectAll.checked) {
+    if (!walletId) return;
+    if (shouldSelect) {
       selectedWallets.add(walletId);
     } else {
       selectedWallets.delete(walletId);
     }
   });
-  
-  updateBulkActions();
+
+  walletOperationsSyncSelectionUI();
 }
 
 /**
- * Toggle wallet selection
+ * Toggle select all in grouping table
  */
-function toggleWalletSelection(walletId) {
-  const checkbox = document.querySelector(`.wallet-checkbox[data-wallet-id="${walletId}"]`);
-  if (checkbox.checked) {
+function walletOperationsToggleGroupingSelectAll(event) {
+  const selectAll = event?.target || document.getElementById('grouping-select-all');
+  if (!selectAll) return;
+
+  const shouldSelect = !!selectAll.checked;
+  const checkboxes = document.querySelectorAll('#grouping-wallet-table .wallet-checkbox');
+
+  checkboxes.forEach((cb) => {
+    const walletId = cb.dataset.walletId;
+    if (!walletId) return;
+    if (shouldSelect) {
+      selectedWallets.add(walletId);
+    } else {
+      selectedWallets.delete(walletId);
+    }
+  });
+
+  walletOperationsSyncSelectionUI();
+}
+
+/**
+ * Toggle wallet selection for a specific wallet
+ */
+function walletOperationsToggleSelection(walletId, isChecked) {
+  if (!walletId) return;
+
+  let shouldSelect;
+  if (typeof isChecked === 'boolean') {
+    shouldSelect = isChecked;
+  } else {
+    shouldSelect = !selectedWallets.has(walletId);
+  }
+
+  if (shouldSelect) {
     selectedWallets.add(walletId);
   } else {
     selectedWallets.delete(walletId);
   }
-  
-  // Update select all checkbox
-  const selectAll = document.getElementById('select-all');
-  const allCheckboxes = document.querySelectorAll('.wallet-checkbox');
-  const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
-  if (selectAll) {
-    selectAll.checked = allChecked;
+
+  walletOperationsSyncSelectionUI();
+}
+
+/**
+ * Update select-all indicators and chips
+ */
+function walletOperationsSyncSelectionUI(options = {}) {
+  const { skipBulkUpdate = false } = options;
+
+  document.querySelectorAll('.wallet-checkbox').forEach((checkbox) => {
+    const walletId = checkbox.dataset.walletId;
+    if (!walletId) return;
+    checkbox.checked = selectedWallets.has(walletId);
+  });
+
+  walletOperationsUpdateSelectAllIndicators();
+  walletOperationsRenderGroupingChips();
+
+  if (!skipBulkUpdate) {
+    walletOperationsUpdateBulkActions();
   }
-  
-  updateBulkActions();
+}
+
+/**
+ * Update select-all checkbox states
+ */
+function walletOperationsUpdateSelectAllIndicators() {
+  const selectAll = document.getElementById('select-all');
+  const tableCheckboxes = Array.from(document.querySelectorAll('#wallets-table-body .wallet-checkbox'));
+
+  if (selectAll) {
+    if (tableCheckboxes.length === 0) {
+      selectAll.checked = false;
+      selectAll.indeterminate = false;
+    } else {
+      const selectedCount = tableCheckboxes.filter((cb) => selectedWallets.has(cb.dataset.walletId)).length;
+      selectAll.checked = selectedCount > 0 && selectedCount === tableCheckboxes.length;
+      selectAll.indeterminate = selectedCount > 0 && selectedCount < tableCheckboxes.length;
+    }
+  }
+
+  const groupingSelectAll = document.getElementById('grouping-select-all');
+  const groupingCheckboxes = Array.from(document.querySelectorAll('#grouping-wallet-table .wallet-checkbox'));
+
+  if (groupingSelectAll) {
+    if (groupingCheckboxes.length === 0) {
+      groupingSelectAll.checked = false;
+      groupingSelectAll.indeterminate = false;
+    } else {
+      const selectedGrouping = groupingCheckboxes.filter((cb) => selectedWallets.has(cb.dataset.walletId)).length;
+      groupingSelectAll.checked = selectedGrouping > 0 && selectedGrouping === groupingCheckboxes.length;
+      groupingSelectAll.indeterminate = selectedGrouping > 0 && selectedGrouping < groupingCheckboxes.length;
+    }
+  }
 }
 
 /**
  * Update bulk actions visibility
  */
-function updateBulkActions() {
+function walletOperationsUpdateBulkActions() {
   const bulkActions = document.getElementById('bulk-actions');
   if (bulkActions) {
     if (selectedWallets.size > 0) {
@@ -592,6 +833,7 @@ async function deactivateWallets() {
       return;
     }
     
+    const affectedCount = selectedWallets.size;
     showToast(`Deactivating ${selectedWallets.size} wallets...`, 'info');
     addConsoleLog(`Deactivating ${selectedWallets.size} wallets`, 'info');
     
@@ -619,9 +861,11 @@ async function deactivateWallets() {
     // Clear selection
     selectedWallets.clear();
     walletOperationsRenderTable();
+    walletOperationsRenderGroupingTable();
+    walletOperationsSyncSelectionUI();
     
-    showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
-    addConsoleLog(`Deactivated ${selectedWallets.size} wallets`, 'success');
+    showToast(`Deactivated ${affectedCount} wallet${affectedCount === 1 ? '' : 's'}`, 'success');
+    addConsoleLog(`Deactivated ${affectedCount} wallet${affectedCount === 1 ? '' : 's'}`, 'success');
     
   } catch (error) {
     console.error('Error deactivating wallets:', error);
@@ -904,12 +1148,15 @@ window.walletOperations = {
   exportWallets,
   deactivateWallets,
   refreshBalances,
-  toggleWalletSelection,
-  toggleSelectAll,
-  switchTab,
-  filterWallets,
+  walletOperationsToggleSelection,
+  walletOperationsToggleSelectAll,
+  walletOperationsSwitchTab,
+  walletOperationsFilterWallets,
   walletOperationsRenderTable,
-  walletOperationsUpdateTotals
+  walletOperationsRenderGroupingTable,
+  walletOperationsRenderGroupingChips,
+  walletOperationsUpdateTotals,
+  walletOperationsUpdateBulkActions
 };
 
 // Also expose functions globally for onclick handlers
@@ -921,12 +1168,16 @@ window.executeExportWallets = executeExportWallets;
 window.deactivateWallets = deactivateWallets;
 window.executeActivateWallets = executeActivateWallets;
 window.refreshBalances = refreshBalances;
-window.toggleWalletSelection = toggleWalletSelection;
-window.toggleSelectAll = toggleSelectAll;
-window.switchTab = switchTab;
-window.filterWallets = filterWallets;
+window.walletOperationsToggleSelection = walletOperationsToggleSelection;
+window.walletOperationsToggleSelectAll = walletOperationsToggleSelectAll;
+window.walletOperationsToggleGroupingSelectAll = walletOperationsToggleGroupingSelectAll;
+window.walletOperationsSwitchTab = walletOperationsSwitchTab;
+window.walletOperationsFilterWallets = walletOperationsFilterWallets;
 window.walletOperationsRenderTable = walletOperationsRenderTable;
+window.walletOperationsRenderGroupingTable = walletOperationsRenderGroupingTable;
+window.walletOperationsRenderGroupingChips = walletOperationsRenderGroupingChips;
 window.walletOperationsUpdateTotals = walletOperationsUpdateTotals;
+window.walletOperationsUpdateBulkActions = walletOperationsUpdateBulkActions;
 window.executeGroupWallets = executeGroupWallets;
 window.executeReclaimRent = executeReclaimRent;
 

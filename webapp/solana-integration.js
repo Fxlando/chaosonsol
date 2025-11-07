@@ -231,7 +231,16 @@ class SolanaIntegration {
             console.warn('Unable to read cached SOL price:', error);
         }
 
-        const fetchers = [
+        const providers = [
+            async () => {
+                const response = await fetch('https://price.jup.ag/v4/price?ids=SOL');
+                const data = await response.json();
+                const price = data?.data?.SOL?.price;
+                if (typeof price === 'number' && !Number.isNaN(price)) {
+                    return price;
+                }
+                throw new Error('Jupiter price missing');
+            },
             async () => {
                 const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
                 const data = await response.json();
@@ -239,7 +248,7 @@ class SolanaIntegration {
                 if (typeof price === 'number' && !Number.isNaN(price)) {
                     return price;
                 }
-                throw new Error('Coingecko response missing price');
+                throw new Error('Coingecko price missing');
             },
             async () => {
                 const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
@@ -248,7 +257,7 @@ class SolanaIntegration {
                 if (!Number.isNaN(price)) {
                     return price;
                 }
-                throw new Error('Binance response missing price');
+                throw new Error('Binance price missing');
             },
             async () => {
                 const response = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot');
@@ -257,25 +266,22 @@ class SolanaIntegration {
                 if (!Number.isNaN(price)) {
                     return price;
                 }
-                throw new Error('Coinbase response missing price');
+                throw new Error('Coinbase price missing');
             }
         ];
 
-        for (const fetcher of fetchers) {
+        try {
+            const price = await Promise.any(providers.map(fn => fn()));
             try {
-                const price = await fetcher();
-                try {
-                    localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
-                } catch (error) {
-                    console.warn('Unable to cache SOL price:', error);
-                }
-                return price;
+                localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
             } catch (error) {
-                console.warn('SOL price fetch failed, trying next source:', error.message);
+                console.warn('Unable to cache SOL price:', error);
             }
+            return price;
+        } catch (error) {
+            console.error('All SOL price providers failed:', error);
         }
 
-        console.error('All SOL price providers failed. Returning last cached value if available.');
         try {
             const cached = localStorage.getItem(cacheKey);
             if (cached) {

@@ -320,5 +320,3 @@ if (typeof window !== 'undefined') {
   window.apiClient = new APIClient();
 }
 
-export default APIClient;
-

@@ -1478,7 +1478,12 @@ registerGlobalHandler('openModal', (modalId) => {
         notify(`Unable to open modal: ${modalId}`, 'error');
         return;
     }
+    const activeElement = document.activeElement;
+    if (activeElement && activeElement !== modal && !modal.contains(activeElement)) {
+        modal.__previouslyFocusedElement = activeElement;
+    }
     modal.classList.remove('hidden');
+    modal.removeAttribute('inert');
     modal.setAttribute('aria-hidden', 'false');
     modal.focus?.();
 });
@@ -1486,8 +1491,23 @@ registerGlobalHandler('openModal', (modalId) => {
 registerGlobalHandler('closeModal', (modalId) => {
     const modal = getElement(modalId);
     if (!modal) return;
+    if (modal.contains(document.activeElement)) {
+        document.activeElement.blur?.();
+    }
     modal.classList.add('hidden');
     modal.setAttribute('aria-hidden', 'true');
+    modal.setAttribute('inert', '');
+    const previouslyFocused = modal.__previouslyFocusedElement;
+    modal.__previouslyFocusedElement = null;
+    if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        requestAnimationFrame(() => {
+            try {
+                previouslyFocused.focus();
+            } catch (focusError) {
+                console.debug('Unable to restore focus after closing modal:', focusError);
+            }
+        });
+    }
 });
 
 registerGlobalHandler('executeGenerate', async () => {

@@ -1,20 +1,29 @@
 // Netlify Function for Complete Wallet Management
-const axios = require('axios');
-const { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
-const bs58 = require('bs58');
+import axios from 'axios';
+import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Resolve local JSON files in ESM context
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function loadJson(relativePath) {
+  try {
+    const absolutePath = path.resolve(__dirname, relativePath);
+    const raw = readFileSync(absolutePath, 'utf-8');
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error(`Failed to load ${relativePath}:`, error.message);
+    return { wallets: [] };
+  }
+}
 
 // Load wallet data
-let volumeWallets, pumpWallets;
-try {
-  volumeWallets = require('../../volume-wallets-public.json');
-} catch (e) {
-  volumeWallets = { wallets: [] };
-}
-try {
-  pumpWallets = require('../../pump-wallets-public.json');
-} catch (e) {
-  pumpWallets = { wallets: [] };
-}
+const volumeWallets = loadJson('../../volume-wallets-public.json');
+const pumpWallets = loadJson('../../pump-wallets-public.json');
 
 // In-memory wallet storage (in production, use a database)
 let walletStorage = new Map();
@@ -219,7 +228,7 @@ async function importWallet(privateKey, name = null, tags = []) {
   }
 }
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',

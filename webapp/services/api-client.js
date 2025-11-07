@@ -79,13 +79,6 @@ class APIClient {
         this.isConnected = true;
         console.log('✅ Connected to API server');
         
-        // Initialize app
-        try {
-          await this.initializeApp();
-        } catch (initError) {
-          console.warn('App initialization failed, continuing with connection:', initError.message);
-        }
-        
         return true;
       }
       return false;

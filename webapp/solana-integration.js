@@ -15,7 +15,7 @@ class SolanaIntegration {
 
     async init() {
         // Initialize with public RPC (user can change in settings)
-        this.rpcEndpoint = 'https://api.mainnet-beta.solana.com';
+        this.rpcEndpoint = 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
         const { Connection } = window.solanaWeb3;
         this.connection = new Connection(this.rpcEndpoint, 'confirmed');
         

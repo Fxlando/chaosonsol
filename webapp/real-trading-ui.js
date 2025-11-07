@@ -6,7 +6,6 @@ let rtSelectedWallets = new Set();
 let rtCurrentView = 'wallets';
 let vanityKeyStore = [];
 let vanityVisibility = new Set();
-let rtAutoScroll = true;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -409,25 +408,6 @@ function addConsoleLog(message, type = 'info') {
     if (rtAutoScroll) {
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
-}
-
-function toggleAutoScroll() {
-    rtAutoScroll = !rtAutoScroll;
-
-    const label = document.getElementById('auto-scroll-text');
-    if (label) {
-        label.textContent = `Auto-scroll: ${rtAutoScroll ? 'ON' : 'OFF'}`;
-    }
-
-    addConsoleLog(`Console auto-scroll ${rtAutoScroll ? 'enabled' : 'paused'}`, 'info');
-}
-
-function clearConsole() {
-    const consoleOutput = document.getElementById('console-output');
-    if (!consoleOutput) return;
-
-    consoleOutput.innerHTML = '';
-    addConsoleLog('Console cleared', 'info');
 }
 
 // Initialize event listeners

@@ -876,8 +876,11 @@ select.input {
 
     .nav {
         padding: 1.25rem 1.5rem;
+    }
+
+    .nav-list {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        grid-template-columns: 1fr;
         gap: 0.75rem;
     }
 

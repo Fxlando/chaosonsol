@@ -231,55 +231,20 @@ class SolanaIntegration {
             console.warn('Unable to read cached SOL price:', error);
         }
 
-        const providers = [
-            async () => {
-                const response = await fetch('https://price.jup.ag/v4/price?ids=SOL');
-                const data = await response.json();
-                const price = data?.data?.SOL?.price;
-                if (typeof price === 'number' && !Number.isNaN(price)) {
-                    return price;
-                }
-                throw new Error('Jupiter price missing');
-            },
-            async () => {
-                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-                const data = await response.json();
-                const price = data?.solana?.usd;
-                if (typeof price === 'number' && !Number.isNaN(price)) {
-                    return price;
-                }
-                throw new Error('Coingecko price missing');
-            },
-            async () => {
-                const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
-                const data = await response.json();
-                const price = parseFloat(data?.price);
-                if (!Number.isNaN(price)) {
-                    return price;
-                }
-                throw new Error('Binance price missing');
-            },
-            async () => {
-                const response = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot');
-                const data = await response.json();
-                const price = parseFloat(data?.data?.amount);
-                if (!Number.isNaN(price)) {
-                    return price;
-                }
-                throw new Error('Coinbase price missing');
-            }
-        ];
-
         try {
-            const price = await Promise.any(providers.map(fn => fn()));
-            try {
-                localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
-            } catch (error) {
-                console.warn('Unable to cache SOL price:', error);
+            const response = await fetch('https://price.jup.ag/v4/price?ids=SOL');
+            const data = await response.json();
+            const price = data?.data?.SOL?.price;
+            if (typeof price === 'number' && !Number.isNaN(price)) {
+                try {
+                    localStorage.setItem(cacheKey, JSON.stringify({ price, timestamp: Date.now() }));
+                } catch (error) {
+                    console.warn('Unable to cache SOL price:', error);
+                }
+                return price;
             }
-            return price;
         } catch (error) {
-            console.error('All SOL price providers failed:', error);
+            console.error('Error fetching SOL price from Jupiter API:', error);
         }
 
         try {

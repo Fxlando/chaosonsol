@@ -49,7 +49,6 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const app = await getApp();
     const path = event.path.replace('/.netlify/functions/api', '');
     const method = event.httpMethod;
     const body = event.body ? JSON.parse(event.body) : {};
@@ -66,6 +65,8 @@ exports.handler = async (event, context) => {
         })
       };
     }
+
+    const app = await getApp();
 
     if (path === '/initialize' && method === 'POST') {
       const status = app.getStatus();

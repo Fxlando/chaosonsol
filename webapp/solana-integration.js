@@ -8,6 +8,8 @@ class SolanaIntegration {
         this.wallets = []; // User's managed wallets
         this.rpcEndpoint = null;
         this.jitoEnabled = false;
+        this.cachedSolPrice = null;
+        this.cachedSolPriceTimestamp = 0;
         this.init();
     }
 
@@ -216,6 +218,15 @@ class SolanaIntegration {
 
     // Real SOL price from API
     async getSolPrice() {
+        const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
+
+        if (
+            this.cachedSolPrice !== null &&
+            Date.now() - this.cachedSolPriceTimestamp < CACHE_TTL_MS
+        ) {
+            return this.cachedSolPrice;
+        }
+
         const PYTH_SOL_FEED = '0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace';
 
         try {
@@ -228,16 +239,25 @@ class SolanaIntegration {
             const data = await response.json();
             const priceInfo = Array.isArray(data) ? data[0]?.price : undefined;
 
-            if (!priceInfo || typeof priceInfo.price !== 'number' || typeof priceInfo.expo !== 'number') {
+            if (!priceInfo || priceInfo.price === undefined || priceInfo.expo === undefined) {
                 throw new Error('Malformed Pyth price payload');
             }
 
-            const price = priceInfo.price * Math.pow(10, priceInfo.expo);
+            const rawPrice = Number(priceInfo.price);
+            const expo = Number(priceInfo.expo);
+
+            if (!Number.isFinite(rawPrice) || !Number.isFinite(expo)) {
+                throw new Error('Pyth price payload contained non-numeric values');
+            }
+
+            const price = rawPrice * Math.pow(10, expo);
 
             if (!Number.isFinite(price)) {
                 throw new Error('Computed Pyth price is not finite');
             }
 
+            this.cachedSolPrice = price;
+            this.cachedSolPriceTimestamp = Date.now();
             return price;
         } catch (error) {
             console.error('Primary SOL price fetch failed:', error);
@@ -251,11 +271,34 @@ class SolanaIntegration {
             const data = await response.json();
             const price = data?.data?.SOL?.price;
             if (typeof price === 'number' && Number.isFinite(price)) {
+                this.cachedSolPrice = price;
+                this.cachedSolPriceTimestamp = Date.now();
                 return price;
             }
             throw new Error('Malformed Jupiter price payload');
         } catch (error) {
             console.error('Fallback SOL price fetch failed:', error);
+        }
+
+        try {
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+            if (!response.ok) {
+                throw new Error(`CoinGecko price request failed with status ${response.status}`);
+            }
+            const data = await response.json();
+            const price = data?.solana?.usd;
+            if (typeof price === 'number' && Number.isFinite(price)) {
+                this.cachedSolPrice = price;
+                this.cachedSolPriceTimestamp = Date.now();
+                return price;
+            }
+            throw new Error('Malformed CoinGecko price payload');
+        } catch (error) {
+            console.error('Secondary fallback SOL price fetch failed:', error);
+        }
+
+        if (this.cachedSolPrice !== null) {
+            return this.cachedSolPrice;
         }
 
         return 0;

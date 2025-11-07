@@ -8,68 +8,82 @@ import { loggerManager } from './logger.js';
 
 const logger = loggerManager.getLogger('SOLPrice');
 
-/**
- * Get real SOL price from CoinGecko
- */
-export async function getSOLPriceFromCoinGecko() {
-  try {
-    const response = await axios.get(
-      'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
-      { timeout: 5000 }
-    );
-    
-    if (response.data && response.data.solana && response.data.solana.usd) {
-      return response.data.solana.usd;
-    }
-    throw new Error('Invalid response from CoinGecko');
-  } catch (error) {
-    logger.warn('CoinGecko price fetch failed:', error.message);
-    throw error;
+const JUPITER_PRICE_ENDPOINTS = [
+  'https://price.jup.ag/v6/price?ids=SOL',
+  'https://price.jup.ag/v4/price?ids=SOL'
+];
+
+const SOL_PRICE_KEYS = [
+  'SOL',
+  'So11111111111111111111111111111111111111112'
+];
+
+function extractPriceFromResponse(responseData) {
+  if (!responseData || typeof responseData !== 'object') {
+    return null;
   }
+
+  const data = responseData.data;
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  for (const key of SOL_PRICE_KEYS) {
+    const entry = data[key];
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    if (entry.price !== undefined) {
+      const price = Number(entry.price);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+
+    if (entry.usd !== undefined) {
+      const price = Number(entry.usd);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
- * Get real SOL price from Coinbase
+ * Get real SOL price from Jupiter price API
  */
-export async function getSOLPriceFromCoinbase() {
-  try {
-    const response = await axios.get(
-      'https://api.coinbase.com/v2/exchange-rates?currency=SOL',
-      { timeout: 5000 }
-    );
-    
-    if (response.data && response.data.data && response.data.data.rates && response.data.data.rates.USD) {
-      return parseFloat(response.data.data.rates.USD);
+export async function getSOLPriceFromJupiter() {
+  let lastError;
+
+  for (const endpoint of JUPITER_PRICE_ENDPOINTS) {
+    try {
+      const response = await axios.get(endpoint, { timeout: 5000 });
+      const price = extractPriceFromResponse(response.data);
+
+      if (price !== null) {
+        return price;
+      }
+
+      lastError = new Error(`No SOL price in Jupiter response from ${endpoint}`);
+    } catch (error) {
+      lastError = error;
+      logger.warn(`Jupiter price fetch failed from ${endpoint}: ${error.message}`);
     }
-    throw new Error('Invalid response from Coinbase');
-  } catch (error) {
-    logger.warn('Coinbase price fetch failed:', error.message);
-    throw error;
   }
+
+  throw lastError || new Error('Unable to fetch SOL price from Jupiter');
 }
 
 /**
  * Get real SOL price with fallback
  */
 export async function getRealSOLPrice() {
-  try {
-    // Try CoinGecko first
-    try {
-      const price = await getSOLPriceFromCoinGecko();
-      logger.info(`✅ Real SOL price from CoinGecko: $${price}`);
-      return price;
-    } catch (error) {
-      // Fallback to Coinbase
-      const price = await getSOLPriceFromCoinbase();
-      logger.info(`✅ Real SOL price from Coinbase: $${price}`);
-      return price;
-    }
-  } catch (error) {
-    logger.error('All SOL price sources failed:', error);
-    // Last resort fallback (should rarely happen)
-    logger.warn('Using fallback SOL price: $180');
-    return 180;
-  }
+  const price = await getSOLPriceFromJupiter();
+  logger.info(`✅ Real SOL price from Jupiter: $${price}`);
+  return price;
 }
 
 /**
@@ -89,8 +103,20 @@ class SOLPriceCache {
       return this.price;
     }
 
-    this.price = await getRealSOLPrice();
-    this.lastUpdate = now;
+    try {
+      this.price = await getRealSOLPrice();
+      this.lastUpdate = now;
+    } catch (error) {
+      logger.error('Failed to refresh SOL price from Jupiter:', error);
+
+      if (this.price !== null) {
+        logger.warn('Serving cached SOL price due to refresh failure');
+        return this.price;
+      }
+
+      throw error;
+    }
+
     return this.price;
   }
 }
@@ -98,8 +124,7 @@ class SOLPriceCache {
 export const solPriceCache = new SOLPriceCache();
 
 export default {
-  getSOLPriceFromCoinGecko,
-  getSOLPriceFromCoinbase,
+  getSOLPriceFromJupiter,
   getRealSOLPrice,
   solPriceCache
 };

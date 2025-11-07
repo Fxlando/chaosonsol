@@ -143,10 +143,10 @@ async function loadDashboard() {
         console.error('Error details:', error.message);
         // Fallback to demo data
         stats = {
-            wallets: { total: 40, active: 40 },
+            wallets: { total: 0, active: 0 },
             balance: { sol: 0, usd: 0 },
-            groups: 2,
-            solPrice: 180,
+            groups: 0,
+            solPrice: null,
             network: 'mainnet-beta'
         };
         console.log('⚠️ Using fallback demo data');
@@ -166,7 +166,12 @@ function updateDashboardStats() {
     document.getElementById('total-groups').textContent = stats.groups;
     
     // Update SOL price
-    document.getElementById('sol-price').textContent = `$${stats.solPrice.toFixed(2)}`;
+    const solPriceEl = document.getElementById('sol-price');
+    if (typeof stats.solPrice === 'number' && !Number.isNaN(stats.solPrice)) {
+        solPriceEl.textContent = `$${stats.solPrice.toFixed(2)}`;
+    } else {
+        solPriceEl.textContent = 'N/A';
+    }
 }
 
 async function updateSystemStatus() {
@@ -587,8 +592,12 @@ function startAutoRefresh() {
             const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
             const response = await fetch(endpoint);
             const data = await response.json();
-            document.getElementById('sol-price').textContent = 
-                `$${data.solPrice.toFixed(2)}`;
+            const solPriceEl = document.getElementById('sol-price');
+            if (typeof data.solPrice === 'number' && !Number.isNaN(data.solPrice)) {
+                solPriceEl.textContent = `$${data.solPrice.toFixed(2)}`;
+            } else {
+                solPriceEl.textContent = 'N/A';
+            }
         } catch (error) {}
     }, 5000);
 }

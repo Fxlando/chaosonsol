@@ -8,6 +8,16 @@ const pumpWallets = require('../../pump-wallets-public.json');
 const RPC_URL = 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
 const LAMPORTS_PER_SOL = 1000000000;
 
+const JUPITER_PRICE_ENDPOINTS = [
+  'https://price.jup.ag/v6/price?ids=SOL',
+  'https://price.jup.ag/v4/price?ids=SOL'
+];
+
+const SOL_PRICE_KEYS = [
+  'SOL',
+  'So11111111111111111111111111111111111111112'
+];
+
 async function getBalance(publicKey) {
   try {
     const response = await axios.post(RPC_URL, {
@@ -29,16 +39,62 @@ async function getBalance(publicKey) {
   }
 }
 
-async function getSolPrice() {
-  try {
-    const response = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL', {
-      timeout: 3000
-    });
-    return parseFloat(response.data.data.rates.USD);
-  } catch (error) {
-    console.error('Error fetching SOL price:', error.message);
-    return 180; // fallback price
+function extractPriceFromResponse(responseData) {
+  if (!responseData || typeof responseData !== 'object') {
+    return null;
   }
+
+  const data = responseData.data;
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  for (const key of SOL_PRICE_KEYS) {
+    const entry = data[key];
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    if (entry.price !== undefined) {
+      const price = Number(entry.price);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+
+    if (entry.usd !== undefined) {
+      const price = Number(entry.usd);
+      if (!Number.isNaN(price)) {
+        return price;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function getSolPrice() {
+  let lastError;
+
+  for (const endpoint of JUPITER_PRICE_ENDPOINTS) {
+    try {
+      const response = await axios.get(endpoint, {
+        timeout: 5000
+      });
+
+      const price = extractPriceFromResponse(response.data);
+      if (price !== null) {
+        return price;
+      }
+
+      lastError = new Error(`No SOL price returned from Jupiter endpoint ${endpoint}`);
+    } catch (error) {
+      lastError = error;
+      console.error(`Error fetching SOL price from Jupiter (${endpoint}):`, error.message);
+    }
+  }
+
+  throw lastError || new Error('Unable to fetch SOL price from Jupiter');
 }
 
 exports.handler = async (event, context) => {
@@ -86,7 +142,8 @@ exports.handler = async (event, context) => {
         usd: totalBalance * solPrice
       },
       groups: 2,
-      solPrice: solPrice,
+      solPrice,
+      priceSource: 'jupiter',
       network: 'mainnet-beta'
     };
 

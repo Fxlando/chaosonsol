@@ -2,9 +2,9 @@
 // 100% Solana Blockchain Integration
 
 let solana;
-let selectedWallets = new Set();
-let currentView = 'wallets';
-let autoScroll = true;
+let rtSelectedWallets = new Set();
+let rtCurrentView = 'wallets';
+let rtAutoScroll = true;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -368,9 +368,9 @@ function copyAddress(address) {
 
 function toggleWalletSelection(address, isSelected) {
     if (isSelected) {
-        selectedWallets.add(address);
+        rtSelectedWallets.add(address);
     } else {
-        selectedWallets.delete(address);
+        rtSelectedWallets.delete(address);
     }
     updateBulkActionsUI();
 }
@@ -378,9 +378,9 @@ function toggleWalletSelection(address, isSelected) {
 function updateBulkActionsUI() {
     const bulkActions = document.getElementById('bulk-actions');
     if (bulkActions) {
-        if (selectedWallets.size > 0) {
+        if (rtSelectedWallets.size > 0) {
             bulkActions.style.display = 'block';
-            bulkActions.innerHTML = `${selectedWallets.size} wallet(s) selected`;
+            bulkActions.innerHTML = `${rtSelectedWallets.size} wallet(s) selected`;
         } else {
             bulkActions.style.display = 'none';
         }
@@ -403,7 +403,7 @@ function addConsoleLog(message, type = 'info') {
     consoleOutput.appendChild(logEntry);
     
     // Auto-scroll if enabled
-    if (autoScroll) {
+    if (rtAutoScroll) {
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
 }
@@ -461,7 +461,7 @@ function switchView(viewName) {
         return;
     }
     
-    currentView = viewName;
+    rtCurrentView = viewName;
     
     // Hide ALL views and pages
     const allViews = document.querySelectorAll('.view');
@@ -1181,7 +1181,7 @@ function startInstantTradingRefresh() {
     }
     
     instantTradingRefreshInterval = setInterval(() => {
-        if (currentView === 'instant') {
+        if (rtCurrentView === 'instant') {
             loadInstantTradingData();
         }
     }, 5000); // Refresh every 5 seconds

@@ -380,7 +380,7 @@ function updateBulkActions() {
  */
 async function executeGenerateWallets() {
   try {
-    const countInput = document.getElementById('generate-count-input');
+    const countInput = document.getElementById('generate-count');
     if (!countInput) {
       showToast('Generate count input not found', 'error');
       return;
@@ -392,6 +392,8 @@ async function executeGenerateWallets() {
       return;
     }
     
+    window.closeModal?.('generate-modal');
+
     showToast(`Generating ${count} wallets...`, 'info');
     addConsoleLog(`Starting generation of ${count} wallets`, 'info');
     
@@ -421,6 +423,8 @@ async function executeGenerateWallets() {
       
       // Navigate back to wallets view
       navigateToPage('wallets');
+
+      countInput.value = '';
     } else {
       throw new Error(result.error || 'Failed to generate wallets');
     }

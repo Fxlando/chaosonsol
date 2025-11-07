@@ -430,6 +430,45 @@ function clearConsole() {
     addConsoleLog('Console cleared', 'info');
 }
 
+const missingGlobalHandlers = [
+    'executeFundWallets',
+    'executeWithdrawWallets',
+    'executeTagWallets',
+    'executeWarmWallets',
+    'executeRedistributeWallets',
+    'executeCreateToken',
+    'executeCopyToken',
+    'executeImportToken',
+    'loadWalletsForTokenCreation',
+    'selectTokenByMint',
+    'executeQuickBuy',
+    'executeQuickSell',
+    'executePumpFunBuy',
+    'executePumpFunSell',
+    'executeAddLiquidity',
+    'executeRemoveLiquidity',
+    'executeManualSwap',
+    'runQuickAction'
+];
+
+function ensureGlobalFunction(name) {
+    if (typeof window[name] === 'function') {
+        return;
+    }
+
+    window[name] = (...args) => {
+        const message = `${name} is not available in this build yet.`;
+        if (typeof notify === 'function') {
+            notify(message, 'warning');
+        } else {
+            console.warn(message, { args });
+        }
+        return null;
+    };
+}
+
+missingGlobalHandlers.forEach(ensureGlobalFunction);
+
 // Initialize event listeners
 function initializeEventListeners() {
     console.log('Setting up navigation listeners...');

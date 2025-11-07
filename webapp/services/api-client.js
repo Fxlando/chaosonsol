@@ -19,6 +19,13 @@ class APIClient {
     this.isConnected = false;
   }
 
+  buildUrl(path) {
+    if (!path.startsWith('/')) {
+      path = `/${path}`;
+    }
+    return `${this.baseURL}${path}`;
+  }
+
   /**
    * Safe fetch with SSL error retry logic
    */
@@ -110,7 +117,7 @@ class APIClient {
    */
   async health(retries = 3) {
     try {
-      const response = await this.safeFetch(`${this.baseURL}/health`, { method: 'GET' }, retries);
+      const response = await this.safeFetch(this.buildUrl('/health'), { method: 'GET' }, retries);
       if (response.ok) {
         return await response.json();
       }
@@ -125,7 +132,7 @@ class APIClient {
    */
   async initializeApp(config = {}) {
     try {
-      const response = await this.safeFetch(`${this.baseURL}/api/initialize`, {
+      const response = await this.safeFetch(this.buildUrl('/initialize'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config })
@@ -140,7 +147,7 @@ class APIClient {
    * Wallet operations
    */
   async createWallet(name, tags = []) {
-    const response = await fetch(`${this.baseURL}/api/wallets/create`, {
+    const response = await fetch(this.buildUrl('/wallets/create'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, tags })
@@ -149,7 +156,7 @@ class APIClient {
   }
 
   async importWallet(privateKey, name, tags = []) {
-    const response = await fetch(`${this.baseURL}/api/wallets/import`, {
+    const response = await fetch(this.buildUrl('/wallets/import'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ privateKey, name, tags })
@@ -158,7 +165,7 @@ class APIClient {
   }
 
   async getAllWallets() {
-    const response = await this.safeFetch(`${this.baseURL}/api/wallets`);
+    const response = await this.safeFetch(this.buildUrl('/wallets'));
     if (!response.ok) {
       throw new Error(`Failed to get wallets: ${response.status}`);
     }
@@ -166,7 +173,7 @@ class APIClient {
   }
 
   async getWallet(walletId) {
-    const response = await fetch(`${this.baseURL}/api/wallets/${walletId}`);
+    const response = await fetch(this.buildUrl(`/wallets/${walletId}`));
     return await response.json();
   }
 
@@ -174,7 +181,7 @@ class APIClient {
    * Trading operations
    */
   async buyToken(walletId, tokenMint, solAmount, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/trading/buy`, {
+    const response = await fetch(this.buildUrl('/trading/buy'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, solAmount, options })
@@ -183,7 +190,7 @@ class APIClient {
   }
 
   async sellToken(walletId, tokenMint, tokenAmount, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/trading/sell`, {
+    const response = await fetch(this.buildUrl('/trading/sell'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, tokenAmount, options })
@@ -192,7 +199,7 @@ class APIClient {
   }
 
   async swapTokens(walletId, inputMint, outputMint, inputAmount, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/trading/swap`, {
+    const response = await fetch(this.buildUrl('/trading/swap'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, inputMint, outputMint, inputAmount, options })
@@ -206,12 +213,12 @@ class APIClient {
       outputMint,
       amount: amount.toString()
     });
-    const response = await fetch(`${this.baseURL}/api/trading/quote?${params}`);
+    const response = await fetch(this.buildUrl(`/trading/quote?${params}`));
     return await response.json();
   }
 
   async getTokenPrice(tokenMint) {
-    const response = await fetch(`${this.baseURL}/api/trading/price/${tokenMint}`);
+    const response = await fetch(this.buildUrl(`/trading/price/${tokenMint}`));
     return await response.json();
   }
 
@@ -219,7 +226,7 @@ class APIClient {
    * Token launch
    */
   async launchToken(walletId, metadata, initialBuy = 0, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/tokens/launch`, {
+    const response = await fetch(this.buildUrl('/tokens/launch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, metadata, initialBuy, options })
@@ -228,7 +235,7 @@ class APIClient {
   }
 
   async createToken(walletId, metadata, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/tokens/create`, {
+    const response = await fetch(this.buildUrl('/tokens/create'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, metadata, options })
@@ -240,7 +247,7 @@ class APIClient {
    * Smart Sell
    */
   async addSmartSellPosition(walletId, tokenMint, entryPrice, amount, options = {}) {
-    const response = await fetch(`${this.baseURL}/api/smartsell/add`, {
+    const response = await fetch(this.buildUrl('/smartsell/add'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, entryPrice, amount, options })
@@ -249,12 +256,13 @@ class APIClient {
   }
 
   async getSmartSellPositions() {
-    const response = await fetch(`${this.baseURL}/api/smartsell/positions`);
+    const response = await fetch(this.buildUrl('/smartsell/positions'));
     return await response.json();
   }
 
   async removeSmartSellPosition(walletId, tokenMint) {
-    const response = await fetch(`${this.baseURL}/api/smartsell/positions/${walletId}/${tokenMint}`, {
+    const response = await fetch(this.buildUrl(`/smartsell/positions/${walletId}/${tokenMint}`), {
+    const response = await fetch(this.buildUrl(`/smartsell/positions/${walletId}/${tokenMint}`), {
       method: 'DELETE'
     });
     return await response.json();
@@ -288,7 +296,7 @@ class APIClient {
    * Status
    */
   async getStatus() {
-    const response = await fetch(`${this.baseURL}/api/status`);
+    const response = await fetch(this.buildUrl('/status'));
     return await response.json();
   }
 

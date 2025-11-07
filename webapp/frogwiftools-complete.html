@@ -2953,34 +2953,34 @@
                     console.warn('Lucide icons library not loaded');
                 }
                 
-                // Initialize with empty wallets - will be loaded from on-chain data
-                wallets = [];
+            // Initialize with empty wallets - will be loaded from on-chain data
+            wallets = [];
                 
                 // Check if required functions exist before calling
                 if (typeof renderWallets === 'function') {
-                    renderWallets();
+            renderWallets();
                 } else {
                     console.error('renderWallets function not found!');
                 }
                 
                 if (typeof updateTotalBalance === 'function') {
-                    updateTotalBalance();
+            updateTotalBalance();
                 }
                 
                 if (typeof initializeEventListeners === 'function') {
-                    initializeEventListeners();
+            initializeEventListeners();
                 }
                 
                 if (typeof initializeCollectFees === 'function') {
-                    initializeCollectFees();
+            initializeCollectFees();
                 }
                 
                 if (typeof startStatusUpdates === 'function') {
-                    startStatusUpdates();
+            startStatusUpdates();
                 }
                 
                 if (typeof addConsoleLog === 'function') {
-                    addConsoleLog('System initialized - Ready for trading', 'info');
+            addConsoleLog('System initialized - Ready for trading', 'info');
                 }
                 
                 // Test if onclick functions are available
@@ -3575,37 +3575,37 @@
             try {
                 console.log('navigateToPage called with:', page);
                 
-                // Hide all views
-                const views = document.querySelectorAll('.view');
+            // Hide all views
+            const views = document.querySelectorAll('.view');
                 if (views.length === 0) {
                     console.error('No .view elements found!');
                     return;
                 }
-                views.forEach(view => view.classList.add('hidden'));
-                
-                // Show the requested page
-                const targetPage = document.getElementById(page + '-page');
-                if (targetPage) {
-                    targetPage.classList.remove('hidden');
+            views.forEach(view => view.classList.add('hidden'));
+            
+            // Show the requested page
+            const targetPage = document.getElementById(page + '-page');
+            if (targetPage) {
+                targetPage.classList.remove('hidden');
                     console.log('Showing page:', page + '-page');
                     
                     if (typeof addConsoleLog === 'function') {
-                        addConsoleLog(`Navigated to ${page} page`, 'info');
+                addConsoleLog(`Navigated to ${page} page`, 'info');
                     }
                     
                     // Load wallets when navigating to create-token page
                     if (page === 'create-token' && typeof loadWalletsForTokenCreation === 'function') {
                         loadWalletsForTokenCreation();
                     }
-                } else {
+            } else {
                     console.log('Page not found, trying modal:', page + '-modal');
-                    // If no dedicated page, show wallets view and open modal
+                // If no dedicated page, show wallets view and open modal
                     const walletsView = document.getElementById('wallets-view');
                     if (walletsView) {
                         walletsView.classList.remove('hidden');
                     }
                     if (typeof openModal === 'function') {
-                        openModal(page + '-modal');
+                openModal(page + '-modal');
                     } else {
                         console.error('openModal function not found!');
                     }
@@ -3632,25 +3632,25 @@
                 const count = countInput.value;
                 
                 if (typeof showToast === 'function') {
-                    showToast(`Generating ${count} wallets...`, 'info');
+            showToast(`Generating ${count} wallets...`, 'info');
                 }
                 if (typeof addConsoleLog === 'function') {
-                    addConsoleLog(`Starting generation of ${count} wallets`, 'info');
+            addConsoleLog(`Starting generation of ${count} wallets`, 'info');
                 }
-                
-                setTimeout(() => {
+            
+            setTimeout(() => {
                     if (typeof showToast === 'function') {
-                        showToast(`${count} wallets generated successfully!`, 'success');
+                showToast(`${count} wallets generated successfully!`, 'success');
                     }
                     if (typeof addConsoleLog === 'function') {
-                        addConsoleLog(`Generated ${count} new wallets`, 'success');
+                addConsoleLog(`Generated ${count} new wallets`, 'success');
                     }
-                    navigateToPage('wallets');
-                }, 2000);
+                navigateToPage('wallets');
+            }, 2000);
             } catch (error) {
                 console.error('Error in executeGenerateWallets:', error);
                 alert('Error generating wallets: ' + error.message);
-            }
+        }
         }
         window.executeGenerateWallets = executeGenerateWallets;
 
@@ -3967,8 +3967,8 @@
         function selectTokenPlatform(platform) {
             try {
                 console.log('selectTokenPlatform called with:', platform);
-                const pumpfunBtn = document.getElementById('create-pumpfun-btn');
-                const raydiumBtn = document.getElementById('create-raydium-btn');
+            const pumpfunBtn = document.getElementById('create-pumpfun-btn');
+            const raydiumBtn = document.getElementById('create-raydium-btn');
                 
                 if (!pumpfunBtn || !raydiumBtn) {
                     console.error('Platform buttons not found!');
@@ -3976,18 +3976,18 @@
                 }
                 
                 selectedTokenPlatform = platform;
-                
-                if (platform === 'pumpfun') {
-                    pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-                    raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-                } else {
-                    pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
-                    raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
-                }
-                
+            
+            if (platform === 'pumpfun') {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+            } else {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+            }
+            
                 if (typeof addConsoleLog === 'function') {
-                    addConsoleLog(`Selected platform: ${platform}`, 'info');
-                }
+            addConsoleLog(`Selected platform: ${platform}`, 'info');
+        }
             } catch (error) {
                 console.error('Error in selectTokenPlatform:', error);
                 alert('Error selecting platform: ' + error.message);
@@ -4061,7 +4061,7 @@
             try {
                 showToast(`Creating token "${name}" (${symbol}) on ${selectedTokenPlatform}...`, 'info');
                 addConsoleLog(`Creating token: ${name} (${symbol}) on ${selectedTokenPlatform}`, 'info');
-                
+            
                 // Prepare metadata
                 const metadata = {
                     name: name,
@@ -4128,8 +4128,8 @@
                     document.getElementById('use-vanity').checked = false;
                     
                     // Navigate to tokens page after a short delay
-                    setTimeout(() => {
-                        navigateToPage('tokens');
+            setTimeout(() => {
+                navigateToPage('tokens');
                     }, 2000);
                 } else {
                     throw new Error(result.error || 'Token creation failed');
@@ -4160,7 +4160,7 @@
                 const response = await fetch(`${API_BASE}/wallets`);
                 if (!response.ok) {
                     throw new Error('Failed to fetch wallets');
-                }
+        }
                 
                 const data = await response.json();
                 const walletList = data.wallets || [];

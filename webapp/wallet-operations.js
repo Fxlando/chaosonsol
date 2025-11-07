@@ -3,7 +3,7 @@
  * Handles all wallet operations: generate, import, fund, withdraw, tag, warm, etc.
  */
 
-const API_BASE = window.location.hostname === 'localhost' 
+var API_BASE = window.location.hostname === 'localhost' 
   ? 'http://localhost:3000' 
   : '/.netlify/functions';
 

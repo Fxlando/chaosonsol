@@ -1,5 +1,5 @@
 // Chaos Bot Control Panel - Advanced Trading Platform
-const API_BASE = window.location.hostname === 'localhost' 
+var API_BASE = window.location.hostname === 'localhost' 
   ? 'http://localhost:3000' 
   : (window.__CHAOSBOT_API_BASE__ || '/.netlify/functions');
 let isBackendAvailable = false;

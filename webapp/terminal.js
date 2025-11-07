@@ -4,7 +4,7 @@ console.log('System initializing...');
 
 // Configuration
 const IS_NETLIFY = window.location.hostname !== 'localhost';
-const API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
+var API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
 
 // State
 let systemData = {

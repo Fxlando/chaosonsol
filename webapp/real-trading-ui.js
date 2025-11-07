@@ -1200,3 +1200,281 @@ window.loadInstantTradingData = loadInstantTradingData;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 
+// ==================== UI HELPER REGISTRATION ====================
+
+const uiHelperState = {
+    fundMode: 'standard',
+    tagExecutor: 'jito',
+    warmExecutor: 'jito',
+    redistributeMode: 'standard',
+    tokenPlatform: 'pumpfun',
+    copyPlatform: 'pumpfun',
+    blockZeroMode: 'bundled',
+    tagFilters: new Set()
+};
+
+function registerGlobalHandler(name, handler) {
+    if (typeof window[name] !== 'function') {
+        window[name] = handler;
+    }
+}
+
+function notify(message, type = 'info') {
+    if (typeof showToast === 'function') {
+        showToast(message, type);
+    } else {
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+    if (typeof addConsoleLog === 'function') {
+        addConsoleLog(message, type);
+    }
+}
+
+function getElement(id) {
+    return document.getElementById(id);
+}
+
+registerGlobalHandler('navigateToPage', (page) => {
+    if (!page) return;
+
+    const modalId = `${page}-modal`;
+    if (getElement(modalId)) {
+        window.openModal(modalId);
+        return;
+    }
+
+    const targetView = getElement(`${page}-view`) || getElement(`${page}-page`);
+    if (targetView && typeof switchView === 'function') {
+        const parentView = targetView.id.endsWith('-page') ? targetView.id.replace('-page', '') : page;
+        switchView(parentView);
+        setTimeout(() => targetView.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+        return;
+    }
+
+    notify(`Unknown page: ${page}`, 'warning');
+});
+
+registerGlobalHandler('openModal', (modalId) => {
+    const modal = getElement(modalId);
+    if (!modal) {
+        notify(`Unable to open modal: ${modalId}`, 'error');
+        return;
+    }
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.focus?.();
+});
+
+registerGlobalHandler('closeModal', (modalId) => {
+    const modal = getElement(modalId);
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+});
+
+registerGlobalHandler('executeGenerate', () => {
+    window.openModal('generate-modal');
+    const input = getElement('generate-count');
+    input?.focus();
+});
+
+registerGlobalHandler('executeTokenLaunch', () => {
+    navigateToPage('launch-token');
+    notify('Prepare token launch configuration below.', 'info');
+});
+
+function applyToggleClasses(primaryId, secondaryId, isPrimaryActive) {
+    const primary = getElement(primaryId);
+    const secondary = getElement(secondaryId);
+    if (!primary || !secondary) return;
+
+    primary.classList.add('border-white', 'bg-neutral-800');
+    secondary.classList.remove('border-white');
+    secondary.classList.add('border-neutral-700');
+
+    if (!isPrimaryActive) {
+        primary.classList.remove('border-white');
+        primary.classList.add('border-neutral-700');
+        secondary.classList.add('border-white', 'bg-neutral-800');
+    }
+}
+
+registerGlobalHandler('selectFundMode', (mode) => {
+    uiHelperState.fundMode = mode;
+    applyToggleClasses('fund-standard-mode', 'fund-mixer-mode', mode === 'standard');
+    notify(`Funding mode set to ${mode.toUpperCase()}`, 'info');
+});
+
+registerGlobalHandler('selectTagExecutor', (executor) => {
+    uiHelperState.tagExecutor = executor;
+    const jitoBtn = getElement('tag-jito-btn');
+    const rpcBtn = getElement('tag-rpc-btn');
+    if (!jitoBtn || !rpcBtn) return;
+    jitoBtn.classList.toggle('bg-purple-600', executor === 'jito');
+    jitoBtn.classList.toggle('bg-neutral-800', executor !== 'jito');
+    rpcBtn.classList.toggle('bg-purple-600', executor === 'rpc');
+    rpcBtn.classList.toggle('bg-neutral-800', executor !== 'rpc');
+    notify(`Tag executor switched to ${executor.toUpperCase()}`, 'info');
+});
+
+registerGlobalHandler('toggleTag', (tag) => {
+    const button = document.querySelector(`[onclick="toggleTag('${tag}')"]`);
+    if (!button) return;
+    if (uiHelperState.tagFilters.has(tag)) {
+        uiHelperState.tagFilters.delete(tag);
+        button.classList.remove('bg-blue-600', 'text-white');
+        button.classList.add('bg-neutral-700');
+    } else {
+        uiHelperState.tagFilters.add(tag);
+        button.classList.add('bg-blue-600', 'text-white');
+        button.classList.remove('bg-neutral-700');
+    }
+    notify(`Tag filter updated: ${Array.from(uiHelperState.tagFilters).join(', ') || 'none'}`, 'info');
+});
+
+registerGlobalHandler('selectWarmExecutor', (executor) => {
+    uiHelperState.warmExecutor = executor;
+    const jitoBtn = getElement('warm-jito-btn');
+    const rpcBtn = getElement('warm-rpc-btn');
+    if (!jitoBtn || !rpcBtn) return;
+    jitoBtn.classList.toggle('bg-purple-600', executor === 'jito');
+    jitoBtn.classList.toggle('bg-neutral-800', executor !== 'jito');
+    rpcBtn.classList.toggle('bg-purple-600', executor === 'rpc');
+    rpcBtn.classList.toggle('bg-neutral-800', executor !== 'rpc');
+    notify(`Warm executor set to ${executor.toUpperCase()}`, 'info');
+});
+
+registerGlobalHandler('selectRedistributeMode', (mode) => {
+    uiHelperState.redistributeMode = mode;
+    applyToggleClasses('redistribute-standard-mode', 'redistribute-mixer-mode', mode === 'standard');
+    notify(`Redistribution mode set to ${mode.toUpperCase()}`, 'info');
+});
+
+registerGlobalHandler('switchTokenTab', (tab) => {
+    const activeBtn = getElement('token-active-tab');
+    const archivedBtn = getElement('token-archived-tab');
+    const showActive = tab === 'Active';
+    activeBtn?.classList.toggle('bg-neutral-700', showActive);
+    activeBtn?.classList.toggle('text-white', showActive);
+    archivedBtn?.classList.toggle('bg-neutral-700', !showActive);
+    archivedBtn?.classList.toggle('text-white', !showActive);
+    notify(`Switched to ${tab} tokens`, 'info');
+});
+
+registerGlobalHandler('selectTokenPlatform', (platform) => {
+    uiHelperState.tokenPlatform = platform;
+    const pumpBtn = getElement('create-pumpfun-btn');
+    const raydiumBtn = getElement('create-raydium-btn');
+    if (!pumpBtn || !raydiumBtn) return;
+    pumpBtn.classList.toggle('border-white', platform === 'pumpfun');
+    pumpBtn.classList.toggle('bg-white', platform === 'pumpfun');
+    pumpBtn.classList.toggle('text-black', platform === 'pumpfun');
+    raydiumBtn.classList.toggle('border-white', platform === 'raydium');
+    raydiumBtn.classList.toggle('bg-white', platform === 'raydium');
+    raydiumBtn.classList.toggle('text-black', platform === 'raydium');
+    notify(`Token platform set to ${platform}`, 'info');
+});
+
+registerGlobalHandler('selectCopyPlatform', (platform) => {
+    uiHelperState.copyPlatform = platform;
+    const pumpBtn = getElement('copy-pumpfun-btn');
+    const raydiumBtn = getElement('copy-raydium-btn');
+    pumpBtn?.classList.toggle('border-white', platform === 'pumpfun');
+    pumpBtn?.classList.toggle('bg-white', platform === 'pumpfun');
+    pumpBtn?.classList.toggle('text-black', platform === 'pumpfun');
+    raydiumBtn?.classList.toggle('border-white', platform === 'raydium');
+    raydiumBtn?.classList.toggle('bg-white', platform === 'raydium');
+    raydiumBtn?.classList.toggle('text-black', platform === 'raydium');
+    notify(`Copy platform set to ${platform}`, 'info');
+});
+
+registerGlobalHandler('selectBlockZeroMode', (mode) => {
+    uiHelperState.blockZeroMode = mode;
+    const bundled = getElement('block-zero-bundled');
+    const undetectable = getElement('block-zero-undetectable');
+    bundled?.classList.toggle('border-white', mode === 'bundled');
+    undetectable?.classList.toggle('border-white', mode === 'undetectable');
+    notify(`Block zero mode set to ${mode}`, 'info');
+});
+
+registerGlobalHandler('uploadTokenImage', () => {
+    notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');
+});
+
+function handleAutomationTask(taskName) {
+    navigateToPage('automations');
+    notify(`${taskName} task queued`, 'info');
+}
+
+registerGlobalHandler('executeAddVolumeTask', () => handleAutomationTask('Volume generation'));
+registerGlobalHandler('executeBulkSellTask', () => handleAutomationTask('Bulk sell'));
+registerGlobalHandler('executeBumpTask', () => handleAutomationTask('Bump'));
+registerGlobalHandler('executeSellBuybackTask', () => handleAutomationTask('Sell/Buyback'));
+
+registerGlobalHandler('refreshFeeWallet', async () => {
+    notify('Refreshing fee wallet...', 'info');
+    try {
+        await loadRealData();
+        notify('Fee wallet refreshed from on-chain data', 'success');
+    } catch (error) {
+        notify(`Unable to refresh fee wallet: ${error.message}`, 'error');
+    }
+});
+
+function copyInnerText(elementId, label) {
+    const element = getElement(elementId);
+    if (!element) {
+        notify(`${label} not available`, 'error');
+        return;
+    }
+    const value = element.textContent.trim();
+    navigator.clipboard.writeText(value).then(() => {
+        notify(`${label} copied to clipboard`, 'success');
+    }).catch(() => {
+        notify(`Unable to copy ${label.toLowerCase()}`, 'error');
+    });
+}
+
+registerGlobalHandler('copyFeeWalletAddress', () => copyInnerText('fee-wallet-address', 'Fee wallet address'));
+registerGlobalHandler('copyFeeWalletKey', () => {
+    const storedKeyElement = getElement('fee-wallet-key');
+    if (storedKeyElement) {
+        copyInnerText('fee-wallet-key', 'Fee wallet private key');
+        return;
+    }
+    notify('Fee wallet private key is stored securely. Download wallets to export keys.', 'warning');
+});
+
+registerGlobalHandler('openDocumentation', () => {
+    window.open('https://docs.chaosbotonsol.xyz', '_blank', 'noopener');
+});
+
+registerGlobalHandler('sharePlatform', async () => {
+    const url = window.location.href;
+    const title = 'ChaosOnSolana Trading Platform';
+    if (navigator.share) {
+        try {
+            await navigator.share({ title, url });
+            notify('Share dialog opened.', 'success');
+        } catch (err) {
+            notify(`Share cancelled: ${err.message}`, 'warning');
+        }
+        return;
+    }
+
+    navigator.clipboard.writeText(url).then(() => {
+        notify('Share link copied to clipboard', 'success');
+    }).catch(() => notify('Unable to copy link', 'error'));
+});
+
+// Ensure defaults are applied on load
+document.addEventListener('DOMContentLoaded', () => {
+    window.selectFundMode?.(uiHelperState.fundMode);
+    window.selectTagExecutor?.(uiHelperState.tagExecutor);
+    window.selectWarmExecutor?.(uiHelperState.warmExecutor);
+    window.selectRedistributeMode?.(uiHelperState.redistributeMode);
+    window.selectTokenPlatform?.(uiHelperState.tokenPlatform);
+    window.selectCopyPlatform?.(uiHelperState.copyPlatform);
+    window.selectBlockZeroMode?.(uiHelperState.blockZeroMode);
+});
+

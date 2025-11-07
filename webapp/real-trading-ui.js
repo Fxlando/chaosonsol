@@ -837,6 +837,7 @@ async function collectAllFees(options = {}) {
     addConsoleLog('💎 Starting fee collection...', 'info');
     
     const result = await multiWalletManager.collectFees(targetWallet);
+    window.__reclaimRentConfig = null;
     
     if (result.success) {
         addConsoleLog(`✅ Fee collection complete!`, 'success');

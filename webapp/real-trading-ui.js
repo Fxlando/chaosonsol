@@ -1431,10 +1431,27 @@ registerGlobalHandler('closeModal', (modalId) => {
     modal.setAttribute('aria-hidden', 'true');
 });
 
-registerGlobalHandler('executeGenerate', () => {
-    window.openModal('generate-modal');
-    const input = getElement('generate-count');
-    input?.focus();
+registerGlobalHandler('executeGenerate', async () => {
+    const modal = getElement('generate-modal');
+    if (!modal) {
+        notify('Generate modal unavailable right now.', 'error');
+        return;
+    }
+
+    const isHidden = modal.classList.contains('hidden') || modal.getAttribute('aria-hidden') === 'true';
+
+    if (isHidden) {
+        window.openModal('generate-modal');
+        const input = getElement('generate-count');
+        input?.focus();
+        return;
+    }
+
+    if (typeof window.executeGenerateWallets === 'function') {
+        await window.executeGenerateWallets({ source: 'modal' });
+    } else {
+        notify('Wallet generator is not ready yet.', 'error');
+    }
 });
 
 registerGlobalHandler('executeTokenLaunch', () => {

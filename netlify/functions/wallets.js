@@ -466,13 +466,20 @@ export const handler = async (event, context) => {
     };
   } catch (error) {
     console.error('Error in wallets function:', error);
+    const fallbackWallets = Array.from(walletStorage.values()).map((wallet) => ({
+      ...wallet,
+      balance: wallet.balance || 0,
+      usdValue: wallet.usdValue || 0
+    }));
+
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         success: false,
         error: error.message,
-        message: 'Failed to process wallet request'
+        message: 'Failed to process wallet request, returning cached data.',
+        wallets: fallbackWallets
       })
     };
   }

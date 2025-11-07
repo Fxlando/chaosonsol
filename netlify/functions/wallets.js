@@ -3,15 +3,13 @@ import axios from 'axios';
 import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
 import path from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = process.env.LAMBDA_TASK_ROOT || process.cwd();
 
 function loadJson(relativePath) {
   try {
-    const absolutePath = path.resolve(__dirname, relativePath);
+    const absolutePath = path.resolve(PROJECT_ROOT, relativePath);
     const raw = readFileSync(absolutePath, 'utf-8');
     return JSON.parse(raw);
   } catch (error) {
@@ -21,8 +19,8 @@ function loadJson(relativePath) {
 }
 
 // Load wallet data
-const volumeWallets = loadJson('../../volume-wallets-public.json');
-const pumpWallets = loadJson('../../pump-wallets-public.json');
+const volumeWallets = loadJson('volume-wallets-public.json');
+const pumpWallets = loadJson('pump-wallets-public.json');
 
 // In-memory wallet storage (in production, use a database)
 let walletStorage = new Map();

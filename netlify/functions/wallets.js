@@ -3,10 +3,9 @@ import axios from 'axios';
 import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { readFileSync } from 'fs';
-import path from 'path';
 import { fileURLToPath } from 'url';
+import path from 'path';
 
-// Resolve local JSON files in ESM context
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -77,17 +76,6 @@ initializeWalletStorage();
 const RPC_URL = process.env.RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
 const connection = new Connection(RPC_URL, 'confirmed');
 
-async function getBalance(publicKey) {
-  try {
-    const pubkey = new PublicKey(publicKey);
-    const balance = await connection.getBalance(pubkey);
-    return balance / LAMPORTS_PER_SOL;
-  } catch (error) {
-    console.error('Error getting balance:', error);
-    return 0;
-  }
-}
-
 async function getSolPrice() {
   try {
     const response = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL', {
@@ -100,22 +88,73 @@ async function getSolPrice() {
 }
 
 async function getAllWalletsWithBalances() {
-  const solPrice = await getSolPrice();
   const wallets = Array.from(walletStorage.values());
-  
-  // Fetch balances for all wallets
-  const walletsWithBalances = await Promise.all(
-    wallets.map(async (wallet) => {
-      const balance = await getBalance(wallet.publicKey || wallet.address);
-      return {
-        ...wallet,
-        balance: balance,
-        usdValue: balance * solPrice
-      };
-    })
-  );
-  
-  return walletsWithBalances;
+
+  if (wallets.length === 0) {
+    return [];
+  }
+
+  const entries = wallets.map((wallet) => {
+    const keyString = wallet.publicKey || wallet.address;
+
+    if (!keyString) {
+      return { wallet, publicKey: null, keyString: null };
+    }
+
+    try {
+      const publicKey = new PublicKey(keyString);
+      return { wallet, publicKey, keyString: publicKey.toBase58() };
+    } catch (error) {
+      console.error(`Invalid public key for wallet ${wallet.id || keyString}:`, error.message);
+      return { wallet, publicKey: null, keyString: null };
+    }
+  });
+
+  const publicKeys = entries
+    .filter((entry) => entry.publicKey)
+    .map((entry) => entry.publicKey);
+
+  const accountsInfoPromise = (async () => {
+    if (publicKeys.length === 0) {
+      return [];
+    }
+
+    try {
+      return await connection.getMultipleAccountsInfo(publicKeys, 'confirmed');
+    } catch (error) {
+      console.error('Error fetching wallet account info:', error.message);
+      return new Array(publicKeys.length).fill(null);
+    }
+  })();
+
+  const solPricePromise = (async () => {
+    try {
+      return await getSolPrice();
+    } catch (error) {
+      console.error('Error fetching SOL price:', error.message);
+      return 0;
+    }
+  })();
+
+  const [accountsInfo, solPrice] = await Promise.all([accountsInfoPromise, solPricePromise]);
+
+  const accountMap = new Map();
+  publicKeys.forEach((key, index) => {
+    const info = accountsInfo[index] || null;
+    accountMap.set(key.toBase58(), info);
+  });
+
+  return entries.map((entry) => {
+    const accountInfo = entry.keyString ? accountMap.get(entry.keyString) : null;
+    const lamports = accountInfo?.lamports ?? 0;
+    const balance = lamports / LAMPORTS_PER_SOL;
+
+    return {
+      ...entry.wallet,
+      balance,
+      usdValue: balance * solPrice
+    };
+  });
 }
 
 async function generateWallet(name = null, tags = []) {

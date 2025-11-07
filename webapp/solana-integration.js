@@ -227,87 +227,60 @@ class SolanaIntegration {
             return this.cachedSolPrice;
         }
 
-        const JUPITER_PRICE_ENDPOINTS = [
-            'https://price.jup.ag/v6/price?ids=SOL',
-            'https://price.jup.ag/v4/price?ids=SOL'
-        ];
-
-        const SOL_PRICE_KEYS = [
-            'SOL',
-            'So11111111111111111111111111111111111111112'
-        ];
-
-        const tryJupiter = async () => {
-            let lastError;
-
-            for (const endpoint of JUPITER_PRICE_ENDPOINTS) {
-                try {
-                    const response = await fetch(endpoint);
-                    if (!response.ok) {
-                        throw new Error(`Jupiter request failed with status ${response.status}`);
-                    }
-
-                    const payload = await response.json();
-                    const data = payload?.data;
-
-                    if (data && typeof data === 'object') {
-                        for (const key of SOL_PRICE_KEYS) {
-                            const entry = data[key];
-                            const priceCandidate = entry?.price ?? entry?.usd;
-                            const price = Number(priceCandidate);
-
-                            if (Number.isFinite(price) && price > 0) {
-                                return price;
-                            }
-                        }
-                    }
-
-                    lastError = new Error('Jupiter payload missing SOL price');
-                } catch (error) {
-                    lastError = error;
-                    console.error(`Jupiter price fetch failed for ${endpoint}:`, error.message);
+        const providers = [
+            {
+                name: 'Coinbase',
+                url: 'https://api.coinbase.com/v2/exchange-rates?currency=SOL',
+                timeout: 5000,
+                parse: (payload) => {
+                    const price = Number(payload?.data?.rates?.USD);
+                    return Number.isFinite(price) && price > 0 ? price : null;
+                }
+            },
+            {
+                name: 'CoinGecko',
+                url: 'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
+                timeout: 5000,
+                parse: (payload) => {
+                    const price = Number(payload?.solana?.usd);
+                    return Number.isFinite(price) && price > 0 ? price : null;
                 }
             }
+        ];
 
-            if (lastError) {
-                throw lastError;
+        const fetchWithTimeout = async (url, timeoutMs) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                return response;
+            } finally {
+                clearTimeout(timeoutId);
             }
-
-            throw new Error('Unable to fetch SOL price from Jupiter');
         };
 
-        const tryCoinGecko = async () => {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-            if (!response.ok) {
-                throw new Error(`CoinGecko request failed with status ${response.status}`);
+        for (const provider of providers) {
+            try {
+                const response = await fetchWithTimeout(provider.url, provider.timeout);
+
+                if (!response.ok) {
+                    throw new Error(`${provider.name} request failed with status ${response.status}`);
+                }
+
+                const payload = await response.json();
+                const price = provider.parse(payload);
+
+                if (price === null) {
+                    throw new Error(`${provider.name} payload missing SOL price`);
+                }
+
+                this.cachedSolPrice = price;
+                this.cachedSolPriceTimestamp = Date.now();
+                return price;
+            } catch (error) {
+                console.warn(`${provider.name} price fetch failed: ${error.message}`);
             }
-
-            const payload = await response.json();
-            const price = Number(payload?.solana?.usd);
-
-            if (!Number.isFinite(price) || price <= 0) {
-                throw new Error('CoinGecko payload missing SOL price');
-            }
-
-            return price;
-        };
-
-        try {
-            const price = await tryJupiter();
-            this.cachedSolPrice = price;
-            this.cachedSolPriceTimestamp = Date.now();
-            return price;
-        } catch (jupiterError) {
-            console.warn('Primary SOL price fetch failed, falling back:', jupiterError.message);
-        }
-
-        try {
-            const price = await tryCoinGecko();
-            this.cachedSolPrice = price;
-            this.cachedSolPriceTimestamp = Date.now();
-            return price;
-        } catch (fallbackError) {
-            console.error('Fallback SOL price fetch failed:', fallbackError.message);
         }
 
         if (this.cachedSolPrice !== null) {
@@ -315,6 +288,7 @@ class SolanaIntegration {
             return this.cachedSolPrice;
         }
 
+        console.error('All SOL price providers failed; returning 0');
         return 0;
     }
 

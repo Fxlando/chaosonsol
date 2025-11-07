@@ -4,7 +4,8 @@
 let solana;
 let rtSelectedWallets = new Set();
 let rtCurrentView = 'wallets';
-let rtAutoScroll = true;
+let vanityKeyStore = [];
+let vanityVisibility = new Set();
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -54,7 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.warn('Error adding console log:', error);
     }
-    
+
+    loadVanityKeysFromStorage();
     console.log('✅ Real Trading Platform Ready');
 });
 
@@ -517,6 +519,10 @@ function switchView(viewName) {
 
     if (viewName === 'blueprint') {
         renderBlueprintList();
+    }
+
+    if (viewName === 'vanities') {
+        renderVanityList();
     }
 
     // Re-initialize Lucide icons for the new view
@@ -1219,8 +1225,11 @@ const uiHelperState = {
     tokenPlatform: 'pumpfun',
     copyPlatform: 'pumpfun',
     blockZeroMode: 'bundled',
-    tagFilters: new Set()
+    tagFilters: new Set(),
+    vanityFilter: 'available'
 };
+
+const VANITY_STORAGE_KEY = 'chaosbot_vanity_keys';
 
 const blueprintTemplates = {
     custom: {
@@ -1524,6 +1533,17 @@ registerGlobalHandler('openCreateBlueprintModal', openCreateBlueprintModal);
 registerGlobalHandler('submitBlueprintForm', submitBlueprintForm);
 registerGlobalHandler('applyBlueprint', applyBlueprint);
 registerGlobalHandler('deleteBlueprint', deleteBlueprint);
+registerGlobalHandler('saveVanityKeys', saveVanityKeys);
+registerGlobalHandler('clearVanityInput', clearVanityInput);
+registerGlobalHandler('scrollToVanityForm', scrollToVanityForm);
+registerGlobalHandler('renderVanityList', renderVanityList);
+registerGlobalHandler('setVanityFilter', setVanityFilter);
+registerGlobalHandler('archiveUsedVanities', archiveUsedVanities);
+registerGlobalHandler('requestMoreVanities', requestMoreVanities);
+registerGlobalHandler('toggleVanityKeyVisibility', toggleVanityKeyVisibility);
+registerGlobalHandler('copyVanityAddress', copyVanityAddress);
+registerGlobalHandler('copyVanityPrivateKey', copyVanityPrivateKey);
+registerGlobalHandler('markVanityStatus', markVanityStatus);
 
 registerGlobalHandler('uploadTokenImage', () => {
     notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');
@@ -1562,6 +1582,325 @@ function configureAutomationOptions(options = {}) {
             }
         }
     }
+}
+
+function persistVanityStore() {
+    try {
+        localStorage.setItem(VANITY_STORAGE_KEY, JSON.stringify(vanityKeyStore));
+    } catch (error) {
+        console.error('Error persisting vanities:', error);
+    }
+}
+
+function loadVanityKeysFromStorage() {
+    try {
+        const saved = localStorage.getItem(VANITY_STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            vanityKeyStore = Array.isArray(parsed)
+                ? parsed.map(entry => ({
+                    id: entry.id || `vanity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    launchpad: entry.launchpad || detectLaunchpad(entry.address || ''),
+                    address: entry.address || '',
+                    privateKey: entry.privateKey || '',
+                    status: entry.status || 'available',
+                    createdAt: entry.createdAt || Date.now(),
+                    updatedAt: entry.updatedAt || entry.createdAt || Date.now()
+                }))
+                : [];
+            persistVanityStore();
+        } else {
+            vanityKeyStore = [];
+        }
+    } catch (error) {
+        console.error('Error loading vanities:', error);
+        vanityKeyStore = [];
+    }
+
+    renderVanityList();
+}
+
+function detectLaunchpad(address) {
+    if (!address) return 'other';
+    const lower = address.toLowerCase();
+    if (lower.endsWith('pump')) return 'pumpfun';
+    if (lower.endsWith('bonk')) return 'bonk';
+    return 'other';
+}
+
+function formatLaunchpadBadge(launchpad) {
+    const map = {
+        pumpfun: { label: 'Pump.fun', classes: 'bg-purple-900/60 text-purple-200' },
+        bonk: { label: 'Bonk', classes: 'bg-orange-900/60 text-orange-200' },
+        other: { label: 'Other', classes: 'bg-neutral-900 text-gray-300' }
+    };
+    const info = map[launchpad] || map.other;
+    return `<span class="px-2 py-1 text-xs font-semibold rounded ${info.classes}">${info.label}</span>`;
+}
+
+function parsePrivateKeyInput(line) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+        throw new Error('Empty private key');
+    }
+
+    let secret;
+    if (trimmed.startsWith('[')) {
+        secret = Uint8Array.from(JSON.parse(trimmed));
+    } else {
+        if (!window.bs58) {
+            throw new Error('Base58 support not loaded');
+        }
+        secret = window.bs58.decode(trimmed);
+    }
+
+    if (!(secret instanceof Uint8Array)) {
+        secret = new Uint8Array(secret);
+    }
+
+    if (secret.length !== 64) {
+        throw new Error('Invalid private key length');
+    }
+
+    if (!window.solanaWeb3 || !window.solanaWeb3.Keypair) {
+        throw new Error('solanaWeb3 not available');
+    }
+
+    const keypair = window.solanaWeb3.Keypair.fromSecretKey(secret);
+    const base58 = window.bs58 ? window.bs58.encode(secret) : trimmed;
+    return { keypair, privateKey: base58 };
+}
+
+function saveVanityKeys() {
+    const textarea = getElement('vanity-keys-input');
+    if (!textarea) {
+        notify('Vanity input form not available.', 'error');
+        return;
+    }
+
+    const lines = textarea.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+        notify('Please paste at least one private key.', 'warning');
+        return;
+    }
+
+    let added = 0;
+    let duplicates = 0;
+    const failures = [];
+    const timestamp = Date.now();
+
+    lines.forEach(line => {
+        try {
+            const { keypair, privateKey } = parsePrivateKeyInput(line);
+            const address = keypair.publicKey.toString();
+
+            if (vanityKeyStore.some(entry => entry.address === address)) {
+                duplicates++;
+                return;
+            }
+
+            vanityKeyStore.push({
+                id: `vanity-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+                launchpad: detectLaunchpad(address),
+                address,
+                privateKey,
+                status: 'available',
+                createdAt: timestamp,
+                updatedAt: timestamp
+            });
+
+            added++;
+        } catch (error) {
+            console.error('Failed to parse vanity key:', error);
+            failures.push({ line, error: error.message });
+        }
+    });
+
+    if (added > 0) {
+        persistVanityStore();
+        textarea.value = '';
+        notify(`Saved ${added} vanity key${added === 1 ? '' : 's'}.`, 'success');
+        addConsoleLog(`📬 Saved ${added} vanity key(s)`, 'info');
+    }
+
+    if (duplicates > 0) {
+        notify(`${duplicates} duplicate key${duplicates === 1 ? '' : 's'} skipped.`, 'warning');
+    }
+
+    if (failures.length > 0) {
+        notify('Some keys could not be parsed. Check the console for details.', 'error');
+    }
+
+    renderVanityList();
+}
+
+function clearVanityInput() {
+    const textarea = getElement('vanity-keys-input');
+    if (textarea) {
+        textarea.value = '';
+        textarea.focus();
+    }
+}
+
+function scrollToVanityForm() {
+    const card = getElement('vanity-form-card');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => getElement('vanity-keys-input')?.focus(), 200);
+    }
+}
+
+function copyVanityAddress(id) {
+    const entry = vanityKeyStore.find(item => item.id === id);
+    if (!entry) return;
+    navigator.clipboard.writeText(entry.address)
+        .then(() => notify('Address copied to clipboard.', 'success'))
+        .catch(() => notify('Unable to copy address.', 'error'));
+}
+
+function copyVanityPrivateKey(id) {
+    const entry = vanityKeyStore.find(item => item.id === id);
+    if (!entry) return;
+    navigator.clipboard.writeText(entry.privateKey)
+        .then(() => notify('Private key copied to clipboard.', 'success'))
+        .catch(() => notify('Unable to copy private key.', 'error'));
+}
+
+function toggleVanityKeyVisibility(id) {
+    if (vanityVisibility.has(id)) {
+        vanityVisibility.delete(id);
+    } else {
+        vanityVisibility.add(id);
+    }
+    renderVanityList();
+}
+
+function markVanityStatus(id, status) {
+    const entry = vanityKeyStore.find(item => item.id === id);
+    if (!entry) return;
+
+    entry.status = status;
+    entry.updatedAt = Date.now();
+    persistVanityStore();
+    renderVanityList();
+
+    const message = status === 'used' ? 'marked as used' : 'returned to available';
+    notify(`Vanity ${message}.`, 'success');
+}
+
+function archiveUsedVanities() {
+    const before = vanityKeyStore.length;
+    vanityKeyStore = vanityKeyStore.filter(entry => entry.status !== 'used');
+    const removed = before - vanityKeyStore.length;
+
+    if (removed === 0) {
+        notify('No used vanities to archive.', 'info');
+        return;
+    }
+
+    persistVanityStore();
+    renderVanityList();
+    notify(`Archived ${removed} used vanity${removed === 1 ? '' : 'ies'}.`, 'success');
+}
+
+function requestMoreVanities() {
+    notify('Vanity request sent. Operations will replenish keys soon.', 'info');
+    addConsoleLog('📮 Vanity request submitted', 'info');
+}
+
+function setVanityFilter(filter) {
+    uiHelperState.vanityFilter = filter;
+    const availableBtn = getElement('vanity-tab-available');
+    const usedBtn = getElement('vanity-tab-used');
+
+    const activeClasses = 'bg-purple-700 text-white';
+    const inactiveClasses = 'bg-neutral-800 hover:bg-neutral-700 text-sm text-gray-300';
+
+    if (availableBtn) {
+        availableBtn.className = `${inactiveClasses} px-3 py-2 rounded transition${filter === 'available' ? ' ' + activeClasses : ''}`;
+    }
+    if (usedBtn) {
+        usedBtn.className = `${inactiveClasses} px-3 py-2 rounded transition${filter === 'used' ? ' ' + activeClasses : ''}`;
+    }
+
+    renderVanityList();
+}
+
+function renderVanityList() {
+    const container = getElement('vanity-table-container');
+    const titleEl = getElement('vanity-list-title');
+    const countEl = getElement('vanity-count-label');
+
+    if (!container) {
+        return;
+    }
+
+    const filter = uiHelperState.vanityFilter || 'available';
+    const filtered = vanityKeyStore.filter(entry => (
+        filter === 'used' ? entry.status === 'used' : entry.status !== 'used'
+    ));
+
+    if (titleEl) {
+        titleEl.textContent = filter === 'used' ? 'Used Vanities' : 'Available Vanities';
+    }
+    if (countEl) {
+        countEl.textContent = `${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'}`;
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-sm text-gray-500">No vanities in this list yet</div>';
+        return;
+    }
+
+    const rows = filtered.map(entry => {
+        const isRevealed = vanityVisibility.has(entry.id);
+        const privateDisplay = isRevealed ? entry.privateKey : '••••••••••••••••••••••••••••';
+        const toggleLabel = isRevealed ? 'Hide' : 'View';
+        const statusAction = entry.status === 'used' ? 'available' : 'used';
+        const statusLabel = entry.status === 'used' ? 'Mark Available' : 'Mark Used';
+
+        return `
+            <tr class="border-b border-neutral-800 last:border-b-0">
+                <td class="px-4 py-3 align-middle">
+                    ${formatLaunchpadBadge(entry.launchpad)}
+                </td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <code class="font-mono text-sm text-gray-200">${entry.address}</code>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="copyVanityAddress('${entry.id}')">Copy</button>
+                    </div>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-sm text-gray-200">${privateDisplay}</span>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="toggleVanityKeyVisibility('${entry.id}')">${toggleLabel}</button>
+                        <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="copyVanityPrivateKey('${entry.id}')">Copy</button>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-xs px-3 py-1.5 rounded transition" onclick="markVanityStatus('${entry.id}', '${statusAction}')">${statusLabel}</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-gray-200">
+                <thead class="bg-neutral-900 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Launchpad</th>
+                        <th class="px-4 py-2 text-left">Address</th>
+                        <th class="px-4 py-2 text-left">Private Key</th>
+                        <th class="px-4 py-2 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 function setBlueprintFormValue(id, value) {

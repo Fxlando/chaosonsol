@@ -94,10 +94,10 @@ async function loadWallets() {
     updateWalletGroups();
     
     // Render wallets
-    renderWallets();
+    walletOperationsRenderTable();
     
     // Update total balance
-    updateTotalBalance();
+    walletOperationsUpdateTotals();
     
     showToast(`Loaded ${wallets.length} wallets`, 'success');
     addConsoleLog(`Loaded ${wallets.length} wallets successfully`, 'success');
@@ -109,8 +109,8 @@ async function loadWallets() {
     
     // Fallback to demo wallets
     wallets = generateDemoWallets();
-    renderWallets();
-    updateTotalBalance();
+    walletOperationsRenderTable();
+    walletOperationsUpdateTotals();
   }
 }
 
@@ -152,7 +152,7 @@ function generateRandomAddress() {
 /**
  * Render wallets table
  */
-function renderWallets() {
+function walletOperationsRenderTable() {
   const tbody = document.getElementById('wallets-table-body');
   if (!tbody) return;
   
@@ -241,7 +241,7 @@ function renderWallets() {
 /**
  * Update total balance
  */
-async function updateTotalBalance() {
+async function walletOperationsUpdateTotals() {
   try {
     const total = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
     const totalBalanceEl = document.getElementById('total-balance');
@@ -271,7 +271,7 @@ function updateWalletGroups() {
  * Filter wallets
  */
 function filterWallets() {
-  renderWallets();
+  walletOperationsRenderTable();
 }
 
 /**
@@ -289,7 +289,7 @@ function switchTab(tab) {
     inactiveTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
   }
   
-  renderWallets();
+  walletOperationsRenderTable();
 }
 
 /**
@@ -618,7 +618,7 @@ async function deactivateWallets() {
     
     // Clear selection
     selectedWallets.clear();
-    renderWallets();
+    walletOperationsRenderTable();
     
     showToast(`Deactivated ${selectedWallets.size} wallets`, 'success');
     addConsoleLog(`Deactivated ${selectedWallets.size} wallets`, 'success');
@@ -908,8 +908,8 @@ window.walletOperations = {
   toggleSelectAll,
   switchTab,
   filterWallets,
-  renderWallets,
-  updateTotalBalance
+  walletOperationsRenderTable,
+  walletOperationsUpdateTotals
 };
 
 // Also expose functions globally for onclick handlers
@@ -925,8 +925,8 @@ window.toggleWalletSelection = toggleWalletSelection;
 window.toggleSelectAll = toggleSelectAll;
 window.switchTab = switchTab;
 window.filterWallets = filterWallets;
-window.renderWallets = renderWallets;
-window.updateTotalBalance = updateTotalBalance;
+window.walletOperationsRenderTable = walletOperationsRenderTable;
+window.walletOperationsUpdateTotals = walletOperationsUpdateTotals;
 window.executeGroupWallets = executeGroupWallets;
 window.executeReclaimRent = executeReclaimRent;
 

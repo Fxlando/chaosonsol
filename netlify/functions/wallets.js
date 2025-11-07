@@ -81,9 +81,11 @@ async function getSolPrice() {
     const response = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL', {
       timeout: 3000
     });
-    return parseFloat(response.data.data.rates.USD);
+    const price = Number(response?.data?.data?.rates?.USD);
+    return Number.isFinite(price) && price > 0 ? price : 0;
   } catch (error) {
-    return 180;
+    console.error('SOL price fetch failed:', error.message);
+    return 0;
   }
 }
 
@@ -94,67 +96,69 @@ async function getAllWalletsWithBalances() {
     return [];
   }
 
-  const entries = wallets.map((wallet) => {
-    const keyString = wallet.publicKey || wallet.address;
+  try {
+    const entries = wallets.map((wallet) => {
+      const keyString = wallet.publicKey || wallet.address;
 
-    if (!keyString) {
-      return { wallet, publicKey: null, keyString: null };
-    }
+      if (!keyString) {
+        return { wallet, publicKey: null, keyString: null };
+      }
 
-    try {
-      const publicKey = new PublicKey(keyString);
-      return { wallet, publicKey, keyString: publicKey.toBase58() };
-    } catch (error) {
-      console.error(`Invalid public key for wallet ${wallet.id || keyString}:`, error.message);
-      return { wallet, publicKey: null, keyString: null };
-    }
-  });
+      try {
+        const publicKey = new PublicKey(keyString);
+        return { wallet, publicKey, keyString: publicKey.toBase58() };
+      } catch (error) {
+        console.error(`Invalid public key for wallet ${wallet.id || keyString}:`, error.message);
+        return { wallet, publicKey: null, keyString: null };
+      }
+    });
 
-  const publicKeys = entries
-    .filter((entry) => entry.publicKey)
-    .map((entry) => entry.publicKey);
+    const publicKeys = entries
+      .filter((entry) => entry.publicKey)
+      .map((entry) => entry.publicKey);
 
-  const accountsInfoPromise = (async () => {
-    if (publicKeys.length === 0) {
-      return [];
-    }
+    const accountsInfoPromise = (async () => {
+      if (publicKeys.length === 0) {
+        return [];
+      }
 
-    try {
-      return await connection.getMultipleAccountsInfo(publicKeys, 'confirmed');
-    } catch (error) {
-      console.error('Error fetching wallet account info:', error.message);
-      return new Array(publicKeys.length).fill(null);
-    }
-  })();
+      try {
+        return await connection.getMultipleAccountsInfo(publicKeys, 'confirmed');
+      } catch (error) {
+        console.error('Error fetching wallet account info:', error.message);
+        return new Array(publicKeys.length).fill(null);
+      }
+    })();
 
-  const solPricePromise = (async () => {
-    try {
-      return await getSolPrice();
-    } catch (error) {
-      console.error('Error fetching SOL price:', error.message);
-      return 0;
-    }
-  })();
+    const solPricePromise = getSolPrice();
 
-  const [accountsInfo, solPrice] = await Promise.all([accountsInfoPromise, solPricePromise]);
+    const [accountsInfo, solPrice] = await Promise.all([accountsInfoPromise, solPricePromise]);
 
-  const accountMap = new Map();
-  publicKeys.forEach((key, index) => {
-    const info = accountsInfo[index] || null;
-    accountMap.set(key.toBase58(), info);
-  });
+    const accountMap = new Map();
+    publicKeys.forEach((key, index) => {
+      const info = accountsInfo[index] || null;
+      accountMap.set(key.toBase58(), info);
+    });
 
-  return entries.map((entry) => {
-    const accountInfo = entry.keyString ? accountMap.get(entry.keyString) : null;
-    const lamports = accountInfo?.lamports ?? 0;
-    const balance = lamports / LAMPORTS_PER_SOL;
+    return entries.map((entry) => {
+      const accountInfo = entry.keyString ? accountMap.get(entry.keyString) : null;
+      const lamports = accountInfo?.lamports ?? 0;
+      const balance = lamports / LAMPORTS_PER_SOL;
 
-    return {
-      ...entry.wallet,
-      balance,
-      usdValue: balance * solPrice
-    };
-  });
+      return {
+        ...entry.wallet,
+        balance,
+        usdValue: balance * solPrice
+      };
+    });
+  } catch (error) {
+    console.error('Error building wallet balances:', error);
+    return wallets.map((wallet) => ({
+      ...wallet,
+      balance: 0,
+      usdValue: 0
+    }));
+  }
 }
 
 async function generateWallet(name = null, tags = []) {

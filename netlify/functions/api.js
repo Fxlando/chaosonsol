@@ -88,12 +88,25 @@ exports.handler = async (event, context) => {
     }
 
     if (path === '/wallets' && method === 'GET') {
-      const wallets = await app.getAllWalletsWithBalances();
-      return {
-        statusCode: 200,
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: true, wallets })
-      };
+      try {
+        const wallets = await app.getAllWalletsWithBalances();
+        return {
+          statusCode: 200,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ success: true, wallets })
+        };
+      } catch (walletError) {
+        console.error('Wallet list error:', walletError);
+        return {
+          statusCode: 200,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            wallets: [],
+            error: walletError.message || 'Unable to load wallets'
+          })
+        };
+      }
     }
 
     // Trading routes

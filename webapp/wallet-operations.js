@@ -1144,6 +1144,7 @@ function addConsoleLog(message, type = 'info') {
 // Make functions globally available
 window.walletOperations = {
   loadWallets,
+  getWallets: () => wallets.slice(),
   executeGenerateWallets,
   exportWallets,
   deactivateWallets,

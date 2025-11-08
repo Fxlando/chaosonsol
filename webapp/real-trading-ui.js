@@ -624,7 +624,8 @@ const tokenLaunchState = {
         uri: null,
         gatewayUrl: null,
         contentType: null,
-        fileName: null
+        fileName: null,
+        size: 0
     }
 };
 
@@ -816,6 +817,21 @@ async function loadCreatorWallets() {
         tokenLaunchState.wallets = [];
     } catch (error) {
         console.error('Failed to load creator wallets:', error);
+        const operationsWallets =
+            typeof window.walletOperations?.getWallets === 'function'
+                ? window.walletOperations.getWallets()
+                : [];
+
+        if (operationsWallets.length) {
+            populateCreatorWalletSelect(walletSelect, operationsWallets, {
+                walletStatus,
+                local: !operationsWallets[0]?.id,
+                error
+            });
+            tokenLaunchState.wallets = operationsWallets;
+            return;
+        }
+
         const localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
 
         if (localWallets.length) {
@@ -839,6 +855,7 @@ async function loadCreatorWallets() {
 function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
     const walletStatus = options.walletStatus;
     const isLocal = options.local;
+    const error = options.error;
 
     selectEl.innerHTML = '';
     const placeholder = document.createElement('option');
@@ -899,7 +916,10 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
 
     if (wallets.length) {
         const sourceLabel = isLocal ? 'local storage' : 'backend';
-        walletStatus.textContent = `${wallets.length} wallet${wallets.length === 1 ? '' : 's'} available (${sourceLabel}).`;
+        const baseMessage = `${wallets.length} wallet${wallets.length === 1 ? '' : 's'} available (${sourceLabel}).`;
+        walletStatus.textContent = error
+            ? `${baseMessage} (Backend unavailable: ${error.message || error})`
+            : baseMessage;
         walletStatus.classList.remove('text-red-400');
         walletStatus.classList.remove('text-yellow-300');
         walletStatus.classList.add('text-gray-500');
@@ -986,7 +1006,8 @@ async function handleTokenImageFile(file) {
             uri: null,
             gatewayUrl: null,
             contentType: file.type,
-            fileName: file.name
+            fileName: file.name,
+            size: file.size
         };
 
         refreshTokenImageStatus();
@@ -998,7 +1019,8 @@ async function handleTokenImageFile(file) {
             uri: null,
             gatewayUrl: null,
             contentType: null,
-            fileName: null
+            fileName: null,
+            size: 0
         };
         refreshTokenImageStatus('Image processing failed. Try again.');
     } finally {
@@ -1059,7 +1081,19 @@ async function ensureTokenImageUploaded() {
         return payload.uri;
     } catch (error) {
         console.error('Image upload failed:', error);
-        notify(`Image upload failed: ${error.message}`, 'error');
+        const canEmbed =
+            tokenLaunchState.image.base64 &&
+            typeof tokenLaunchState.image.base64 === 'string' &&
+            tokenLaunchState.image.base64.startsWith('data:') &&
+            tokenLaunchState.image.size <= 2 * 1024 * 1024;
+
+        if (canEmbed) {
+            notify('IPFS upload unavailable. Embedding image directly into metadata.', 'warning');
+            refreshTokenImageStatus('Embedding image directly in metadata.');
+            return tokenLaunchState.image.base64;
+        }
+
+        notify(`Image upload failed and cannot embed locally: ${error.message}`, 'error');
         refreshTokenImageStatus('Image upload failed. Launch will proceed without artwork.');
         return null;
     } finally {

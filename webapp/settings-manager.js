@@ -42,16 +42,16 @@ class SettingsManager {
             rpc: {
                 mainnet: 'https://api.mainnet-beta.solana.com',
                 devnet: 'https://api.devnet.solana.com',
-                custom: '',
-                current: 'mainnet',
+                custom: 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+                current: 'custom',
                 timeout: 30000,
                 commitment: 'confirmed'
             },
 
             // Solana Connectivity
             solana: {
-                rpcHttp: 'https://api.mainnet-beta.solana.com',
-                rpcWebsocket: 'wss://api.mainnet-beta.solana.com',
+                rpcHttp: 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+                rpcWebsocket: 'wss://rpc.ankr.com/solana/ws/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
                 network: 'mainnet',
                 skipPreflight: false,
                 priorityFee: 0.0005,

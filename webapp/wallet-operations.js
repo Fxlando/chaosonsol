@@ -12,6 +12,8 @@ let wallets = [];
 let selectedWallets = new Set();
 let walletGroups = new Map();
 let groupingSearchTerm = '';
+let tagActiveWalletId = null;
+const TAG_PLATFORM_IDS = ['trojan', 'photon', 'axiom', 'gmgn', 'pepeboost', 'bullx'];
 
 // Initialize wallet operations
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,6 +33,7 @@ async function initializeWalletOperations() {
   
   // Setup event listeners
   setupWalletEventListeners();
+  walletOperationsUpdateTagInfo();
   
   console.log('✅ Wallet operations initialized');
 }
@@ -173,6 +176,151 @@ function generateRandomAddress() {
     address += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return address;
+}
+
+function walletOperationsGetWalletId(wallet) {
+  if (!wallet) return '';
+  return wallet.id || wallet.address || wallet.publicKey || wallet.pubkey || '';
+}
+
+function walletOperationsGetPrimaryAddress(wallet) {
+  if (!wallet) return '';
+  return wallet.address || wallet.publicKey || wallet.pubkey || '';
+}
+
+function walletOperationsFindWallet(walletId) {
+  if (!walletId) return null;
+  return wallets.find((wallet) => walletOperationsGetWalletId(wallet) === walletId) || null;
+}
+
+function walletOperationsSetActiveTagWallet(walletId) {
+  if (!walletId) return;
+  const wallet = walletOperationsFindWallet(walletId);
+  if (!wallet) return;
+  tagActiveWalletId = walletId;
+  walletOperationsUpdateTagInfo();
+}
+
+function walletOperationsUpdateTagInfo() {
+  const container = document.getElementById('tag-wallet-info');
+  if (!container) return;
+
+  const selectedList = Array.from(selectedWallets)
+    .map(walletOperationsFindWallet)
+    .filter(Boolean);
+
+  if (selectedList.length === 0) {
+    tagActiveWalletId = null;
+    container.innerHTML = '<p class="text-sm text-gray-400">Select wallet(s) from the table to configure tagging settings.</p>';
+    container.classList.add('opacity-60');
+    return;
+  }
+
+  container.classList.remove('opacity-60');
+
+  if (!tagActiveWalletId || !selectedList.some((wallet) => walletOperationsGetWalletId(wallet) === tagActiveWalletId)) {
+    tagActiveWalletId = walletOperationsGetWalletId(selectedList[0]);
+  }
+
+  const activeWallet = selectedList.find((wallet) => walletOperationsGetWalletId(wallet) === tagActiveWalletId) || selectedList[0];
+  const activeId = walletOperationsGetWalletId(activeWallet);
+  const address = walletOperationsGetPrimaryAddress(activeWallet);
+  const balanceValue = typeof activeWallet.balance === 'number' ? activeWallet.balance : 0;
+  const tags = Array.isArray(activeWallet.tags) ? activeWallet.tags : [];
+
+  const selectorOptions = selectedList.map((wallet) => {
+    const walletId = walletOperationsGetWalletId(wallet);
+    const label = `${wallet.name || 'Unnamed Wallet'} • ${truncateAddress(walletOperationsGetPrimaryAddress(wallet))}`;
+    const selectedAttr = walletId === activeId ? 'selected' : '';
+    return `<option value="${walletId}" ${selectedAttr}>${label}</option>`;
+  }).join('');
+
+  const chips = selectedList.map((wallet) => {
+    const walletId = walletOperationsGetWalletId(wallet);
+    const isActive = walletId === activeId;
+    const chipLabel = `${wallet.name || 'Wallet'} • ${truncateAddress(walletOperationsGetPrimaryAddress(wallet))}`;
+    return `<button type="button" class="tag-wallet-chip ${isActive ? 'tag-wallet-chip--active' : ''}" data-wallet-id="${walletId}" onclick="walletOperationsSetActiveTagWallet(this.dataset.walletId)">${chipLabel}</button>`;
+  }).join('');
+
+  const tagContent = tags.length > 0
+    ? `<div class="flex flex-wrap gap-2">${tags.map((tag) => `<span class="px-2 py-0.5 bg-purple-900/30 text-purple-200 rounded-full text-xs">${tag}</span>`).join('')}</div>`
+    : `<div class="text-xs text-gray-500">No tags recorded yet.</div>`;
+
+  const selectorControl = selectedList.length > 1
+    ? `<div class="flex flex-col text-right gap-1">
+        <label for="tag-wallet-selector" class="text-xs text-gray-500 uppercase tracking-wide">Active wallet</label>
+        <select id="tag-wallet-selector" class="bg-black border border-neutral-700 rounded px-2 py-1 text-xs text-gray-200" onchange="walletOperationsSetActiveTagWallet(this.value)">
+          ${selectorOptions}
+        </select>
+      </div>`
+    : '';
+
+  const chipSection = selectedList.length > 1
+    ? `<div class="space-y-2">
+        <div class="text-xs text-gray-500 uppercase tracking-wide">Selected wallets</div>
+        <div class="flex flex-wrap gap-2">
+          ${chips}
+        </div>
+      </div>`
+    : '';
+
+  container.innerHTML = `
+    <div class="space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div class="space-y-1">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Active wallet</div>
+          <div class="text-lg font-semibold text-white">${activeWallet.name || 'Unnamed Wallet'}</div>
+            <div class="flex items-center gap-2">
+              <code class="text-xs font-mono text-gray-400">${address ? truncateAddress(address) : '—'}</code>
+              ${address ? `<button type="button" class="text-xs text-purple-300 hover:text-purple-100" data-wallet-address="${address}" onclick="copyToClipboard(this.dataset.walletAddress)">Copy</button>` : ''}
+            </div>
+        </div>
+        ${selectorControl}
+      </div>
+
+      ${chipSection}
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="tag-stat-card">
+          <div class="tag-stat-label">SOL Balance</div>
+          <div class="tag-stat-value">${balanceValue.toFixed(4)} SOL</div>
+        </div>
+        <div class="tag-stat-card sm:col-span-2">
+          <div class="tag-stat-label">Current Tags</div>
+          ${tagContent}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function walletOperationsAutoAssignTags() {
+  const availableButtons = TAG_PLATFORM_IDS
+    .map((tag) => document.querySelector(`[data-tag-button="${tag}"]`))
+    .filter(Boolean);
+
+  if (availableButtons.length === 0) {
+    showToast('Tag buttons are not available in this view', 'error');
+    return;
+  }
+
+  // Clear any existing active tags
+  availableButtons.forEach((button) => {
+    if (button.classList.contains('tag-option--active')) {
+      toggleTag(button.dataset.tagButton);
+    }
+  });
+
+  const randomCount = Math.max(1, Math.floor(Math.random() * Math.min(TAG_PLATFORM_IDS.length, 3)) + 1);
+  const chosen = new Set();
+
+  while (chosen.size < randomCount) {
+    const pick = TAG_PLATFORM_IDS[Math.floor(Math.random() * TAG_PLATFORM_IDS.length)];
+    chosen.add(pick);
+  }
+
+  chosen.forEach((tag) => toggleTag(tag));
+  showToast(`Auto-assigned ${Array.from(chosen).join(', ')} tags`, 'success');
 }
 
 /**
@@ -536,6 +684,7 @@ function walletOperationsSyncSelectionUI(options = {}) {
 
   walletOperationsUpdateSelectAllIndicators();
   walletOperationsRenderGroupingChips();
+walletOperationsUpdateTagInfo();
 
   if (!skipBulkUpdate) {
     walletOperationsUpdateBulkActions();
@@ -1145,6 +1294,7 @@ function addConsoleLog(message, type = 'info') {
 window.walletOperations = {
   loadWallets,
   getWallets: () => wallets.slice(),
+  getSelectedWalletIds: () => Array.from(selectedWallets),
   executeGenerateWallets,
   exportWallets,
   deactivateWallets,
@@ -1157,7 +1307,9 @@ window.walletOperations = {
   walletOperationsRenderGroupingTable,
   walletOperationsRenderGroupingChips,
   walletOperationsUpdateTotals,
-  walletOperationsUpdateBulkActions
+  walletOperationsUpdateBulkActions,
+  walletOperationsUpdateTagInfo,
+  walletOperationsAutoAssignTags
 };
 
 // Also expose functions globally for onclick handlers
@@ -1179,6 +1331,10 @@ window.walletOperationsRenderGroupingTable = walletOperationsRenderGroupingTable
 window.walletOperationsRenderGroupingChips = walletOperationsRenderGroupingChips;
 window.walletOperationsUpdateTotals = walletOperationsUpdateTotals;
 window.walletOperationsUpdateBulkActions = walletOperationsUpdateBulkActions;
+window.walletOperationsSetActiveTagWallet = walletOperationsSetActiveTagWallet;
+window.walletOperationsUpdateTagInfo = walletOperationsUpdateTagInfo;
+window.walletOperationsAutoAssignTags = walletOperationsAutoAssignTags;
+window.walletOperationsGetSelectedWalletIds = () => Array.from(selectedWallets);
 window.executeGroupWallets = executeGroupWallets;
 window.executeReclaimRent = executeReclaimRent;
 

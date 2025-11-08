@@ -176,6 +176,18 @@ export class APIServer {
       }
     });
 
+    this.app.post('/api/tagging/run', async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const result = await this.chaosApp.tagWallets(req.body || {});
+        this.emitToClients('tagging', result);
+        res.json(result);
+      } catch (error) {
+        logger.error('Tagging workflow failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     this.app.post('/api/trading/swap', async (req, res) => {
       try {
         await this.ensureInitialized();

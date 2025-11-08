@@ -200,6 +200,15 @@ class APIClient {
     return await response.json();
   }
 
+  async tagWallets(payload) {
+    const response = await fetch(this.buildUrl('/tagging/run'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await response.json();
+  }
+
   async getQuote(inputMint, outputMint, amount, options = {}) {
     const params = new URLSearchParams({
       inputMint,

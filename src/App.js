@@ -12,6 +12,7 @@ import { Security } from './wallet/Security.js';
 import { loggerManager } from './utils/logger.js';
 
 const logger = loggerManager.getLogger('App');
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Main Application Class
@@ -174,6 +175,252 @@ export class App {
       throw new Error('App not initialized');
     }
     return await this.walletManager.getAllWalletsWithBalances();
+  }
+
+  /**
+   * Execute tagging workflow for multiple wallets
+   * Performs a quick buy (tag) and sell, then persists tag metadata on the wallet
+   */
+  async tagWallets(options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    const {
+      walletIds = [],
+      tags = [],
+      minAmount = 0.1,
+      maxAmount = 0.2,
+      executor = 'jito',
+      slippage = 3.0,
+      mintCandidates = [],
+      method = 'uniform',
+      sellDelaySeconds = 6
+    } = options;
+
+    if (!Array.isArray(walletIds) || walletIds.length === 0) {
+      return {
+        success: false,
+        error: 'No wallet IDs provided for tagging',
+        results: []
+      };
+    }
+
+    if (!Array.isArray(mintCandidates) || mintCandidates.length === 0) {
+      return {
+        success: false,
+        error: 'No mint candidates supplied for tagging',
+        results: []
+      };
+    }
+
+    const sanitizedTags = Array.from(
+      new Set(
+        (tags || [])
+          .map(tag => (typeof tag === 'string' ? tag.trim() : ''))
+          .filter(Boolean)
+      )
+    );
+
+    if (sanitizedTags.length === 0) {
+      return {
+        success: false,
+        error: 'At least one platform tag must be selected',
+        results: []
+      };
+    }
+
+    const candidatePool = mintCandidates.map((mint) => {
+      if (mint && typeof mint === 'object') {
+        return {
+          mint: mint.mint || mint.address || '',
+          symbol: mint.symbol || null,
+          decimals: mint.decimals,
+          source: mint.source || null
+        };
+      }
+      return {
+        mint: String(mint || '').trim(),
+        symbol: null,
+        decimals: undefined,
+        source: null
+      };
+    }).filter(entry => entry.mint);
+
+    if (candidatePool.length === 0) {
+      return {
+        success: false,
+        error: 'Mint candidate list is empty after sanitization',
+        results: []
+      };
+    }
+
+    const results = [];
+
+    for (const walletId of walletIds) {
+      const wallet = this.walletManager.getWallet(walletId);
+      if (!wallet) {
+        results.push({
+          walletId,
+          success: false,
+          error: 'Wallet not found'
+        });
+        continue;
+      }
+
+      const amountRange = Math.max(0, maxAmount - minAmount);
+      const solAmount = Number(
+        (minAmount + (amountRange > 0 ? Math.random() * amountRange : 0))
+          .toFixed(4)
+      );
+
+      // Rotate candidate pool to avoid hammering the same mint repeatedly
+      const candidateIndex = Math.floor(Math.random() * candidatePool.length);
+      const { mint, symbol, decimals, source } = candidatePool[candidateIndex];
+
+      if (!mint) {
+        results.push({
+          walletId,
+          success: false,
+          error: 'Invalid mint candidate'
+        });
+        continue;
+      }
+
+      logger.info(`Tagging wallet ${walletId} using mint ${mint} (${symbol || 'unknown'}) with amount ${solAmount} SOL`);
+
+      try {
+        const buyOptions = {
+          slippage,
+          executor,
+          source: 'tagging',
+          tags: sanitizedTags,
+          method
+        };
+
+        const buyResult = await this.tradingEngine.buyToken(
+          walletId,
+          mint,
+          solAmount,
+          buyOptions
+        );
+
+        if (!buyResult?.success) {
+          results.push({
+            walletId,
+            mint,
+            solAmount,
+            success: false,
+            stage: 'buy',
+            error: buyResult?.error || 'Buy transaction failed'
+          });
+          continue;
+        }
+
+        let tokenAmount = null;
+
+        if (buyResult.tokenAmount) {
+          tokenAmount = typeof buyResult.tokenAmount === 'string'
+            ? parseInt(buyResult.tokenAmount, 10)
+            : Math.floor(buyResult.tokenAmount);
+        } else if (buyResult.outputAmount) {
+          tokenAmount = typeof buyResult.outputAmount === 'string'
+            ? parseInt(buyResult.outputAmount, 10)
+            : Math.floor(buyResult.outputAmount);
+        }
+
+        if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
+          // Fallback: fetch balance in UI units and convert using decimals if provided
+          const uiBalance = await this.solanaCore.getTokenBalance(wallet.publicKey, mint);
+          if (uiBalance && decimals !== undefined) {
+            tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
+          } else if (uiBalance) {
+            tokenAmount = Math.floor(Number(uiBalance));
+          }
+        }
+
+        if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
+          results.push({
+            walletId,
+            mint,
+            solAmount,
+            success: false,
+            stage: 'prepare-sell',
+            error: 'Unable to determine token amount for sell'
+          });
+          continue;
+        }
+
+        // Optional wait to mimic natural tagging behaviour
+        const delayMs = Math.max(0, sellDelaySeconds) * 1000;
+        if (delayMs > 0) {
+          await sleep(delayMs);
+        }
+
+        const sellResult = await this.tradingEngine.sellToken(
+          walletId,
+          mint,
+          tokenAmount,
+          {
+            slippage,
+            executor,
+            source: 'tagging',
+            tags: sanitizedTags,
+            method
+          }
+        );
+
+        if (!sellResult?.success) {
+          results.push({
+            walletId,
+            mint,
+            solAmount,
+            tokenAmount,
+            success: false,
+            stage: 'sell',
+            buy: buyResult,
+            error: sellResult?.error || 'Sell transaction failed'
+          });
+          continue;
+        }
+
+        const existingTags = Array.isArray(wallet.tags) ? wallet.tags : [];
+        const mergedTags = Array.from(new Set([...existingTags, ...sanitizedTags]));
+        this.walletManager.updateWalletTags(walletId, mergedTags);
+
+        results.push({
+          walletId,
+          mint,
+          symbol,
+          source,
+          solAmount,
+          tokenAmount,
+          success: true,
+          buy: buyResult,
+          sell: sellResult,
+          tags: mergedTags
+        });
+      } catch (error) {
+        logger.error(`Tagging workflow failed for wallet ${walletId}:`, error);
+        results.push({
+          walletId,
+          mint,
+          solAmount,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    const successCount = results.filter(result => result.success).length;
+    const failureCount = results.length - successCount;
+
+    return {
+      success: failureCount === 0,
+      successCount,
+      failureCount,
+      results
+    };
   }
 
   /**

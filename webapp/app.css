@@ -813,6 +813,110 @@ select.input {
     font-size: 1.05rem;
 }
 
+/* --- Tagging UI Enhancements --- */
+.executor-pill {
+    padding: 0.5rem 1.1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: #1f1f2a;
+    color: #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.executor-pill--active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(99, 102, 241, 0.9));
+    color: #ffffff;
+    border-color: rgba(139, 92, 246, 0.6);
+    box-shadow: 0 10px 25px rgba(99, 102, 241, 0.28);
+}
+
+.executor-pill--muted {
+    background: #1f1f2a;
+    color: #d1d5db;
+}
+
+.executor-pill--muted:hover {
+    background: #2b2b39;
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #f3f4f6;
+}
+
+.tag-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: #1b1b26;
+    color: #d1d5db;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-option:hover {
+    background: #232334;
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #f9fafb;
+}
+
+.tag-option--active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(236, 72, 153, 0.75));
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 12px 24px rgba(236, 72, 153, 0.25);
+}
+
+.tag-wallet-chip {
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #1d1d29;
+    color: #cbd5f5;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-wallet-chip:hover {
+    background: #232336;
+    border-color: rgba(139, 92, 246, 0.45);
+}
+
+.tag-wallet-chip--active {
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    border-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(99, 102, 241, 0.28);
+}
+
+.tag-stat-card {
+    background: rgba(23, 23, 36, 0.85);
+    border: 1px solid rgba(139, 92, 246, 0.18);
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+.tag-stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(226, 232, 240, 0.6);
+    margin-bottom: 0.4rem;
+}
+
+.tag-stat-value {
+    font-size: 1rem;
+    font-family: 'Space Mono', 'Fira Code', monospace;
+    color: #f9fafb;
+}
+
 /* === TOAST === */
 #toast-container {
     position: fixed;

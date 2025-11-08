@@ -128,6 +128,15 @@ exports.handler = async (event, context) => {
       };
     }
 
+    if (path === '/tagging/run' && method === 'POST') {
+      const result = await app.tagWallets(body || {});
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result)
+      };
+    }
+
     // Token launch routes
     if (path === '/tokens/launch' && method === 'POST') {
       const { walletId, metadata, initialBuy, platform, automations, options } = body;

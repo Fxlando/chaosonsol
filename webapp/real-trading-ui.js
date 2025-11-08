@@ -7,6 +7,7 @@ let rtCurrentView = 'wallets';
 let vanityKeyStore = [];
 let vanityVisibility = new Set();
 let rtAutoScroll = true;
+let closeMobileSidebar = () => {};
 const MIN_RENT_BUFFER_SOL = 0.001;
 
 let collectFeesState = {
@@ -17,12 +18,63 @@ let collectFeesState = {
     history: []
 };
 
+const VIEW_METADATA = {
+    wallets: { title: 'Wallets', subtitle: 'Multi-wallet orchestration' },
+    tokens: { title: 'Tokens', subtitle: 'Launch & manage assets' },
+    instant: { title: 'Instant Trading', subtitle: 'Live fills & routing' },
+    volume: { title: 'Volume Trading', subtitle: 'Coordinated executions' },
+    smartsell: { title: 'Smart Sell AI', subtitle: 'Adaptive exits' },
+    pumpfun: { title: 'Pump.fun Sniper', subtitle: 'Early launch monitor' },
+    trade: { title: 'Manual Trade', subtitle: 'Jupiter swaps' },
+    history: { title: 'Trade History', subtitle: 'Execution logs' },
+    tasks: { title: 'Tasks', subtitle: 'Automation runbook' },
+    pnl: { title: 'P&L Cards', subtitle: 'Performance tracking' },
+    'collect-fees': { title: 'Collect Fees', subtitle: 'Automated cashouts' },
+    blueprint: { title: 'Blueprint', subtitle: 'Automation recipes' },
+    vanities: { title: 'Vanities', subtitle: 'Custom address lab' },
+    settings: { title: 'Settings', subtitle: 'Platform configuration' },
+    console: { title: 'Console', subtitle: 'Real-time logs' },
+    generate: { title: 'Generate Wallets', subtitle: 'Batch creation' },
+    import: { title: 'Import Wallets', subtitle: 'Bring existing keys' },
+    fund: { title: 'Fund Wallets', subtitle: 'Distribute capital' },
+    withdraw: { title: 'Withdraw', subtitle: 'Move funds out' },
+    tag: { title: 'Tag Wallets', subtitle: 'Organise labels' },
+    warm: { title: 'Warm Wallets', subtitle: 'Prepare for trading' },
+    reclaim: { title: 'Reclaim Rent', subtitle: 'Optimise SOL usage' },
+    export: { title: 'Export Wallets', subtitle: 'Backups & sharing' },
+    redistribute: { title: 'Redistribute', subtitle: 'Balance wallets' },
+    activate: { title: 'Activation', subtitle: 'Enable or pause bots' },
+    grouping: { title: 'Grouping', subtitle: 'Cluster strategies' },
+    'create-token': { title: 'Create Token', subtitle: 'Deploy new assets' },
+    'copy-token': { title: 'Copy Token', subtitle: 'Clone liquidity' },
+    'import-token': { title: 'Import Token', subtitle: 'Track existing tokens' },
+    'launch-token': { title: 'Launch Token', subtitle: 'On-chain deployment' }
+};
+
+const REVEAL_SELECTORS = [
+    '[data-reveal]',
+    '.bg-neutral-900.rounded-lg',
+    '.bg-neutral-900.rounded-xl',
+    '.bg-neutral-900.rounded-2xl',
+    '.bg-neutral-800.rounded-lg',
+    '.bg-neutral-800.rounded-xl',
+    '.bg-neutral-800.rounded-2xl',
+    '.bg-black.rounded-xl'
+];
+
+let revealObserver = null;
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Initializing Real On-Chain Trading Platform...');
     
+    hydrateTopBar();
+    setupAnimatedViews();
+    setupScrollObserver();
+
     // FIRST: Set up navigation immediately - this is critical
     initializeEventListeners();
+    setupMobileNavigation();
     setupMintSelectionToggle();
     
     // Initialize Lucide icons
@@ -90,6 +142,7 @@ async function loadRealData() {
         updateRPCStatus(rpcHealth);
         
         addConsoleLog(`✅ Loaded ${wallets.length} wallets with real balances`, 'info');
+        updateTopbarSyncTimestamp(Date.now());
 
         if (collectFeesState.initialized) {
             await refreshCollectFeesView({ silent: true });
@@ -324,6 +377,15 @@ function updateRPCStatus(health) {
             dotElement.className = 'w-2 h-2 bg-red-500 rounded-full';
         }
     }
+
+    const apiStatusPill = document.getElementById('topbar-api-status');
+    if (apiStatusPill) {
+        apiStatusPill.setAttribute('aria-status', health.healthy ? 'online' : 'offline');
+        const label = apiStatusPill.querySelector('.label');
+        if (label) {
+            label.textContent = health.healthy ? 'API Online' : 'API Offline';
+        }
+    }
 }
 
 // Refresh single wallet balance
@@ -349,6 +411,7 @@ function startRealTimeUpdates() {
         try {
             const price = await solana.getSolPrice();
             updateSOLPrice(price);
+            updateTopbarSyncTimestamp(Date.now());
         } catch (error) {
             console.error('Error updating price:', error);
         }
@@ -506,6 +569,202 @@ function ensureGlobalFunction(name) {
 
 missingGlobalHandlers.forEach(ensureGlobalFunction);
 
+function hydrateTopBar() {
+    updateActiveViewLabel(rtCurrentView);
+    updateTopbarSyncTimestamp(Date.now());
+}
+
+function setupAnimatedViews() {
+    const views = document.querySelectorAll('.view');
+    views.forEach(view => {
+        if (!view.classList.contains('animated-view')) {
+            view.classList.add('animated-view');
+        }
+    });
+    const activeView = Array.from(views).find(view => !view.classList.contains('hidden'));
+    if (activeView) {
+        activeView.classList.add('is-visible');
+    }
+}
+
+function setupScrollObserver() {
+    if (typeof IntersectionObserver === 'undefined') {
+        return;
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+        const selector = REVEAL_SELECTORS.join(',');
+        document.querySelectorAll(selector).forEach(element => {
+            if (!element.classList.contains('reveal-ready')) {
+                element.classList.add('reveal-ready');
+            }
+            element.classList.add('is-visible');
+        });
+        revealObserver = null;
+        return;
+    }
+
+    revealObserver = new IntersectionObserver(handleRevealIntersection, {
+        threshold: 0.15,
+        rootMargin: '0px 0px -20px'
+    });
+
+    refreshScrollAnimations();
+}
+
+function handleRevealIntersection(entries) {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            if (revealObserver) {
+                revealObserver.unobserve(entry.target);
+            }
+        }
+    });
+}
+
+function refreshScrollAnimations(context) {
+    const scope = context || document;
+    const selector = REVEAL_SELECTORS.join(',');
+    const elements = scope.querySelectorAll(selector);
+
+    if (!revealObserver) {
+        elements.forEach(element => {
+            if (!element.classList.contains('reveal-ready')) {
+                element.classList.add('reveal-ready');
+            }
+            element.classList.add('is-visible');
+        });
+        return;
+    }
+
+    let delayIndex = 0;
+    elements.forEach(element => {
+        const isNew = !element.classList.contains('reveal-ready');
+        if (isNew) {
+            element.classList.add('reveal-ready');
+        }
+
+        if (context) {
+            element.classList.remove('is-visible');
+        }
+
+        if (isNew || context) {
+            const delay = Math.min(delayIndex * 35, 240);
+            element.style.setProperty('--reveal-delay', `${delay}ms`);
+            delayIndex += 1;
+        }
+
+        revealObserver.observe(element);
+    });
+}
+
+function formatViewName(viewName) {
+    if (!viewName) return '';
+    return viewName
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function updateActiveViewLabel(viewName) {
+    const titleEl = document.getElementById('current-view-label');
+    const subtitleEl = document.getElementById('current-view-subtitle');
+    if (!titleEl || !subtitleEl) return;
+
+    const meta = VIEW_METADATA[viewName] || {};
+    const fallbackTitle = formatViewName(viewName);
+
+    titleEl.textContent = meta.title || fallbackTitle || 'Chaos Bot';
+
+    const subtitleText = meta.subtitle || '';
+    if (subtitleText) {
+        subtitleEl.textContent = subtitleText;
+        subtitleEl.classList.remove('hidden');
+    } else {
+        subtitleEl.classList.add('hidden');
+    }
+}
+
+function updateTopbarSyncTimestamp(timestamp = Date.now()) {
+    const syncEl = document.getElementById('topbar-sync-timestamp');
+    if (!syncEl) return;
+
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    syncEl.textContent = date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function setupMobileNavigation() {
+    const toggle = document.getElementById('mobile-nav-toggle');
+    const backdrop = document.getElementById('mobile-nav-backdrop');
+    const sidebar = document.getElementById('primary-sidebar');
+
+    if (!toggle || !sidebar) {
+        return;
+    }
+
+    const closeSidebar = () => {
+        if (!document.body.classList.contains('sidebar-open')) {
+            return;
+        }
+        document.body.classList.remove('sidebar-open');
+        toggle.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+    };
+
+    const openSidebar = () => {
+        document.body.classList.add('sidebar-open');
+        toggle.classList.add('is-open');
+        toggle.setAttribute('aria-expanded', 'true');
+    };
+
+    closeMobileSidebar = closeSidebar;
+
+    toggle.addEventListener('click', () => {
+        if (document.body.classList.contains('sidebar-open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    if (backdrop) {
+        backdrop.addEventListener('click', closeSidebar);
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeSidebar();
+        }
+    });
+
+    const desktopQuery = window.matchMedia('(min-width: 1025px)');
+    const handleDesktopChange = (event) => {
+        if (event.matches) {
+            closeSidebar();
+        }
+    };
+
+    if (typeof desktopQuery.addEventListener === 'function') {
+        desktopQuery.addEventListener('change', handleDesktopChange);
+    } else if (typeof desktopQuery.addListener === 'function') {
+        desktopQuery.addListener(handleDesktopChange);
+    }
+
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.matchMedia('(max-width: 1024px)').matches) {
+                closeSidebar();
+            }
+        });
+    });
+}
+
 // Initialize event listeners
 function initializeEventListeners() {
     console.log('Setting up navigation listeners...');
@@ -566,6 +825,7 @@ function switchView(viewName) {
     console.log(`Hiding ${allViews.length} views`);
     allViews.forEach(view => {
         view.classList.add('hidden');
+        view.classList.remove('is-visible');
     });
     
     // Show selected view - try -view first, then -page
@@ -576,6 +836,9 @@ function switchView(viewName) {
     
     if (selectedView) {
         selectedView.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            selectedView.classList.add('is-visible');
+        });
         console.log(`✅ Showing view: ${viewName}`);
     } else {
         console.error(`❌ View not found: ${viewName}-view or ${viewName}-page`);
@@ -595,6 +858,18 @@ function switchView(viewName) {
             item.className = 'nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white';
         }
     });
+    
+    updateActiveViewLabel(viewName);
+
+    if (selectedView) {
+        refreshScrollAnimations(selectedView);
+    } else {
+        refreshScrollAnimations();
+    }
+
+    if (typeof closeMobileSidebar === 'function') {
+        closeMobileSidebar();
+    }
     
     // Load view-specific data
     if (viewName === 'wallets') {

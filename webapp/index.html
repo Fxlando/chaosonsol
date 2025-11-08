@@ -27,6 +27,247 @@
     <!-- Wallet Operations -->
     <script src="wallet-operations.js"></script>
     <style>
+        :root {
+            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+            --glass-bg: rgba(23, 23, 23, 0.88);
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        body {
+            overscroll-behavior-y: contain;
+        }
+
+        .main-content {
+            scroll-behavior: smooth;
+            overflow-y: auto;
+        }
+
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--glass-bg);
+            border-bottom: 1px solid rgba(124, 58, 237, 0.18);
+            backdrop-filter: blur(18px);
+        }
+
+        .top-bar-title {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .top-bar .view-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        .top-bar .view-subtitle {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: #a1a1aa;
+        }
+
+        .top-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .top-bar-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(64, 64, 64, 0.35);
+            border: 1px solid rgba(124, 58, 237, 0.25);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #f3e8ff;
+            transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), border-color 0.25s ease;
+        }
+
+        .top-bar-pill .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+        }
+
+        .top-bar-pill[aria-status="offline"] .dot {
+            background: #ef4444;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18);
+        }
+
+        .top-bar-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 32px rgba(124, 58, 237, 0.18);
+            border-color: rgba(124, 58, 237, 0.4);
+        }
+
+        #mobile-nav-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.3rem;
+            padding: 0.5rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(124, 58, 237, 0.35);
+            background: rgba(124, 58, 237, 0.12);
+            color: #f5f3ff;
+            cursor: pointer;
+            transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), border-color 0.25s ease;
+        }
+
+        #mobile-nav-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 32px rgba(124, 58, 237, 0.22);
+            border-color: rgba(124, 58, 237, 0.55);
+        }
+
+        #mobile-nav-toggle .line {
+            width: 18px;
+            height: 2px;
+            border-radius: 999px;
+            background: currentColor;
+            transition: transform 0.3s var(--ease-out), opacity 0.3s var(--ease-out);
+        }
+
+        #mobile-nav-toggle.is-open .line:nth-child(1) {
+            transform: translateY(6px) rotate(45deg);
+        }
+
+        #mobile-nav-toggle.is-open .line:nth-child(2) {
+            opacity: 0;
+        }
+
+        #mobile-nav-toggle.is-open .line:nth-child(3) {
+            transform: translateY(-6px) rotate(-45deg);
+        }
+
+        .mobile-nav-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s var(--ease-out);
+            z-index: 35;
+        }
+
+        body.sidebar-open .mobile-nav-backdrop {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        body.sidebar-open {
+            overflow: hidden;
+        }
+
+        .nav-item {
+            transition: background-color 0.25s var(--ease-out), color 0.25s var(--ease-out), transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out);
+        }
+
+        .nav-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 18px 32px rgba(124, 58, 237, 0.18);
+        }
+
+        button {
+            transition: transform 0.2s var(--ease-out), box-shadow 0.25s var(--ease-out), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1.5px);
+            box-shadow: 0 12px 28px rgba(124, 58, 237, 0.18);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .bg-neutral-900.rounded-lg,
+        .bg-neutral-900.rounded-xl,
+        .bg-neutral-900.rounded-2xl,
+        .bg-neutral-800.rounded-lg,
+        .bg-neutral-800.rounded-xl,
+        .bg-neutral-800.rounded-2xl,
+        .bg-black.rounded-xl {
+            transition: border-color 0.25s var(--ease-out), transform 0.25s var(--ease-out), box-shadow 0.3s var(--ease-out);
+        }
+
+        .bg-neutral-900.rounded-lg:hover,
+        .bg-neutral-900.rounded-xl:hover,
+        .bg-neutral-900.rounded-2xl:hover,
+        .bg-neutral-800.rounded-lg:hover,
+        .bg-neutral-800.rounded-xl:hover,
+        .bg-neutral-800.rounded-2xl:hover,
+        .bg-black.rounded-xl:hover {
+            border-color: rgba(124, 58, 237, 0.45);
+            transform: translateY(-4px);
+            box-shadow: 0 22px 45px rgba(124, 58, 237, 0.2);
+        }
+
+        .animated-view {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity 0.35s var(--ease-out), transform 0.4s var(--ease-out);
+        }
+
+        .animated-view.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reveal-ready {
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.45s var(--ease-out), transform 0.5s var(--ease-out);
+            transition-delay: var(--reveal-delay, 0ms);
+        }
+
+        .reveal-ready.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+
+            .animated-view,
+            .reveal-ready {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+        }
+
         .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
         .bg-neutral-900 { background-color: #171717; }
         .bg-neutral-800 { background-color: #262626; }
@@ -236,18 +477,31 @@
             }
 
             .sidebar {
-                position: relative;
-                width: 100% !important;
-                max-width: none;
-                height: auto;
-                border-right: none;
-                border-bottom: 1px solid #262626;
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                width: min(84vw, 18rem);
+                max-width: 320px;
+                height: 100vh;
+                border-right: 1px solid #262626;
+                border-bottom: none;
                 padding-bottom: 1rem;
                 align-items: stretch;
+                transform: translateX(-100%);
+                transition: transform 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+                background: rgba(10, 10, 15, 0.96);
+                backdrop-filter: blur(12px);
+                z-index: 60;
+            }
+
+            body.sidebar-open .sidebar {
+                transform: translateX(0);
+                box-shadow: 0 28px 48px rgba(0, 0, 0, 0.55);
             }
 
             .sidebar nav {
-                padding: 1rem;
+                padding: 1.25rem;
             }
 
             .sidebar nav .nav-list {
@@ -277,8 +531,17 @@
                 border-color: #7c3aed;
             }
 
+            #mobile-nav-toggle {
+                display: inline-flex;
+            }
+
+            .top-bar-actions {
+                display: none;
+            }
+
             .main-content {
                 width: 100%;
+                margin-left: 0;
             }
 
             .view {
@@ -330,7 +593,7 @@
 </head>
 <body class="flex h-screen bg-black text-gray-200 font-sans">
     <!-- Sidebar -->
-    <div class="sidebar w-60 bg-neutral-900 border-r border-neutral-800 flex flex-col">
+    <div id="primary-sidebar" class="sidebar w-60 bg-neutral-900 border-r border-neutral-800 flex flex-col">
         <div class="p-4 border-b border-neutral-800">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-neutral-800 rounded-2xl border border-neutral-700 flex items-center justify-center">
@@ -456,6 +719,28 @@
 
     <!-- Main Content -->
     <div class="main-content flex-1 flex flex-col">
+        <div class="top-bar">
+            <button id="mobile-nav-toggle" class="mobile-nav-toggle" aria-expanded="false" aria-controls="primary-sidebar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="line"></span>
+                <span class="line"></span>
+                <span class="line"></span>
+            </button>
+            <div class="top-bar-title">
+                <span class="view-subtitle" id="current-view-subtitle">Wallet Orchestration</span>
+                <span class="view-title" id="current-view-label">Wallets</span>
+            </div>
+            <div class="top-bar-actions">
+                <div class="top-bar-pill" id="topbar-api-status" aria-status="online">
+                    <span class="dot"></span>
+                    <span class="label">API Online</span>
+                </div>
+                <div class="top-bar-pill">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                    <span id="topbar-sync-timestamp">Just now</span>
+                </div>
+            </div>
+        </div>
         <!-- Wallets View -->
         <div id="wallets-view" class="view flex-1 flex flex-col">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
@@ -3997,6 +4282,7 @@
             }, 3000);
         }
     </script>
+    <div id="mobile-nav-backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
     <script src="real-trading-ui.js"></script>
     <script>
         // Inline navigation fallback - ensures navigation works even if other scripts fail

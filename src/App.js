@@ -223,7 +223,150 @@ export class App {
     if (!this.isInitialized) {
       throw new Error('App not initialized');
     }
-    return await this.tradingEngine.launchToken(walletId, metadata, initialBuyAmount, options);
+
+    const platform = options.platform || 'pumpfun';
+
+    if (platform !== 'pumpfun') {
+      return {
+        success: false,
+        error: `Unsupported launch platform: ${platform}`
+      };
+    }
+
+    const launchResult = await this.tradingEngine.launchToken(
+      walletId,
+      metadata,
+      initialBuyAmount,
+      options
+    );
+
+    if (!launchResult.success) {
+      return launchResult;
+    }
+
+    const automationResults = {};
+    const automations = options.automations || {};
+    const tokenMint = launchResult.tokenMint;
+
+    // Smart Sell automation
+    if (automations.smartSell?.enabled) {
+      try {
+        const smartConfig = { ...automations.smartSell };
+        const wallet = this.walletManager.getWallet(walletId);
+
+        if (!wallet) {
+          throw new Error('Creator wallet not found for Smart Sell automation');
+        }
+
+        let entryPrice = smartConfig.entryPrice;
+        if (!entryPrice || entryPrice <= 0) {
+          const priceInfo = await this.getTokenPrice(tokenMint);
+          if (priceInfo.success && priceInfo.price > 0) {
+            entryPrice = priceInfo.price;
+          }
+        }
+
+        let amount = smartConfig.amount;
+        if (!amount || amount <= 0) {
+          const balanceInfo = await this.solanaCore.getTokenBalance(
+            wallet.publicKey,
+            tokenMint
+          );
+
+          if (balanceInfo && typeof balanceInfo.uiAmount === 'number') {
+            amount = balanceInfo.uiAmount;
+          }
+        }
+
+        if (!entryPrice || entryPrice <= 0) {
+          throw new Error('Unable to determine entry price for Smart Sell automation');
+        }
+
+        if (!amount || amount <= 0) {
+          throw new Error('No token balance available for Smart Sell automation');
+        }
+
+        const smartOptions = {
+          profitTarget: smartConfig.profitTarget,
+          stopLoss: smartConfig.stopLoss,
+          trailingStop: smartConfig.trailingStop,
+          emergencyLoss:
+            smartConfig.emergencyLoss !== undefined
+              ? smartConfig.emergencyLoss
+              : smartConfig.emergencyStop,
+          partialSells: smartConfig.partialSells,
+          sellPercentages: smartConfig.sellPercentages
+        };
+
+        const smartResult = await this.addSmartSellPosition(
+          walletId,
+          tokenMint,
+          entryPrice,
+          amount,
+          smartOptions
+        );
+
+        automationResults.smartSell = {
+          ...smartResult,
+          config: smartOptions,
+          walletId
+        };
+      } catch (error) {
+        logger.error('Smart Sell automation setup failed:', error);
+        automationResults.smartSell = {
+          success: false,
+          error: error.message
+        };
+      }
+    }
+
+    // Volume Bot automation
+    if (automations.volumeBot?.enabled) {
+      try {
+        const volumeConfig = { ...automations.volumeBot };
+        const walletIds =
+          Array.isArray(volumeConfig.walletIds) && volumeConfig.walletIds.length > 0
+            ? volumeConfig.walletIds
+            : [walletId];
+
+        // Ensure configuration fields align with VolumeBot expectations
+        if (volumeConfig.buyAmount && !volumeConfig.minAmount && !volumeConfig.maxAmount) {
+          volumeConfig.minAmount = volumeConfig.buyAmount;
+          volumeConfig.maxAmount = volumeConfig.buyAmount;
+        }
+
+        if (volumeConfig.sellDelay && !volumeConfig.delayBetween) {
+          volumeConfig.delayBetween = volumeConfig.sellDelay;
+        }
+
+        delete volumeConfig.enabled;
+        delete volumeConfig.walletIds;
+
+        const volumeResult = await this.startVolumeSession(
+          walletIds,
+          tokenMint,
+          volumeConfig
+        );
+
+        automationResults.volumeBot = {
+          ...volumeResult,
+          walletIds,
+          config: volumeConfig
+        };
+      } catch (error) {
+        logger.error('Volume bot automation setup failed:', error);
+        automationResults.volumeBot = {
+          success: false,
+          error: error.message
+        };
+      }
+    }
+
+    return {
+      ...launchResult,
+      platform,
+      automations: automationResults
+    };
   }
 
   /**

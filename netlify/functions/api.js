@@ -117,12 +117,38 @@ exports.handler = async (event, context) => {
 
     // Token launch routes
     if (path === '/tokens/launch' && method === 'POST') {
+      const { walletId, metadata, initialBuy, platform, automations, options } = body;
+
+      if (!walletId || !metadata) {
+        return {
+          statusCode: 400,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'walletId and metadata are required'
+          })
+        };
+      }
+
+      const launchOptions = {
+        ...(options || {})
+      };
+
+      if (platform) {
+        launchOptions.platform = platform;
+      }
+
+      if (automations) {
+        launchOptions.automations = automations;
+      }
+
       const result = await app.launchToken(
-        body.walletId,
-        body.metadata,
-        body.initialBuy || 0,
-        body.options || {}
+        walletId,
+        metadata,
+        initialBuy || 0,
+        launchOptions
       );
+
       return {
         statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },

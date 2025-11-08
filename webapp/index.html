@@ -1480,12 +1480,22 @@
                             <span class="font-semibold">Raydium</span>
                         </button>
                     </div>
+
+                    <div class="mb-6">
+                        <label class="block mb-2 text-sm font-medium">Creator Wallet</label>
+                        <select id="token-creator-wallet" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2">
+                            <option value="">Loading wallets...</option>
+                        </select>
+                        <p id="token-wallet-status" class="text-xs text-gray-500">Connect your backend wallet manager to load wallets.</p>
+                    </div>
                     
-                    <div class="border-2 border-dashed border-neutral-700 rounded-lg p-12 mb-6 text-center">
+                    <div id="token-image-dropzone" class="border-2 border-dashed border-neutral-700 rounded-lg p-12 mb-6 text-center transition">
                         <div class="text-4xl mb-4">☁️</div>
-                        <p class="text-sm text-gray-400">
+                        <img id="token-image-preview" class="mx-auto max-h-40 rounded hidden mb-4" alt="Token preview" />
+                        <p id="token-image-status" class="text-sm text-gray-400">
                             <span class="underline cursor-pointer" onclick="uploadTokenImage()">Click to upload</span> an image or drag and drop
                         </p>
+                        <input type="file" id="token-image-input" accept="image/*" class="hidden" />
                     </div>
                     
                     <div class="mb-6">

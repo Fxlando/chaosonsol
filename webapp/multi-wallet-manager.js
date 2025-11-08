@@ -227,7 +227,25 @@ class MultiWalletManager {
     async executeVolumeBlueprint(blueprint) {
         const settings = blueprint.settings || {};
         const wallets = this.resolveBlueprintWallets(blueprint, 'volumeBot');
-        const { tokenMint, cycles, buyAmount, sellDelay } = settings;
+        const {
+            tokenMint,
+            cycles = 10,
+            buyAmount = 0.02,
+            sellDelay = 30,
+            minAmount,
+            maxAmount,
+            randomizeAmounts = true,
+            randomizeDelay = true,
+            buyIntervalSeconds,
+            buyIntervalMinSeconds,
+            buyIntervalMaxSeconds,
+            sellIntervalSeconds,
+            sellIntervalMinSeconds,
+            sellIntervalMaxSeconds,
+            sellPercentageMin = 55,
+            sellPercentageMax = 90,
+            guardrails = {}
+        } = settings;
 
         if (!wallets || wallets.length === 0) {
             throw new Error('No wallets available for Volume Bot automation');
@@ -235,31 +253,154 @@ class MultiWalletManager {
 
         console.log(`📊 Volume: ${cycles} cycles with ${wallets.length} wallets`);
 
+        const resolveAmount = () => {
+            const lower = typeof minAmount === 'number' && minAmount > 0 ? minAmount : buyAmount;
+            const upper = typeof maxAmount === 'number' && maxAmount > lower ? maxAmount : buyAmount;
+
+            if (!randomizeAmounts || lower === upper) {
+                return buyAmount;
+            }
+
+            return lower + Math.random() * (upper - lower);
+        };
+
+        const resolveDelay = (baseSeconds, minSeconds, maxSeconds) => {
+            const fallback = baseSeconds || sellDelay;
+            const lower = Math.max(0.1, minSeconds || fallback);
+            const upper = Math.max(lower, maxSeconds || fallback);
+            const value = randomizeDelay ? lower + Math.random() * (upper - lower) : fallback;
+            return Math.max(0, value * 1000);
+        };
+
+        const guardrailState = {
+            netPosition: 0,
+            realizedPnL: 0,
+            stop: false
+        };
+
+        const guardrailConfig = {
+            enabled: guardrails?.enabled !== false,
+            minNetPosition: typeof guardrails?.minNetPosition === 'number' ? guardrails.minNetPosition : null,
+            maxNetPosition: typeof guardrails?.maxNetPosition === 'number' ? guardrails.maxNetPosition : null,
+            targetNetPosition:
+                typeof guardrails?.targetNetPosition === 'number' ? guardrails.targetNetPosition : null,
+            realizedProfitTarget:
+                typeof guardrails?.realizedProfitTarget === 'number' ? guardrails.realizedProfitTarget : null,
+            realizedLossLimit:
+                typeof guardrails?.realizedLossLimit === 'number'
+                    ? Math.abs(guardrails.realizedLossLimit)
+                    : null
+        };
+
+        const evaluateGuardrails = (phase) => {
+            if (!guardrailConfig.enabled) {
+                return false;
+            }
+
+            if (
+                guardrailConfig.maxNetPosition !== null &&
+                guardrailState.netPosition > guardrailConfig.maxNetPosition
+            ) {
+                console.log(`🛑 Guardrail stop (${phase}): net position above ${guardrailConfig.maxNetPosition}`);
+                return true;
+            }
+
+            if (
+                guardrailConfig.minNetPosition !== null &&
+                guardrailState.netPosition < guardrailConfig.minNetPosition
+            ) {
+                console.log(`🛑 Guardrail stop (${phase}): net position below ${guardrailConfig.minNetPosition}`);
+                return true;
+            }
+
+            if (
+                guardrailConfig.targetNetPosition !== null &&
+                guardrailState.netPosition >= guardrailConfig.targetNetPosition
+            ) {
+                console.log(`🛑 Guardrail stop (${phase}): target position reached`);
+                return true;
+            }
+
+            if (
+                guardrailConfig.realizedProfitTarget !== null &&
+                guardrailState.realizedPnL >= guardrailConfig.realizedProfitTarget
+            ) {
+                console.log(`🛑 Guardrail stop (${phase}): profit target met`);
+                return true;
+            }
+
+            if (
+                guardrailConfig.realizedLossLimit !== null &&
+                guardrailState.realizedPnL <= -guardrailConfig.realizedLossLimit
+            ) {
+                console.log(`🛑 Guardrail stop (${phase}): loss limit breached`);
+                return true;
+            }
+
+            return false;
+        };
+
         for (let cycle = 0; cycle < cycles; cycle++) {
+            if (guardrailState.stop) break;
             console.log(`   Cycle ${cycle + 1}/${cycles}`);
 
-            // Stagger wallet operations
             for (const wallet of wallets) {
+                if (guardrailState.stop) break;
+
                 try {
-                    // Buy
-                    await this.executeBuy(wallet.privateKey, tokenMint, buyAmount);
-                    
-                    // Wait
-                    await this.sleep(sellDelay * 1000);
-                    
-                    // Sell
-                    await this.executeSell(wallet.privateKey, tokenMint, buyAmount);
-                    
-                    // Random delay between wallets
-                    await this.sleep(Math.random() * 3000 + 1000);
-                    
+                    const amountToBuy = resolveAmount();
+                    await this.executeBuy(wallet.privateKey, tokenMint, amountToBuy);
+                    guardrailState.netPosition += amountToBuy;
+                    guardrailState.realizedPnL -= amountToBuy;
+
+                    if (evaluateGuardrails('post-buy')) {
+                        guardrailState.stop = true;
+                        break;
+                    }
+
+                    const sellDelayMs = resolveDelay(
+                        sellIntervalSeconds,
+                        sellIntervalMinSeconds,
+                        sellIntervalMaxSeconds
+                    );
+                    await this.sleep(sellDelayMs);
+
+                    const sellPercent =
+                        sellPercentageMin === sellPercentageMax
+                            ? sellPercentageMin
+                            : sellPercentageMin + Math.random() * (sellPercentageMax - sellPercentageMin);
+                    const amountSold = amountToBuy * (sellPercent / 100);
+                    await this.executeSell(wallet.privateKey, tokenMint, amountSold);
+                    guardrailState.netPosition -= amountSold;
+                    guardrailState.realizedPnL += amountSold * 0.98; // approximate fees
+
+                    if (evaluateGuardrails('post-sell')) {
+                        guardrailState.stop = true;
+                        break;
+                    }
+
+                    const buyDelayMs = resolveDelay(
+                        buyIntervalSeconds,
+                        buyIntervalMinSeconds,
+                        buyIntervalMaxSeconds
+                    );
+                    await this.sleep(buyDelayMs);
                 } catch (error) {
                     console.error(`Error in wallet ${wallet.publicKey}:`, error.message);
                 }
             }
 
-            // Delay between cycles
-            await this.sleep(Math.random() * 5000 + 3000);
+            if (guardrailState.stop) {
+                console.log('🛑 Guardrail triggered, stopping volume generation');
+                break;
+            }
+
+            const cycleDelayMs = resolveDelay(
+                (sellIntervalSeconds || sellDelay) * 2,
+                (sellIntervalMinSeconds || 1),
+                (sellIntervalMaxSeconds || sellDelay * 2)
+            );
+            await this.sleep(cycleDelayMs);
         }
 
         console.log('✅ Volume generation complete');

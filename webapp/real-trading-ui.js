@@ -1505,6 +1505,25 @@ function toggleVolumeBotConfig() {
     const config = document.getElementById('volume-bot-config');
     if (checkbox && config) {
         config.classList.toggle('hidden', !checkbox.checked);
+        toggleVolumeGuardrails();
+    }
+}
+
+function toggleVolumeGuardrails() {
+    const checkbox = document.getElementById('volume-bot-guardrails-enabled');
+    const guardrailPanel = document.getElementById('volume-bot-guardrail-config');
+    if (checkbox && guardrailPanel) {
+        const volumeEnabled = Boolean(document.getElementById('enable-volume-bot')?.checked);
+        guardrailPanel.classList.toggle('hidden', !checkbox.checked || !volumeEnabled);
+    }
+}
+
+function toggleBlueprintVolumeGuardrails() {
+    const checkbox = document.getElementById('blueprint-volume-guardrails-enabled');
+    const guardrailPanel = document.getElementById('blueprint-volume-guardrail-config');
+    if (checkbox && guardrailPanel) {
+        const volumeEnabled = Boolean(document.getElementById('blueprint-volume-enabled')?.checked);
+        guardrailPanel.classList.toggle('hidden', !checkbox.checked || !volumeEnabled);
     }
 }
 
@@ -1977,6 +1996,11 @@ async function executeCreateAndLaunchToken() {
 
         const volumeBotConfig = enableVolumeBot
             ? (() => {
+                  const readNumber = (id) => {
+                      const value = parseFloat(document.getElementById(id)?.value ?? '');
+                      return Number.isFinite(value) ? value : null;
+                  };
+
                   const config = {
                       enabled: true,
                       walletSelector: volumeSelection,
@@ -1990,8 +2014,51 @@ async function executeCreateAndLaunchToken() {
                       buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
                       sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
                       cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
-                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked)
+                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
+                      randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
                   };
+
+                  const minAmount = readNumber('volume-bot-min-amount');
+                  const maxAmount = readNumber('volume-bot-max-amount');
+                  if (minAmount !== null) config.minAmount = minAmount;
+                  if (maxAmount !== null) config.maxAmount = maxAmount;
+
+                  const buyInterval = readNumber('volume-bot-buy-interval');
+                  const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
+                  const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
+                  if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
+                  if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
+                  if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
+
+                  const sellInterval = readNumber('volume-bot-sell-interval');
+                  const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
+                  const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
+                  if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
+                  if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
+                  if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
+
+                  const sellPercentMin = readNumber('volume-bot-sell-percent-min');
+                  const sellPercentMax = readNumber('volume-bot-sell-percent-max');
+                  if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
+                  if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
+
+                  const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
+                  const guardrails = {
+                      enabled: guardrailsEnabled,
+                      minNetPosition: readNumber('volume-bot-min-position'),
+                      maxNetPosition: readNumber('volume-bot-max-position'),
+                      targetNetPosition: readNumber('volume-bot-target-position'),
+                      realizedProfitTarget: readNumber('volume-bot-profit-target'),
+                      realizedLossLimit: readNumber('volume-bot-loss-limit')
+                  };
+
+                  Object.keys(guardrails).forEach((key) => {
+                      if (key !== 'enabled' && guardrails[key] === null) {
+                          delete guardrails[key];
+                      }
+                  });
+
+                  config.guardrails = guardrails;
 
                   if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
                       delete config.walletIds;
@@ -2226,6 +2293,13 @@ function setupBlueprintAutomationControls() {
             toggleBlueprintAutomationWrappers(prefix, modeSelect.value || 'all');
         }
     });
+
+    const volumeToggle = getElement('blueprint-volume-enabled');
+    if (volumeToggle && !volumeToggle.dataset.guardrailHandler) {
+        volumeToggle.addEventListener('change', toggleBlueprintVolumeGuardrails);
+        volumeToggle.dataset.guardrailHandler = 'true';
+    }
+    toggleBlueprintVolumeGuardrails();
 }
 
 function resetBlueprintAutomationSelectors() {
@@ -3014,6 +3088,8 @@ window.refreshWalletBalance = refreshWalletBalance;
 window.toggleWalletSelection = toggleWalletSelection;
 window.toggleSmartSellConfig = toggleSmartSellConfig;
 window.toggleVolumeBotConfig = toggleVolumeBotConfig;
+window.toggleVolumeGuardrails = toggleVolumeGuardrails;
+window.toggleBlueprintVolumeGuardrails = toggleBlueprintVolumeGuardrails;
 window.executeCreateAndLaunchToken = executeCreateAndLaunchToken;
 window.viewActiveAutomations = viewActiveAutomations;
 window.stopAutomation = stopAutomation;
@@ -3228,7 +3304,27 @@ const blueprintTemplates = {
                 enabled: false,
                 buyAmount: 0.02,
                 cycles: 10,
-                sellDelay: 45
+                sellDelay: 45,
+                minAmount: 0.015,
+                maxAmount: 0.05,
+                buyIntervalSeconds: 3,
+                buyIntervalMinSeconds: 1,
+                buyIntervalMaxSeconds: 8,
+                sellIntervalSeconds: 5,
+                sellIntervalMinSeconds: 2,
+                sellIntervalMaxSeconds: 12,
+                sellPercentageMin: 55,
+                sellPercentageMax: 90,
+                randomizeAmounts: true,
+                randomizeDelay: true,
+                guardrails: {
+                    enabled: true,
+                    minNetPosition: 0,
+                    maxNetPosition: null,
+                    targetNetPosition: null,
+                    realizedProfitTarget: null,
+                    realizedLossLimit: null
+                }
             }
         },
         notes: ''
@@ -3253,7 +3349,27 @@ const blueprintTemplates = {
                 enabled: false,
                 buyAmount: 0.02,
                 cycles: 8,
-                sellDelay: 40
+                sellDelay: 40,
+                minAmount: 0.015,
+                maxAmount: 0.04,
+                buyIntervalSeconds: 2.5,
+                buyIntervalMinSeconds: 1,
+                buyIntervalMaxSeconds: 6,
+                sellIntervalSeconds: 4,
+                sellIntervalMinSeconds: 1.5,
+                sellIntervalMaxSeconds: 8,
+                sellPercentageMin: 50,
+                sellPercentageMax: 85,
+                randomizeAmounts: true,
+                randomizeDelay: true,
+                guardrails: {
+                    enabled: true,
+                    minNetPosition: 0,
+                    maxNetPosition: 5000,
+                    targetNetPosition: 2500,
+                    realizedProfitTarget: 2,
+                    realizedLossLimit: 1
+                }
             }
         },
         notes: 'Use Jito bundle for guaranteed first fills.'
@@ -3278,7 +3394,27 @@ const blueprintTemplates = {
                 enabled: true,
                 buyAmount: 0.03,
                 cycles: 15,
-                sellDelay: 55
+                sellDelay: 55,
+                minAmount: 0.02,
+                maxAmount: 0.06,
+                buyIntervalSeconds: 3.5,
+                buyIntervalMinSeconds: 1,
+                buyIntervalMaxSeconds: 9,
+                sellIntervalSeconds: 6,
+                sellIntervalMinSeconds: 2,
+                sellIntervalMaxSeconds: 14,
+                sellPercentageMin: 60,
+                sellPercentageMax: 92,
+                randomizeAmounts: true,
+                randomizeDelay: true,
+                guardrails: {
+                    enabled: true,
+                    minNetPosition: 0,
+                    maxNetPosition: 7500,
+                    targetNetPosition: 5000,
+                    realizedProfitTarget: 3,
+                    realizedLossLimit: 1.5
+                }
             }
         },
         notes: 'Pairs well with mixer funding mode and multiple wallets.'
@@ -3303,7 +3439,27 @@ const blueprintTemplates = {
                 enabled: true,
                 buyAmount: 0.015,
                 cycles: 12,
-                sellDelay: 35
+                sellDelay: 35,
+                minAmount: 0.01,
+                maxAmount: 0.03,
+                buyIntervalSeconds: 2,
+                buyIntervalMinSeconds: 0.8,
+                buyIntervalMaxSeconds: 5,
+                sellIntervalSeconds: 3.5,
+                sellIntervalMinSeconds: 1,
+                sellIntervalMaxSeconds: 7,
+                sellPercentageMin: 50,
+                sellPercentageMax: 88,
+                randomizeAmounts: true,
+                randomizeDelay: true,
+                guardrails: {
+                    enabled: true,
+                    minNetPosition: 0,
+                    maxNetPosition: 4000,
+                    targetNetPosition: 2000,
+                    realizedProfitTarget: 2.5,
+                    realizedLossLimit: 1
+                }
             }
         },
         notes: 'Monitor spread between Raydium and Jupiter pools.'
@@ -4122,9 +4278,22 @@ function setBlueprintFormValue(id, value) {
     if (!element) return;
     if (element.type === 'checkbox') {
         element.checked = Boolean(value);
+    } else if (value === undefined || value === null || (typeof value === 'number' && !Number.isFinite(value))) {
+        element.value = '';
     } else {
         element.value = value;
     }
+}
+
+function getNumericValue(id) {
+    const element = getElement(id);
+    if (!element) return null;
+    const raw = element.value;
+    if (raw === undefined || raw === null || raw === '') {
+        return null;
+    }
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getBlueprintFormValues() {
@@ -4154,8 +4323,13 @@ function getBlueprintFormValues() {
         throw new Error(volumeValidation.message);
     }
 
+    const readNumber = (id) => getNumericValue(id);
+
     const smartSellGroup = getWalletGroupById(smartSellSelector.groupId);
     const volumeGroup = getWalletGroupById(volumeSelector.groupId);
+    const volumeRandomizeAmounts = Boolean(getElement('blueprint-volume-randomize-amounts')?.checked);
+    const volumeRandomizeDelay = Boolean(getElement('blueprint-volume-randomize-delay')?.checked);
+    const volumeGuardrailsEnabled = Boolean(getElement('blueprint-volume-guardrails-enabled')?.checked);
 
     return {
         template,
@@ -4181,17 +4355,47 @@ function getBlueprintFormValues() {
                     walletGroupId: smartSellSelector.groupId || null,
                     walletGroupName: smartSellGroup?.name || null
                 },
-                volumeBot: {
+                volumeBot: (() => {
+                    const volumeGuardrails = {
+                        enabled: volumeGuardrailsEnabled,
+                        minNetPosition: readNumber('blueprint-volume-min-position'),
+                        maxNetPosition: readNumber('blueprint-volume-max-position'),
+                        targetNetPosition: readNumber('blueprint-volume-target-position'),
+                        realizedProfitTarget: readNumber('blueprint-volume-profit-target'),
+                        realizedLossLimit: readNumber('blueprint-volume-loss-limit')
+                    };
+
+                    Object.keys(volumeGuardrails).forEach((key) => {
+                        if (key !== 'enabled' && volumeGuardrails[key] === null) {
+                            delete volumeGuardrails[key];
+                        }
+                    });
+
+                    return {
                     enabled: volumeEnabled,
                     buyAmount: parseFloat(getElement('blueprint-volume-amount')?.value || '0') || 0,
                     cycles: parseInt(getElement('blueprint-volume-cycles')?.value || '0', 10) || 0,
                     sellDelay: parseInt(getElement('blueprint-volume-delay')?.value || '0', 10) || 0,
+                    minAmount: readNumber('blueprint-volume-min-amount'),
+                    maxAmount: readNumber('blueprint-volume-max-amount'),
+                    buyIntervalSeconds: readNumber('blueprint-volume-buy-interval'),
+                    buyIntervalMinSeconds: readNumber('blueprint-volume-buy-interval-min'),
+                    buyIntervalMaxSeconds: readNumber('blueprint-volume-buy-interval-max'),
+                    sellIntervalSeconds: readNumber('blueprint-volume-sell-interval'),
+                    sellIntervalMinSeconds: readNumber('blueprint-volume-sell-interval-min'),
+                    sellIntervalMaxSeconds: readNumber('blueprint-volume-sell-interval-max'),
+                    sellPercentageMin: readNumber('blueprint-volume-sell-percent-min'),
+                    sellPercentageMax: readNumber('blueprint-volume-sell-percent-max'),
+                    randomizeAmounts: volumeRandomizeAmounts,
+                    randomizeDelay: volumeRandomizeDelay,
                     walletSelector: volumeSelector,
                     walletMode: volumeSelector.mode,
                     walletIds: volumeSelector.walletIds,
                     walletGroupId: volumeSelector.groupId || null,
-                    walletGroupName: volumeGroup?.name || null
-                }
+                    walletGroupName: volumeGroup?.name || null,
+                    guardrails: volumeGuardrails
+                    };
+                })()
             }
         }
     };
@@ -4219,10 +4423,33 @@ function applyBlueprintPreset(templateKey) {
     setBlueprintFormValue('blueprint-smart-sell-profit', preset.automations.smartSell.profitTarget);
     setBlueprintFormValue('blueprint-smart-sell-stoploss', preset.automations.smartSell.stopLoss);
 
-    setBlueprintFormValue('blueprint-volume-enabled', preset.automations.volumeBot.enabled);
-    setBlueprintFormValue('blueprint-volume-amount', preset.automations.volumeBot.buyAmount);
-    setBlueprintFormValue('blueprint-volume-cycles', preset.automations.volumeBot.cycles);
-    setBlueprintFormValue('blueprint-volume-delay', preset.automations.volumeBot.sellDelay);
+    const volumePreset = preset.automations.volumeBot || {};
+    setBlueprintFormValue('blueprint-volume-enabled', volumePreset.enabled);
+    setBlueprintFormValue('blueprint-volume-amount', volumePreset.buyAmount ?? '');
+    setBlueprintFormValue('blueprint-volume-cycles', volumePreset.cycles ?? '');
+    setBlueprintFormValue('blueprint-volume-delay', volumePreset.sellDelay ?? '');
+    setBlueprintFormValue('blueprint-volume-min-amount', volumePreset.minAmount ?? '');
+    setBlueprintFormValue('blueprint-volume-max-amount', volumePreset.maxAmount ?? '');
+    setBlueprintFormValue('blueprint-volume-buy-interval', volumePreset.buyIntervalSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-buy-interval-min', volumePreset.buyIntervalMinSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-buy-interval-max', volumePreset.buyIntervalMaxSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-sell-interval', volumePreset.sellIntervalSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-sell-interval-min', volumePreset.sellIntervalMinSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-sell-interval-max', volumePreset.sellIntervalMaxSeconds ?? '');
+    setBlueprintFormValue('blueprint-volume-sell-percent-min', volumePreset.sellPercentageMin ?? '');
+    setBlueprintFormValue('blueprint-volume-sell-percent-max', volumePreset.sellPercentageMax ?? '');
+    setBlueprintFormValue('blueprint-volume-randomize-amounts', volumePreset.randomizeAmounts !== false);
+    setBlueprintFormValue('blueprint-volume-randomize-delay', volumePreset.randomizeDelay !== false);
+
+    const guardrailsPreset = volumePreset.guardrails || {};
+    setBlueprintFormValue('blueprint-volume-guardrails-enabled', guardrailsPreset.enabled !== false);
+    setBlueprintFormValue('blueprint-volume-min-position', guardrailsPreset.minNetPosition ?? '');
+    setBlueprintFormValue('blueprint-volume-max-position', guardrailsPreset.maxNetPosition ?? '');
+    setBlueprintFormValue('blueprint-volume-target-position', guardrailsPreset.targetNetPosition ?? '');
+    setBlueprintFormValue('blueprint-volume-profit-target', guardrailsPreset.realizedProfitTarget ?? '');
+    setBlueprintFormValue('blueprint-volume-loss-limit', guardrailsPreset.realizedLossLimit ?? '');
+
+    toggleBlueprintVolumeGuardrails();
 }
 
 function openCreateBlueprintModal(template = 'custom') {
@@ -4349,6 +4576,17 @@ function buildBlueprintCard(blueprint) {
         <div>Volume Bot wallets: ${describeAutomationSelector(automationSettings.volumeBot)}</div>
     `;
     body.appendChild(walletSummary);
+
+    const guardrails = automationSettings.volumeBot?.guardrails;
+    const guardrailSummary = document.createElement('div');
+    guardrailSummary.className = 'text-xs text-gray-400';
+    if (guardrails && guardrails.enabled !== false) {
+        const formatOrDash = (value) => (value === null || value === undefined ? '—' : value);
+        guardrailSummary.textContent = `Volume guardrails → min ${formatOrDash(guardrails.minNetPosition)} • max ${formatOrDash(guardrails.maxNetPosition)} • target ${formatOrDash(guardrails.targetNetPosition)} • profit ${formatOrDash(guardrails.realizedProfitTarget)} SOL • loss ${formatOrDash(guardrails.realizedLossLimit)} SOL`;
+    } else {
+        guardrailSummary.textContent = 'Volume guardrails → disabled';
+    }
+    body.appendChild(guardrailSummary);
 
     if (blueprint.notes) {
         const notes = document.createElement('div');
@@ -4492,6 +4730,24 @@ function applyBlueprintToLaunch(blueprint) {
         const volumeAmount = getElement('volume-bot-amount');
         const volumeCycles = getElement('volume-bot-cycles');
         const volumeDelay = getElement('volume-bot-delay');
+        const volumeMinAmount = getElement('volume-bot-min-amount');
+        const volumeMaxAmount = getElement('volume-bot-max-amount');
+        const volumeBuyInterval = getElement('volume-bot-buy-interval');
+        const volumeBuyIntervalMin = getElement('volume-bot-buy-interval-min');
+        const volumeBuyIntervalMax = getElement('volume-bot-buy-interval-max');
+        const volumeSellInterval = getElement('volume-bot-sell-interval');
+        const volumeSellIntervalMin = getElement('volume-bot-sell-interval-min');
+        const volumeSellIntervalMax = getElement('volume-bot-sell-interval-max');
+        const volumeSellPercentMin = getElement('volume-bot-sell-percent-min');
+        const volumeSellPercentMax = getElement('volume-bot-sell-percent-max');
+        const volumeRandomizeAmounts = getElement('volume-bot-randomize');
+        const volumeRandomizeDelay = getElement('volume-bot-randomize-delay');
+        const guardrailToggle = getElement('volume-bot-guardrails-enabled');
+        const guardrailMin = getElement('volume-bot-min-position');
+        const guardrailMax = getElement('volume-bot-max-position');
+        const guardrailTarget = getElement('volume-bot-target-position');
+        const guardrailProfit = getElement('volume-bot-profit-target');
+        const guardrailLoss = getElement('volume-bot-loss-limit');
         if (volumeAmount && automations.volumeBot?.buyAmount !== undefined) {
             volumeAmount.value = automations.volumeBot.buyAmount;
         }
@@ -4501,6 +4757,102 @@ function applyBlueprintToLaunch(blueprint) {
         if (volumeDelay && automations.volumeBot?.sellDelay !== undefined) {
             volumeDelay.value = automations.volumeBot.sellDelay;
         }
+        if (volumeMinAmount) {
+            volumeMinAmount.value =
+                automations.volumeBot?.minAmount !== undefined ? automations.volumeBot.minAmount : '';
+        }
+        if (volumeMaxAmount) {
+            volumeMaxAmount.value =
+                automations.volumeBot?.maxAmount !== undefined ? automations.volumeBot.maxAmount : '';
+        }
+        if (volumeBuyInterval) {
+            volumeBuyInterval.value =
+                automations.volumeBot?.buyIntervalSeconds !== undefined
+                    ? automations.volumeBot.buyIntervalSeconds
+                    : '';
+        }
+        if (volumeBuyIntervalMin) {
+            volumeBuyIntervalMin.value =
+                automations.volumeBot?.buyIntervalMinSeconds !== undefined
+                    ? automations.volumeBot.buyIntervalMinSeconds
+                    : '';
+        }
+        if (volumeBuyIntervalMax) {
+            volumeBuyIntervalMax.value =
+                automations.volumeBot?.buyIntervalMaxSeconds !== undefined
+                    ? automations.volumeBot.buyIntervalMaxSeconds
+                    : '';
+        }
+        if (volumeSellInterval) {
+            volumeSellInterval.value =
+                automations.volumeBot?.sellIntervalSeconds !== undefined
+                    ? automations.volumeBot.sellIntervalSeconds
+                    : '';
+        }
+        if (volumeSellIntervalMin) {
+            volumeSellIntervalMin.value =
+                automations.volumeBot?.sellIntervalMinSeconds !== undefined
+                    ? automations.volumeBot.sellIntervalMinSeconds
+                    : '';
+        }
+        if (volumeSellIntervalMax) {
+            volumeSellIntervalMax.value =
+                automations.volumeBot?.sellIntervalMaxSeconds !== undefined
+                    ? automations.volumeBot.sellIntervalMaxSeconds
+                    : '';
+        }
+        if (volumeSellPercentMin) {
+            volumeSellPercentMin.value =
+                automations.volumeBot?.sellPercentageMin !== undefined
+                    ? automations.volumeBot.sellPercentageMin
+                    : '';
+        }
+        if (volumeSellPercentMax) {
+            volumeSellPercentMax.value =
+                automations.volumeBot?.sellPercentageMax !== undefined
+                    ? automations.volumeBot.sellPercentageMax
+                    : '';
+        }
+        if (volumeRandomizeAmounts) {
+            volumeRandomizeAmounts.checked = automations.volumeBot?.randomizeAmounts !== false;
+        }
+        if (volumeRandomizeDelay) {
+            volumeRandomizeDelay.checked = automations.volumeBot?.randomizeDelay !== false;
+        }
+        if (guardrailToggle) {
+            guardrailToggle.checked = automations.volumeBot?.guardrails?.enabled !== false;
+        }
+        if (guardrailMin) {
+            guardrailMin.value =
+                automations.volumeBot?.guardrails?.minNetPosition !== undefined
+                    ? automations.volumeBot.guardrails.minNetPosition
+                    : '';
+        }
+        if (guardrailMax) {
+            guardrailMax.value =
+                automations.volumeBot?.guardrails?.maxNetPosition !== undefined
+                    ? automations.volumeBot.guardrails.maxNetPosition
+                    : '';
+        }
+        if (guardrailTarget) {
+            guardrailTarget.value =
+                automations.volumeBot?.guardrails?.targetNetPosition !== undefined
+                    ? automations.volumeBot.guardrails.targetNetPosition
+                    : '';
+        }
+        if (guardrailProfit) {
+            guardrailProfit.value =
+                automations.volumeBot?.guardrails?.realizedProfitTarget !== undefined
+                    ? automations.volumeBot.guardrails.realizedProfitTarget
+                    : '';
+        }
+        if (guardrailLoss) {
+            guardrailLoss.value =
+                automations.volumeBot?.guardrails?.realizedLossLimit !== undefined
+                    ? automations.volumeBot.guardrails.realizedLossLimit
+                    : '';
+        }
+        toggleVolumeGuardrails();
     }
 
     const normalizeSelectorForLaunch = (automationConfig = {}) => {

@@ -165,6 +165,18 @@ export const TRADING_CONFIG = {
   VOLUME_BOT_MIN_DELAY: 1000, // 1 second
   VOLUME_BOT_MAX_DELAY: 60000, // 60 seconds
   VOLUME_BOT_DEFAULT_DELAY: 3000, // 3 seconds
+  VOLUME_BOT_MIN_SELL_PERCENT: 45, // 45%
+  VOLUME_BOT_MAX_SELL_PERCENT: 95, // 95%
+  VOLUME_BOT_DEFAULT_BUY_INTERVAL: 3000, // 3 seconds between buys
+  VOLUME_BOT_DEFAULT_SELL_INTERVAL: 5000, // 5 seconds between sells
+  VOLUME_BOT_GUARDRAILS: {
+    ENABLED: true,
+    MIN_NET_POSITION: 0, // tokens (ui amount)
+    MAX_NET_POSITION: null,
+    TARGET_NET_POSITION: null,
+    REALIZED_PROFIT_TARGET: null, // SOL
+    REALIZED_LOSS_LIMIT: null // SOL
+  }
 };
 
 // Logging Constants

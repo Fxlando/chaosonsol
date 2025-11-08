@@ -580,13 +580,26 @@ export class App {
             : [walletId];
 
         // Ensure configuration fields align with VolumeBot expectations
-        if (volumeConfig.buyAmount && !volumeConfig.minAmount && !volumeConfig.maxAmount) {
+        if (
+          volumeConfig.buyAmount &&
+          volumeConfig.minAmount === undefined &&
+          volumeConfig.maxAmount === undefined
+        ) {
           volumeConfig.minAmount = volumeConfig.buyAmount;
           volumeConfig.maxAmount = volumeConfig.buyAmount;
         }
 
-        if (volumeConfig.sellDelay && !volumeConfig.delayBetween) {
-          volumeConfig.delayBetween = volumeConfig.sellDelay;
+        const sellIntervalSeconds =
+          volumeConfig.sellIntervalSeconds ??
+          volumeConfig.sellDelay ??
+          volumeConfig.delayBetween;
+
+        if (sellIntervalSeconds && !volumeConfig.delayBetween) {
+          volumeConfig.delayBetween = sellIntervalSeconds;
+        }
+
+        if (!volumeConfig.guardrails) {
+          volumeConfig.guardrails = { enabled: false };
         }
 
         delete volumeConfig.enabled;

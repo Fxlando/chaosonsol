@@ -2197,6 +2197,7 @@ registerGlobalHandler('toggleVanityKeyVisibility', toggleVanityKeyVisibility);
 registerGlobalHandler('copyVanityAddress', copyVanityAddress);
 registerGlobalHandler('copyVanityPrivateKey', copyVanityPrivateKey);
 registerGlobalHandler('markVanityStatus', markVanityStatus);
+registerGlobalHandler('uploadTokenImage', uploadTokenImage);
 
 registerGlobalHandler('uploadTokenImage', () => {
     notify('Image upload coming soon. Email chaosbot support to whitelist.', 'warning');

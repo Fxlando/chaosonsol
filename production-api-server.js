@@ -111,7 +111,7 @@ class ProductionAPIServer {
             if (pathname.startsWith('/api/')) {
                 await this.handleAPIRequest(req, res, pathname, method, parsedUrl.query);
             } else if (pathname === '/' || pathname === '/index.html') {
-                this.serveFile(res, 'frogwiftools-complete.html');
+                this.serveFile(res, 'chaosonsol-complete.html');
             } else if (pathname.endsWith('.html')) {
                 this.serveFile(res, pathname.substring(1));
             } else if (pathname.endsWith('.js')) {

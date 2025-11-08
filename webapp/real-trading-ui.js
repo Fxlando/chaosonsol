@@ -816,13 +816,23 @@ async function loadCreatorWallets() {
         tokenLaunchState.wallets = [];
     } catch (error) {
         console.error('Failed to load creator wallets:', error);
-        if (walletStatus) {
-            walletStatus.textContent = `Failed to load wallets: ${error.message}`;
-            walletStatus.classList.remove('text-gray-500');
-            walletStatus.classList.add('text-red-400');
+        const localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+
+        if (localWallets.length) {
+            populateCreatorWalletSelect(walletSelect, localWallets, {
+                walletStatus,
+                local: true,
+                error
+            });
+        } else {
+            walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
+            walletSelect.disabled = true;
+            if (walletStatus) {
+                walletStatus.textContent = `Unable to load wallets (${error.message}). Import wallets from the Wallets view.`;
+                walletStatus.classList.remove('text-gray-500');
+                walletStatus.classList.add('text-red-400');
+            }
         }
-        walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
-        walletSelect.disabled = true;
     }
 }
 
@@ -855,6 +865,13 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         selectEl.appendChild(option);
     });
 
+    if (wallets.length > 0) {
+        selectEl.disabled = false;
+        selectEl.removeAttribute('disabled');
+    } else {
+        selectEl.disabled = true;
+    }
+
     if (tokenLaunchState.selectedWalletId) {
         const matchingOption = Array.from(selectEl.options).find(
             opt => opt.value === tokenLaunchState.selectedWalletId
@@ -867,9 +884,16 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         selectEl.value = wallets[0].id || wallets[0].publicKey;
         tokenLaunchState.selectedWalletId = selectEl.value;
         placeholder.selected = false;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (wallets.length > 1) {
+        const firstOption = selectEl.options[1];
+        if (firstOption) {
+            firstOption.selected = true;
+            placeholder.selected = false;
+            tokenLaunchState.selectedWalletId = firstOption.value;
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
-
-    selectEl.disabled = wallets.length === 0;
 
     if (!walletStatus) return;
 

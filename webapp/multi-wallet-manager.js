@@ -273,17 +273,12 @@ class MultiWalletManager {
         };
 
         const guardrailState = {
-            netPosition: 0,
             realizedPnL: 0,
             stop: false
         };
 
         const guardrailConfig = {
             enabled: guardrails?.enabled !== false,
-            minNetPosition: typeof guardrails?.minNetPosition === 'number' ? guardrails.minNetPosition : null,
-            maxNetPosition: typeof guardrails?.maxNetPosition === 'number' ? guardrails.maxNetPosition : null,
-            targetNetPosition:
-                typeof guardrails?.targetNetPosition === 'number' ? guardrails.targetNetPosition : null,
             realizedProfitTarget:
                 typeof guardrails?.realizedProfitTarget === 'number' ? guardrails.realizedProfitTarget : null,
             realizedLossLimit:
@@ -295,30 +290,6 @@ class MultiWalletManager {
         const evaluateGuardrails = (phase) => {
             if (!guardrailConfig.enabled) {
                 return false;
-            }
-
-            if (
-                guardrailConfig.maxNetPosition !== null &&
-                guardrailState.netPosition > guardrailConfig.maxNetPosition
-            ) {
-                console.log(`🛑 Guardrail stop (${phase}): net position above ${guardrailConfig.maxNetPosition}`);
-                return true;
-            }
-
-            if (
-                guardrailConfig.minNetPosition !== null &&
-                guardrailState.netPosition < guardrailConfig.minNetPosition
-            ) {
-                console.log(`🛑 Guardrail stop (${phase}): net position below ${guardrailConfig.minNetPosition}`);
-                return true;
-            }
-
-            if (
-                guardrailConfig.targetNetPosition !== null &&
-                guardrailState.netPosition >= guardrailConfig.targetNetPosition
-            ) {
-                console.log(`🛑 Guardrail stop (${phase}): target position reached`);
-                return true;
             }
 
             if (
@@ -350,7 +321,6 @@ class MultiWalletManager {
                 try {
                     const amountToBuy = resolveAmount();
                     await this.executeBuy(wallet.privateKey, tokenMint, amountToBuy);
-                    guardrailState.netPosition += amountToBuy;
                     guardrailState.realizedPnL -= amountToBuy;
 
                     if (evaluateGuardrails('post-buy')) {
@@ -371,7 +341,6 @@ class MultiWalletManager {
                             : sellPercentageMin + Math.random() * (sellPercentageMax - sellPercentageMin);
                     const amountSold = amountToBuy * (sellPercent / 100);
                     await this.executeSell(wallet.privateKey, tokenMint, amountSold);
-                    guardrailState.netPosition -= amountSold;
                     guardrailState.realizedPnL += amountSold * 0.98; // approximate fees
 
                     if (evaluateGuardrails('post-sell')) {

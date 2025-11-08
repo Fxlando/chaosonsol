@@ -132,7 +132,9 @@ export class VolumeBot {
           guardrailReason: null
         },
         isActive: true,
-        guardrailState: this.createGuardrailState(),
+      guardrailState: this.createGuardrailState(
+        this.usesNetGuardrails(sessionConfig.guardrails)
+      ),
         startedAt: new Date().toISOString()
       };
 
@@ -160,7 +162,9 @@ export class VolumeBot {
       const { walletIds, tokenMint, config } = session;
       const cycles = config.continuous ? Number.MAX_SAFE_INTEGER : Math.max(1, config.cycles || 1);
 
-      await this.refreshGuardrailBalances(session);
+      if (session.guardrailState.trackNetPosition) {
+        await this.refreshGuardrailBalances(session);
+      }
       
       for (let cycle = 0; cycle < cycles && session.isActive; cycle++) {
         session.stats.cyclesCompleted = cycle + 1;
@@ -203,7 +207,9 @@ export class VolumeBot {
 
               const solSpent = this.extractSolAmount(buyResult, 'input', buyAmount);
               this.applyCashFlow(session, -solSpent);
-              await this.updateGuardrailTokenHoldings(session, walletId, tokenMint);
+              if (session.guardrailState.trackNetPosition) {
+                await this.updateGuardrailTokenHoldings(session, walletId, tokenMint);
+              }
               this.updateStatsFromGuardrails(session);
 
               if (this.evaluateGuardrails(session, 'post-buy')) {
@@ -256,7 +262,9 @@ export class VolumeBot {
                   logger.info(`✅ Sell successful: ${sellResult.signature}`);
 
                   this.applyCashFlow(session, solReceived);
-                  await this.updateGuardrailTokenHoldings(session, walletId, tokenMint);
+                  if (session.guardrailState.trackNetPosition) {
+                    await this.updateGuardrailTokenHoldings(session, walletId, tokenMint);
+                  }
                   this.updateStatsFromGuardrails(session);
 
                   if (this.evaluateGuardrails(session, 'post-sell')) {
@@ -446,7 +454,12 @@ export class VolumeBot {
   }
 
   async updateGuardrailTokenHoldings(session, walletId, tokenMint) {
-    if (!session || !walletId || !tokenMint) {
+    if (
+      !session ||
+      !session.guardrailState?.trackNetPosition ||
+      !walletId ||
+      !tokenMint
+    ) {
       return;
     }
 
@@ -504,18 +517,23 @@ export class VolumeBot {
     const { realizedPnL, netTokenPosition } = session.guardrailState;
     let triggerReason = null;
 
+    const trackingNet = session.guardrailState.trackNetPosition;
+
     if (
-      guardrails.maxNetPosition !== null &&
+      trackingNet &&
+      guardrails?.maxNetPosition != null &&
       netTokenPosition > guardrails.maxNetPosition
     ) {
       triggerReason = `Net position ${netTokenPosition.toFixed(4)} exceeds maximum ${guardrails.maxNetPosition}`;
     } else if (
-      guardrails.minNetPosition !== null &&
+      trackingNet &&
+      guardrails?.minNetPosition != null &&
       netTokenPosition < guardrails.minNetPosition
     ) {
       triggerReason = `Net position ${netTokenPosition.toFixed(4)} below minimum ${guardrails.minNetPosition}`;
     } else if (
-      guardrails.targetNetPosition !== null &&
+      trackingNet &&
+      guardrails?.targetNetPosition != null &&
       netTokenPosition >= guardrails.targetNetPosition
     ) {
       triggerReason = `Target net position ${guardrails.targetNetPosition} reached`;
@@ -547,6 +565,9 @@ export class VolumeBot {
   }
 
   async refreshGuardrailBalances(session) {
+    if (!session?.guardrailState?.trackNetPosition) {
+      return;
+    }
     if (!session?.walletIds || !Array.isArray(session.walletIds)) {
       return;
     }
@@ -675,7 +696,7 @@ export class VolumeBot {
     };
   }
 
-  createGuardrailState() {
+  createGuardrailState(trackNetPosition = false) {
     return {
       realizedPnL: 0,
       netTokenPosition: 0,
@@ -684,7 +705,8 @@ export class VolumeBot {
       triggeredAt: null,
       lastCashFlowAt: null,
       tokenHoldings: new Map(),
-      tokenHoldingsSnapshot: {}
+      tokenHoldingsSnapshot: {},
+      trackNetPosition
     };
   }
 
@@ -780,21 +802,6 @@ export class VolumeBot {
     const enabled =
       overrides.enabled !== undefined ? Boolean(overrides.enabled) : Boolean(defaultEnabled);
 
-    const minNetPosition = this.normalizeNullableNumber(
-      overrides.minNetPosition,
-      defaults.minNetPosition ?? TRADING_CONFIG.VOLUME_BOT_GUARDRAILS?.MIN_NET_POSITION ?? 0
-    );
-
-    const maxNetPosition = this.normalizeNullableNumber(
-      overrides.maxNetPosition,
-      defaults.maxNetPosition ?? TRADING_CONFIG.VOLUME_BOT_GUARDRAILS?.MAX_NET_POSITION ?? null
-    );
-
-    const targetNetPosition = this.normalizeNullableNumber(
-      overrides.targetNetPosition,
-      defaults.targetNetPosition ?? TRADING_CONFIG.VOLUME_BOT_GUARDRAILS?.TARGET_NET_POSITION ?? null
-    );
-
     const realizedProfitTarget = this.normalizeNullableNumber(
       overrides.realizedProfitTarget ?? overrides.profitTarget,
       defaults.realizedProfitTarget ?? TRADING_CONFIG.VOLUME_BOT_GUARDRAILS?.REALIZED_PROFIT_TARGET ?? null
@@ -813,12 +820,18 @@ export class VolumeBot {
 
     return {
       enabled,
-      minNetPosition,
-      maxNetPosition,
-      targetNetPosition,
       realizedProfitTarget,
       realizedLossLimit
     };
+  }
+
+  usesNetGuardrails(guardrails = {}) {
+    if (!guardrails) return false;
+    return (
+      guardrails.minNetPosition != null ||
+      guardrails.maxNetPosition != null ||
+      guardrails.targetNetPosition != null
+    );
   }
 
   normalizeNullableNumber(value, fallback = null) {

@@ -171,9 +171,6 @@ export const TRADING_CONFIG = {
   VOLUME_BOT_DEFAULT_SELL_INTERVAL: 5000, // 5 seconds between sells
   VOLUME_BOT_GUARDRAILS: {
     ENABLED: true,
-    MIN_NET_POSITION: 0, // tokens (ui amount)
-    MAX_NET_POSITION: null,
-    TARGET_NET_POSITION: null,
     REALIZED_PROFIT_TARGET: null, // SOL
     REALIZED_LOSS_LIMIT: null // SOL
   }

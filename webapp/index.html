@@ -2009,10 +2009,10 @@
                             <div id="volume-bot-config" class="space-y-4 hidden">
                                 <div class="space-y-3">
                                     <div>
-                                        <div class="text-[11px] uppercase text-gray-500 tracking-wide mb-2">Order sizing</div>
+                                        <div class="text-[11px] uppercase text-gray-500 tracking-wide mb-2">Trade amounts</div>
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Buy Amount (SOL)</label>
+                                                <label class="block mb-2 text-xs font-medium">Base buy size (SOL)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-amount"
@@ -2022,7 +2022,7 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Min Buy (SOL)</label>
+                                                <label class="block mb-2 text-xs font-medium">Smallest buy (SOL)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-min-amount"
@@ -2030,9 +2030,10 @@
                                                     step="0.001"
                                                     class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                                 />
+                                                <p class="text-[11px] text-gray-500 mt-1">Used when "vary amount" is on.</p>
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Max Buy (SOL)</label>
+                                                <label class="block mb-2 text-xs font-medium">Largest buy (SOL)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-max-amount"
@@ -2044,7 +2045,7 @@
                                         </div>
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Sell Delay (seconds)</label>
+                                                <label class="block mb-2 text-xs font-medium">Seconds before selling</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-delay"
@@ -2064,11 +2065,11 @@
                                             <div class="flex items-center gap-3 mt-6 md:mt-8">
                                                 <label class="flex items-center gap-2">
                                                     <input type="checkbox" id="volume-bot-randomize" checked class="rounded" />
-                                                    <span class="text-xs">Randomize amounts</span>
+                                                    <span class="text-xs">Vary buy size each loop</span>
                                                 </label>
                                                 <label class="flex items-center gap-2">
                                                     <input type="checkbox" id="volume-bot-randomize-delay" checked class="rounded" />
-                                                    <span class="text-xs">Randomize timing</span>
+                                                    <span class="text-xs">Vary the timing a little</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -2078,7 +2079,7 @@
                                         <div class="text-[11px] uppercase text-gray-500 tracking-wide mb-2">Timing</div>
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Buy Interval (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Seconds between buys (avg)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-buy-interval"
@@ -2088,7 +2089,7 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Buy Interval Min (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Fastest buy delay (s)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-buy-interval-min"
@@ -2096,9 +2097,10 @@
                                                     step="0.1"
                                                     class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                                 />
+                                                <p class="text-[11px] text-gray-500 mt-1">Leave blank to stick with the average.</p>
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Buy Interval Max (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Slowest buy delay (s)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-buy-interval-max"
@@ -2110,7 +2112,7 @@
                                         </div>
                                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Sell Interval (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Seconds between sells (avg)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-sell-interval"
@@ -2120,7 +2122,7 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Sell Interval Min (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Fastest sell delay (s)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-sell-interval-min"
@@ -2130,7 +2132,7 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Sell Interval Max (s)</label>
+                                                <label class="block mb-2 text-xs font-medium">Slowest sell delay (s)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-sell-interval-max"
@@ -2140,6 +2142,7 @@
                                                 />
                                             </div>
                                         </div>
+                                        <p class="text-[11px] text-gray-500 mt-3">The bot picks a random delay between your fastest and slowest numbers. If you leave them empty, it sticks with the average.</p>
                                     </div>
 
                                     <div>
@@ -2170,7 +2173,7 @@
 
                                     <div class="border border-neutral-800 rounded-md p-3">
                                         <div class="flex items-center justify-between">
-                                            <div class="text-xs font-medium text-gray-200">Inventory guardrails</div>
+                                            <div class="text-xs font-medium text-gray-200">Safety stops</div>
                                             <label class="flex items-center gap-2 text-xs text-gray-300">
                                                 <input type="checkbox" id="volume-bot-guardrails-enabled" class="rounded" checked onchange="toggleVolumeGuardrails()" />
                                                 Enable
@@ -2178,35 +2181,7 @@
                                         </div>
                                         <div id="volume-bot-guardrail-config" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Min net position (tokens)</label>
-                                                <input
-                                                    type="number"
-                                                    id="volume-bot-min-position"
-                                                    value="0"
-                                                    step="0.01"
-                                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block mb-2 text-xs font-medium">Max net position (tokens)</label>
-                                                <input
-                                                    type="number"
-                                                    id="volume-bot-max-position"
-                                                    step="0.01"
-                                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block mb-2 text-xs font-medium">Target position (tokens)</label>
-                                                <input
-                                                    type="number"
-                                                    id="volume-bot-target-position"
-                                                    step="0.01"
-                                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block mb-2 text-xs font-medium">Stop at profit (SOL)</label>
+                                                <label class="block mb-2 text-xs font-medium">Stop when profit hits (SOL)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-profit-target"
@@ -2215,7 +2190,7 @@
                                                 />
                                             </div>
                                             <div>
-                                                <label class="block mb-2 text-xs font-medium">Stop at loss (SOL)</label>
+                                                <label class="block mb-2 text-xs font-medium">Stop when loss hits (SOL)</label>
                                                 <input
                                                     type="number"
                                                     id="volume-bot-loss-limit"
@@ -4275,7 +4250,7 @@
                                     </label>
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Buy Amount</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Base buy size (SOL)</label>
                                             <input type="number" id="blueprint-volume-amount" value="0.02" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
@@ -4283,49 +4258,50 @@
                                             <input type="number" id="blueprint-volume-cycles" value="10" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell Delay (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds before selling</label>
                                             <input type="number" id="blueprint-volume-delay" value="45" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Min Buy (SOL)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Smallest buy (SOL)</label>
                                             <input type="number" id="blueprint-volume-min-amount" value="0.015" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            <p class="text-[10px] text-gray-500 mt-1">Used when "vary amount" is on.</p>
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Max Buy (SOL)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Largest buy (SOL)</label>
                                             <input type="number" id="blueprint-volume-max-amount" value="0.05" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div class="flex items-center gap-2 mt-6">
                                             <input type="checkbox" id="blueprint-volume-randomize-amounts" class="rounded" checked />
-                                            <span class="text-[11px] text-gray-400">Randomize buys</span>
+                                            <span class="text-[11px] text-gray-400">Vary buy size each loop</span>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Buy Interval (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between buys (avg)</label>
                                             <input type="number" id="blueprint-volume-buy-interval" value="3" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Buy Interval Min (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest buy delay (s)</label>
                                             <input type="number" id="blueprint-volume-buy-interval-min" value="1" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Buy Interval Max (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest buy delay (s)</label>
                                             <input type="number" id="blueprint-volume-buy-interval-max" value="8" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell Interval (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between sells (avg)</label>
                                             <input type="number" id="blueprint-volume-sell-interval" value="5" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell Interval Min (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest sell delay (s)</label>
                                             <input type="number" id="blueprint-volume-sell-interval-min" value="2" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell Interval Max (s)</label>
+                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest sell delay (s)</label>
                                             <input type="number" id="blueprint-volume-sell-interval-max" value="12" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                         </div>
                                     </div>
@@ -4340,33 +4316,22 @@
                                         </div>
                                         <div class="flex items-center gap-2 mt-6">
                                             <input type="checkbox" id="blueprint-volume-randomize-delay" class="rounded" checked />
-                                            <span class="text-[11px] text-gray-400">Randomize timing</span>
+                                            <span class="text-[11px] text-gray-400">Vary the timing a little</span>
                                         </div>
                                     </div>
+                                    <p class="text-[10px] text-gray-500">The bot picks a random delay between your fastest and slowest numbers. Leave them blank if you just want the average.</p>
                                     <div class="border-t border-neutral-800 pt-3 space-y-3">
                                         <label class="flex items-center gap-2 text-xs text-gray-300">
                                             <input type="checkbox" id="blueprint-volume-guardrails-enabled" class="rounded" checked onchange="toggleBlueprintVolumeGuardrails()" />
-                                            Enable inventory guardrails
+                                            Enable safety stops
                                         </label>
                                         <div id="blueprint-volume-guardrail-config" class="grid grid-cols-2 gap-2">
                                             <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Min net position (tokens)</label>
-                                                <input type="number" id="blueprint-volume-min-position" value="0" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Max net position (tokens)</label>
-                                                <input type="number" id="blueprint-volume-max-position" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Target position (tokens)</label>
-                                                <input type="number" id="blueprint-volume-target-position" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop at profit (SOL)</label>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when profit hits (SOL)</label>
                                                 <input type="number" id="blueprint-volume-profit-target" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                             </div>
                                             <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop at loss (SOL)</label>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when loss hits (SOL)</label>
                                                 <input type="number" id="blueprint-volume-loss-limit" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                             </div>
                                         </div>

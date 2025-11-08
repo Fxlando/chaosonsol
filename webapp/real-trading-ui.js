@@ -2045,18 +2045,16 @@ async function executeCreateAndLaunchToken() {
                   const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
                   const guardrails = {
                       enabled: guardrailsEnabled,
-                      minNetPosition: readNumber('volume-bot-min-position'),
-                      maxNetPosition: readNumber('volume-bot-max-position'),
-                      targetNetPosition: readNumber('volume-bot-target-position'),
                       realizedProfitTarget: readNumber('volume-bot-profit-target'),
                       realizedLossLimit: readNumber('volume-bot-loss-limit')
                   };
 
-                  Object.keys(guardrails).forEach((key) => {
-                      if (key !== 'enabled' && guardrails[key] === null) {
-                          delete guardrails[key];
-                      }
-                  });
+                  if (guardrails.realizedProfitTarget === null) {
+                      delete guardrails.realizedProfitTarget;
+                  }
+                  if (guardrails.realizedLossLimit === null) {
+                      delete guardrails.realizedLossLimit;
+                  }
 
                   config.guardrails = guardrails;
 
@@ -3319,9 +3317,6 @@ const blueprintTemplates = {
                 randomizeDelay: true,
                 guardrails: {
                     enabled: true,
-                    minNetPosition: 0,
-                    maxNetPosition: null,
-                    targetNetPosition: null,
                     realizedProfitTarget: null,
                     realizedLossLimit: null
                 }
@@ -3364,9 +3359,6 @@ const blueprintTemplates = {
                 randomizeDelay: true,
                 guardrails: {
                     enabled: true,
-                    minNetPosition: 0,
-                    maxNetPosition: 5000,
-                    targetNetPosition: 2500,
                     realizedProfitTarget: 2,
                     realizedLossLimit: 1
                 }
@@ -3409,9 +3401,6 @@ const blueprintTemplates = {
                 randomizeDelay: true,
                 guardrails: {
                     enabled: true,
-                    minNetPosition: 0,
-                    maxNetPosition: 7500,
-                    targetNetPosition: 5000,
                     realizedProfitTarget: 3,
                     realizedLossLimit: 1.5
                 }
@@ -3454,9 +3443,6 @@ const blueprintTemplates = {
                 randomizeDelay: true,
                 guardrails: {
                     enabled: true,
-                    minNetPosition: 0,
-                    maxNetPosition: 4000,
-                    targetNetPosition: 2000,
                     realizedProfitTarget: 2.5,
                     realizedLossLimit: 1
                 }
@@ -4358,18 +4344,16 @@ function getBlueprintFormValues() {
                 volumeBot: (() => {
                     const volumeGuardrails = {
                         enabled: volumeGuardrailsEnabled,
-                        minNetPosition: readNumber('blueprint-volume-min-position'),
-                        maxNetPosition: readNumber('blueprint-volume-max-position'),
-                        targetNetPosition: readNumber('blueprint-volume-target-position'),
                         realizedProfitTarget: readNumber('blueprint-volume-profit-target'),
                         realizedLossLimit: readNumber('blueprint-volume-loss-limit')
                     };
 
-                    Object.keys(volumeGuardrails).forEach((key) => {
-                        if (key !== 'enabled' && volumeGuardrails[key] === null) {
-                            delete volumeGuardrails[key];
-                        }
-                    });
+                    if (volumeGuardrails.realizedProfitTarget === null) {
+                        delete volumeGuardrails.realizedProfitTarget;
+                    }
+                    if (volumeGuardrails.realizedLossLimit === null) {
+                        delete volumeGuardrails.realizedLossLimit;
+                    }
 
                     return {
                     enabled: volumeEnabled,
@@ -4443,9 +4427,6 @@ function applyBlueprintPreset(templateKey) {
 
     const guardrailsPreset = volumePreset.guardrails || {};
     setBlueprintFormValue('blueprint-volume-guardrails-enabled', guardrailsPreset.enabled !== false);
-    setBlueprintFormValue('blueprint-volume-min-position', guardrailsPreset.minNetPosition ?? '');
-    setBlueprintFormValue('blueprint-volume-max-position', guardrailsPreset.maxNetPosition ?? '');
-    setBlueprintFormValue('blueprint-volume-target-position', guardrailsPreset.targetNetPosition ?? '');
     setBlueprintFormValue('blueprint-volume-profit-target', guardrailsPreset.realizedProfitTarget ?? '');
     setBlueprintFormValue('blueprint-volume-loss-limit', guardrailsPreset.realizedLossLimit ?? '');
 
@@ -4582,9 +4563,9 @@ function buildBlueprintCard(blueprint) {
     guardrailSummary.className = 'text-xs text-gray-400';
     if (guardrails && guardrails.enabled !== false) {
         const formatOrDash = (value) => (value === null || value === undefined ? '—' : value);
-        guardrailSummary.textContent = `Volume guardrails → min ${formatOrDash(guardrails.minNetPosition)} • max ${formatOrDash(guardrails.maxNetPosition)} • target ${formatOrDash(guardrails.targetNetPosition)} • profit ${formatOrDash(guardrails.realizedProfitTarget)} SOL • loss ${formatOrDash(guardrails.realizedLossLimit)} SOL`;
+        guardrailSummary.textContent = `Safety stops → take profit ${formatOrDash(guardrails.realizedProfitTarget)} SOL • stop loss ${formatOrDash(guardrails.realizedLossLimit)} SOL`;
     } else {
-        guardrailSummary.textContent = 'Volume guardrails → disabled';
+        guardrailSummary.textContent = 'Safety stops → disabled';
     }
     body.appendChild(guardrailSummary);
 
@@ -4743,9 +4724,6 @@ function applyBlueprintToLaunch(blueprint) {
         const volumeRandomizeAmounts = getElement('volume-bot-randomize');
         const volumeRandomizeDelay = getElement('volume-bot-randomize-delay');
         const guardrailToggle = getElement('volume-bot-guardrails-enabled');
-        const guardrailMin = getElement('volume-bot-min-position');
-        const guardrailMax = getElement('volume-bot-max-position');
-        const guardrailTarget = getElement('volume-bot-target-position');
         const guardrailProfit = getElement('volume-bot-profit-target');
         const guardrailLoss = getElement('volume-bot-loss-limit');
         if (volumeAmount && automations.volumeBot?.buyAmount !== undefined) {
@@ -4821,24 +4799,6 @@ function applyBlueprintToLaunch(blueprint) {
         }
         if (guardrailToggle) {
             guardrailToggle.checked = automations.volumeBot?.guardrails?.enabled !== false;
-        }
-        if (guardrailMin) {
-            guardrailMin.value =
-                automations.volumeBot?.guardrails?.minNetPosition !== undefined
-                    ? automations.volumeBot.guardrails.minNetPosition
-                    : '';
-        }
-        if (guardrailMax) {
-            guardrailMax.value =
-                automations.volumeBot?.guardrails?.maxNetPosition !== undefined
-                    ? automations.volumeBot.guardrails.maxNetPosition
-                    : '';
-        }
-        if (guardrailTarget) {
-            guardrailTarget.value =
-                automations.volumeBot?.guardrails?.targetNetPosition !== undefined
-                    ? automations.volumeBot.guardrails.targetNetPosition
-                    : '';
         }
         if (guardrailProfit) {
             guardrailProfit.value =

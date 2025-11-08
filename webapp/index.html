@@ -347,6 +347,10 @@
                     <i data-lucide="wallet" class="w-4 h-4"></i>
                     <span class="text-sm">Wallets</span>
                 </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="vanities">
+                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    <span class="text-sm">Vanities</span>
+                </div>
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="blueprint">
                     <i data-lucide="file-text" class="w-4 h-4"></i>
                     <span class="text-sm">Blueprint</span>
@@ -355,14 +359,6 @@
                     <i data-lucide="dollar-sign" class="w-4 h-4"></i>
                     <span class="text-sm">Collect Fees</span>
                 </div>
-                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="vanities">
-                    <i data-lucide="edit-2" class="w-4 h-4"></i>
-                    <span class="text-sm">Vanities</span>
-                </div>
-                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="console">
-                    <i data-lucide="terminal" class="w-4 h-4"></i>
-                    <span class="text-sm">Console</span>
-                </div>
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="pnl">
                     <i data-lucide="trending-up" class="w-4 h-4"></i>
                     <span class="text-sm">P&L Cards</span>
@@ -370,6 +366,10 @@
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="settings">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                     <span class="text-sm">Settings</span>
+                </div>
+                <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="console">
+                    <i data-lucide="terminal" class="w-4 h-4"></i>
+                    <span class="text-sm">Console</span>
                 </div>
             </div>
             
@@ -839,112 +839,155 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-3xl">🏷️</span>
-                    <h1 class="text-2xl font-semibold">Tag <span id="tag-selected-count">1</span> Wallet</h1>
+                    <h1 class="text-2xl font-semibold">Tag <span id="tag-selected-count">0</span> Wallet</h1>
                 </div>
             </div>
             
             <div class="flex-1 overflow-auto p-6">
-                <div class="max-w-2xl">
-                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4 mb-6">
+                <div class="max-w-3xl space-y-8">
+                    <div class="bg-neutral-900/40 border border-neutral-800 rounded-lg p-5 space-y-3">
+                        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                            <span>💡</span>
+                            <span>How Tagging Works</span>
+                        </h2>
+                        <p class="text-sm text-gray-300 leading-relaxed">
+                            Tagging performs a small buy and sell on a real token pair. Trading dashboards (GMGN, Photon, Axiom, and others)
+                            detect the activity and attach their logos to your wallets. The result: your wallets show up across these platforms
+                            as verified traders or bots.
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="bg-neutral-950/60 border border-neutral-800 rounded-lg p-3">
+                                <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wide mb-1">Before You Start</h3>
+                                <ul class="text-xs text-gray-400 space-y-1 leading-relaxed">
+                                    <li>✓ Select wallets using the table checkboxes.</li>
+                                    <li>✓ Pick an executor that matches your infrastructure.</li>
+                                    <li>✓ Choose the trading platforms you want to signal.</li>
+                                </ul>
+                            </div>
+                            <div class="bg-neutral-950/60 border border-neutral-800 rounded-lg p-3">
+                                <h3 class="text-xs font-semibold text-gray-200 uppercase tracking-wide mb-1">After Tagging</h3>
+                                <ul class="text-xs text-gray-400 space-y-1 leading-relaxed">
+                                    <li>✓ Review the wallet on <span class="text-purple-300">gmgn.ai</span> or other explorers.</li>
+                                    <li>✓ Tags may take a few minutes to propagate across platforms.</li>
+                                    <li>✓ Re-run tagging whenever you need to refresh visibility.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
                         <div class="flex items-start gap-3">
                             <span class="text-yellow-500 text-xl">⚠️</span>
                             <div>
                                 <h3 class="font-semibold text-yellow-200 mb-1">Heads up!</h3>
                                 <p class="text-sm text-yellow-300">
-                                    The amount you enter is not how much the tag will cost, but rather the amount of SOL that will be used to buy a random token. The token will then be sold 10-15 seconds later for approximately the same amount of SOL minus the transaction fees. Tags may take a few minutes to show up on some sites.
+                                    The amount you enter is not how much the tag will cost, but the SOL amount used for the swap. The token is sold
+                                    back 10–15 seconds later, so expect roughly the same SOL minus network fees. Some platforms can take a few minutes
+                                    before the tag visibly updates.
                                 </p>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="mb-6">
-                        <label class="block mb-2 text-sm font-medium">Executor</label>
-                        <div class="flex gap-2">
-                            <button id="tag-jito-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectTagExecutor('jito')">
-                                Jito
-                            </button>
-                            <button id="tag-rpc-btn" class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition" onclick="selectTagExecutor('rpc')">
-                                RPC
-                            </button>
+                    <div class="space-y-5">
+                        <div>
+                            <h3 class="text-sm font-semibold text-white mb-2">Select Wallets to Tag</h3>
+                            <p class="text-sm text-gray-400">
+                                Pick wallets from the table. Selected wallets appear below so you can inspect balances, existing tags,
+                                and switch the active wallet when working in Specific mode.
+                            </p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <label class="block text-sm font-semibold text-white">Select Executor</label>
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div class="flex gap-2">
+                                    <button id="tag-jito-btn" class="executor-pill executor-pill--active" onclick="selectTagExecutor('jito')">
+                                        Jito
+                                    </button>
+                                    <button id="tag-rpc-btn" class="executor-pill executor-pill--muted" onclick="selectTagExecutor('rpc')">
+                                        RPC
+                                    </button>
+                                </div>
+                                <div class="text-xs text-gray-400 space-y-1">
+                                    <p><span class="text-purple-300 font-semibold">Jito</span>: Uses bundles for high landing rates. Perfect if you don’t run a staked validator.</p>
+                                    <p><span class="text-purple-300 font-semibold">RPC</span>: For staked nodes or power users who manage their own priority fees.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="mb-6">
-                        <label class="block mb-3 text-sm font-medium">Tagging Method</label>
+                    <div>
+                        <label class="block mb-3 text-sm font-semibold text-white">Select Tagging Mode</label>
                         <div class="space-y-2">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="tag-method" value="uniform" class="text-purple-600" />
-                                <span class="text-sm">Uniform Tags</span>
+                                <input type="radio" name="tag-method" value="uniform" class="text-purple-600">
+                                <span class="text-sm text-gray-300">Uniform — apply the same platforms to every selected wallet.</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="tag-method" value="specific" checked class="text-purple-600" />
-                                <span class="text-sm">Specific Tags</span>
+                                <input type="radio" name="tag-method" value="specific" checked class="text-purple-600">
+                                <span class="text-sm text-gray-300">Specific — configure each wallet individually for mixed personas.</span>
                             </label>
                         </div>
                     </div>
-                    
-                    <div id="tag-wallet-info" class="mb-6 bg-neutral-800 rounded-lg p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center gap-2">
-                                <span class="text-lg">🐘</span>
-                                <span class="font-mono text-sm">sour-elephant</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs text-gray-400">Address</span>
-                            </div>
+
+                    <div>
+                        <h3 class="block mb-3 text-sm font-semibold text-white">Select Trading Bot Tag</h3>
+                        <p class="text-sm text-gray-400 mb-3">
+                            Toggle as many platforms as you like. Use the auto assign button to randomise tags across your selection.
+                        </p>
+                        <div class="flex flex-wrap gap-2 mb-3" id="tag-platform-buttons">
+                            <button type="button" class="tag-option" data-tag-button="trojan" onclick="toggleTag('trojan')">🛡️ Trojan</button>
+                            <button type="button" class="tag-option" data-tag-button="photon" onclick="toggleTag('photon')">⚡ Photon</button>
+                            <button type="button" class="tag-option" data-tag-button="axiom" onclick="toggleTag('axiom')">🧠 Axiom</button>
+                            <button type="button" class="tag-option" data-tag-button="gmgn" onclick="toggleTag('gmgn')">🟣 GMGN</button>
+                            <button type="button" class="tag-option" data-tag-button="pepeboost" onclick="toggleTag('pepeboost')">🐸 PepeBoost</button>
+                            <button type="button" class="tag-option" data-tag-button="bullx" onclick="toggleTag('bullx')">🐂 BullX</button>
                         </div>
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-xs font-mono text-gray-400">xVX...yaSp</span>
-                        </div>
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-sm text-gray-400">Platforms</span>
-                            <span class="text-sm text-gray-400">Auto Assign</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition" onclick="toggleTag('home')">🏠</button>
-                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('chart')">📊</button>
-                            <button class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition" onclick="toggleTag('blue')">🔵</button>
-                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('warning')">⚠️</button>
-                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('seed')">🌱</button>
-                            <button class="bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition" onclick="toggleTag('crown')">👑</button>
-                        </div>
+                        <button type="button" class="px-3 py-1.5 text-xs font-medium rounded bg-neutral-800 hover:bg-neutral-700 text-gray-200 transition" onclick="walletOperationsAutoAssignTags()">
+                            Auto Assign Platforms
+                        </button>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div id="tag-wallet-info" class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
+                        <p class="text-sm text-gray-400">Select wallet(s) from the table to configure tagging settings.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Min Buy Amount</label>
+                            <label class="block mb-2 text-sm font-semibold text-white">Min Buy Amount</label>
                             <input
                                 type="number"
                                 id="tag-min-amount"
                                 value="0.2"
                                 step="0.01"
                                 class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
-                            />
-                            <p class="text-xs text-gray-500">The minimum amount to buy in SOL for each swap.</p>
+                            >
+                            <p class="text-xs text-gray-500">Lower bound for the random SOL amount used when tagging.</p>
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-medium">Max Buy Amount</label>
+                            <label class="block mb-2 text-sm font-semibold text-white">Max Buy Amount</label>
                             <input
                                 type="number"
                                 id="tag-max-amount"
                                 value="0.3"
                                 step="0.01"
                                 class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 mb-2"
-                            />
-                            <p class="text-xs text-gray-500">The maximum amount to buy in SOL for each swap.</p>
+                            >
+                            <p class="text-xs text-gray-500">Upper bound for the random SOL amount used when tagging.</p>
                         </div>
                     </div>
                     
-                    <div class="mb-6">
-                        <label class="block mb-3 text-sm font-medium">Mint Selection Mode</label>
+                    <div>
+                        <label class="block mb-3 text-sm font-semibold text-white">Select Mint</label>
                         <div class="space-y-2">
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="mint-selection" value="auto" checked class="text-purple-600" />
-                                <span class="text-sm">Auto (Random)</span>
+                                <input type="radio" name="mint-selection" value="auto" checked class="text-purple-600">
+                                <span class="text-sm text-gray-300">Auto (Random) — pulls a mint from the FrogWifTools curated list.</span>
                             </label>
                             <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="mint-selection" value="custom" class="text-purple-600" />
-                                <span class="text-sm">Custom</span>
+                                <input type="radio" name="mint-selection" value="custom" class="text-purple-600">
+                                <span class="text-sm text-gray-300">Custom — provide a mint or list of mints for the tagging swaps.</span>
                             </label>
                         </div>
                     </div>

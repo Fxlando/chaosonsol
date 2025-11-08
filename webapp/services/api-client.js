@@ -62,6 +62,30 @@ class APIClient {
     }
   }
 
+  async request(path, options = {}, retries = 2) {
+    const response = await this.safeFetch(this.buildUrl(path), options, retries);
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = { success: response.ok };
+    }
+
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      Object.defineProperty(data, '_httpStatus', {
+        value: response.status,
+        enumerable: false
+      });
+
+      if (!Object.prototype.hasOwnProperty.call(data, 'success')) {
+        data.success = response.ok;
+      }
+    }
+
+    return data;
+  }
+
   /**
    * Initialize connection with SSL error handling
    */
@@ -110,11 +134,7 @@ class APIClient {
    */
   async health(retries = 3) {
     try {
-      const response = await this.safeFetch(this.buildUrl('/health'), { method: 'GET' }, retries);
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error(`Health check failed: ${response.status}`);
+      return await this.request('/health', {}, retries);
     } catch (error) {
       throw new Error('API server not available');
     }
@@ -125,12 +145,11 @@ class APIClient {
    */
   async initializeApp(config = {}) {
     try {
-      const response = await this.safeFetch(this.buildUrl('/initialize'), {
+      return await this.request('/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config })
       });
-      return await response.json();
     } catch (error) {
       throw new Error(`Failed to initialize app: ${error.message}`);
     }
@@ -140,73 +159,62 @@ class APIClient {
    * Wallet operations
    */
   async createWallet(name, tags = []) {
-    const response = await fetch(this.buildUrl('/wallets/create'), {
+    return await this.request('/wallets/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, tags })
     });
-    return await response.json();
   }
 
   async importWallet(privateKey, name, tags = []) {
-    const response = await fetch(this.buildUrl('/wallets/import'), {
+    return await this.request('/wallets/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ privateKey, name, tags })
     });
-    return await response.json();
   }
 
   async getAllWallets() {
-    const response = await this.safeFetch(this.buildUrl('/wallets'));
-    if (!response.ok) {
-      throw new Error(`Failed to get wallets: ${response.status}`);
-    }
-    return await response.json();
+    return await this.request('/wallets');
   }
 
   async getWallet(walletId) {
-    const response = await fetch(this.buildUrl(`/wallets/${walletId}`));
-    return await response.json();
+    return await this.request(`/wallets/${walletId}`);
   }
 
   /**
    * Trading operations
    */
   async buyToken(walletId, tokenMint, solAmount, options = {}) {
-    const response = await fetch(this.buildUrl('/trading/buy'), {
+    return await this.request('/trading/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, solAmount, options })
     });
-    return await response.json();
   }
 
   async sellToken(walletId, tokenMint, tokenAmount, options = {}) {
-    const response = await fetch(this.buildUrl('/trading/sell'), {
+    return await this.request('/trading/sell', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, tokenAmount, options })
     });
-    return await response.json();
   }
 
   async swapTokens(walletId, inputMint, outputMint, inputAmount, options = {}) {
-    const response = await fetch(this.buildUrl('/trading/swap'), {
+    return await this.request('/trading/swap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, inputMint, outputMint, inputAmount, options })
     });
-    return await response.json();
   }
 
   async tagWallets(payload) {
-    const response = await fetch(this.buildUrl('/tagging/run'), {
+    return await this.request('/tagging/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return await response.json();
   }
 
   async getQuote(inputMint, outputMint, amount, options = {}) {
@@ -215,111 +223,97 @@ class APIClient {
       outputMint,
       amount: amount.toString()
     });
-    const response = await fetch(this.buildUrl(`/trading/quote?${params}`));
-    return await response.json();
+    return await this.request(`/trading/quote?${params.toString()}`);
   }
 
   async getTokenPrice(tokenMint) {
-    const response = await fetch(this.buildUrl(`/trading/price/${tokenMint}`));
-    return await response.json();
+    return await this.request(`/trading/price/${tokenMint}`);
   }
 
   /**
    * Token launch
    */
   async launchToken(walletId, metadata, initialBuy = 0, options = {}) {
-    const response = await fetch(this.buildUrl('/tokens/launch'), {
+    return await this.request('/tokens/launch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, metadata, initialBuy, options })
     });
-    return await response.json();
   }
 
   async createToken(walletId, metadata, options = {}) {
-    const response = await fetch(this.buildUrl('/tokens/create'), {
+    return await this.request('/tokens/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, metadata, options })
     });
-    return await response.json();
   }
 
   /**
    * Smart Sell
    */
   async addSmartSellPosition(walletId, tokenMint, entryPrice, amount, options = {}) {
-    const response = await fetch(this.buildUrl('/smartsell/add'), {
+    return await this.request('/smartsell/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletId, tokenMint, entryPrice, amount, options })
     });
-    return await response.json();
   }
 
   async getSmartSellPositions() {
-    const response = await fetch(this.buildUrl('/smartsell/positions'));
-    return await response.json();
+    return await this.request('/smartsell/positions');
   }
 
   async removeSmartSellPosition(walletId, tokenMint) {
-    const response = await fetch(this.buildUrl(`/smartsell/positions/${walletId}/${tokenMint}`), {
+    return await this.request(`/smartsell/positions/${walletId}/${tokenMint}`, {
       method: 'DELETE'
     });
-    return await response.json();
   }
 
   /**
    * Volume Bot
    */
   async startVolumeSession(walletIds, tokenMint, config = {}) {
-    const response = await fetch(`${this.baseURL}/api/volumebot/start`, {
+    return await this.request('/volumebot/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ walletIds, tokenMint, config })
     });
-    return await response.json();
   }
 
   async getVolumeSessions() {
-    const response = await fetch(`${this.baseURL}/api/volumebot/sessions`);
-    return await response.json();
+    return await this.request('/volumebot/sessions');
   }
 
   async stopVolumeSession(sessionId) {
-    const response = await fetch(`${this.baseURL}/api/volumebot/stop/${sessionId}`, {
+    return await this.request(`/volumebot/stop/${sessionId}`, {
       method: 'POST'
     });
-    return await response.json();
   }
 
   /**
    * Status
    */
   async getStatus() {
-    const response = await fetch(this.buildUrl('/status'));
-    return await response.json();
+    return await this.request('/status');
   }
 
   /**
    * PumpFun
    */
   async getPumpFunToken(tokenMint) {
-    const response = await fetch(`${this.baseURL}/api/pumpfun/token/${tokenMint}`);
-    return await response.json();
+    return await this.request(`/pumpfun/token/${tokenMint}`);
   }
 
   async getTrendingTokens(limit = 20) {
-    const response = await fetch(`${this.baseURL}/api/pumpfun/trending?limit=${limit}`);
-    return await response.json();
+    return await this.request(`/pumpfun/trending?limit=${limit}`);
   }
 
   /**
    * Jupiter
    */
   async getJupiterTokens() {
-    const response = await fetch(`${this.baseURL}/api/jupiter/tokens`);
-    return await response.json();
+    return await this.request('/jupiter/tokens');
   }
 }
 

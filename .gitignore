@@ -31,6 +31,9 @@ pump-wallets-keys.json
 volume-wallets-keys.json
 pump-wallets-public.json
 volume-wallets-public.json
+*.enc
+.data/
+webapp/.data/
 
 # Test coverage
 coverage/

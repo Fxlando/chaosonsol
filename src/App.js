@@ -20,12 +20,14 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 export class App {
   constructor(config = {}) {
     this.config = {
+      ...config,
       network: config.network || 'mainnet-beta',
-      rpc: config.rpc || {},
-      trading: config.trading || {},
-      smartSell: config.smartSell || {},
-      volumeBot: config.volumeBot || {},
-      ...config
+      rpc: { ...(config.rpc || {}) },
+      solanaCore: { ...(config.solanaCore || {}) },
+      trading: { ...(config.trading || {}) },
+      smartSell: { ...(config.smartSell || {}) },
+      volumeBot: { ...(config.volumeBot || {}) },
+      walletManager: { ...(config.walletManager || {}) }
     };
 
     // Core components
@@ -63,7 +65,8 @@ export class App {
       await this.solanaCore.initialize();
 
       // Initialize Wallet Manager
-      this.walletManager = new WalletManager(this.solanaCore);
+      const walletStorage = this.config.walletManager?.storage || null;
+      this.walletManager = new WalletManager(this.solanaCore, walletStorage);
       await this.walletManager.initialize();
 
       // Initialize Trading Engine

@@ -25,47 +25,67 @@ document.addEventListener('DOMContentLoaded', async () => {
 function integrateWithAPI() {
   // Replace SolanaIntegration methods with API calls
   if (window.SolanaIntegration) {
-    const originalSolana = window.SolanaIntegration;
+    const solanaProto = window.SolanaIntegration.prototype;
+    if (!solanaProto) {
+      return;
+    }
+
+    const originalCreateWallet = solanaProto.createWallet;
+    const originalImportWallet = solanaProto.importWallet;
+    const originalGetWalletsWithBalances = solanaProto.getAllWalletsWithBalances;
     
-    // Override wallet creation
-    originalSolana.createWallet = async function() {
+    solanaProto.createWallet = async function(name = null, tags = []) {
       if (window.apiClient && window.apiClient.isConnected) {
-        const result = await window.apiClient.createWallet('New Wallet');
-        return result.wallet;
+        const response = await window.apiClient.createWallet(name, tags);
+        return response.wallet;
       }
-      // Fallback to original
-      return this.createWallet();
+
+      if (typeof originalCreateWallet === 'function') {
+        return originalCreateWallet.call(this, name, tags);
+      }
+
+      throw new Error('Wallet creation not available');
     };
 
-    // Override wallet import
-    originalSolana.importWallet = async function(privateKey, name) {
+    solanaProto.importWallet = async function(privateKey, name = null, tags = []) {
       if (window.apiClient && window.apiClient.isConnected) {
-        const result = await window.apiClient.importWallet(privateKey, name);
-        return result.wallet;
+        const response = await window.apiClient.importWallet(privateKey, name, tags);
+        return response.wallet;
       }
-      // Fallback to original
-      return this.importWallet(privateKey);
+
+      if (typeof originalImportWallet === 'function') {
+        return originalImportWallet.call(this, privateKey, name, tags);
+      }
+
+      throw new Error('Wallet import not available');
     };
 
-    // Override balance fetching
-    originalSolana.getAllWalletsWithBalances = async function() {
+    solanaProto.getAllWalletsWithBalances = async function() {
       if (window.apiClient && window.apiClient.isConnected) {
         const result = await window.apiClient.getAllWallets();
         return result.wallets || [];
       }
-      // Fallback to original
-      return this.getAllWalletsWithBalances();
+
+      if (typeof originalGetWalletsWithBalances === 'function') {
+        return originalGetWalletsWithBalances.call(this);
+      }
+
+      return [];
     };
   }
 
   // Replace PumpFunTrading methods
   if (window.PumpFunTrading) {
-    const originalPumpFun = window.PumpFunTrading;
+    const pumpFunProto = window.PumpFunTrading.prototype;
+    if (!pumpFunProto) {
+      return;
+    }
+
+    const originalCreateToken = pumpFunProto.createToken;
     
-    // Override token creation
-    originalPumpFun.prototype.createToken = async function(config) {
+    pumpFunProto.createToken = async function(config) {
       if (window.apiClient && window.apiClient.isConnected) {
-        const result = await window.apiClient.launchToken(
+        return window.apiClient.launchToken(
           config.creatorWallet,
           {
             name: config.name,
@@ -78,10 +98,13 @@ function integrateWithAPI() {
           },
           config.initialBuyAmount || 0
         );
-        return result;
       }
-      // Fallback to original
-      return this.createToken(config);
+
+      if (typeof originalCreateToken === 'function') {
+        return originalCreateToken.call(this, config);
+      }
+
+      throw new Error('Token creation not available');
     };
   }
 }

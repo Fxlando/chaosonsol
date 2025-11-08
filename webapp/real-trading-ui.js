@@ -795,50 +795,25 @@ async function loadCreatorWallets() {
         const response = await window.apiClient.getAllWallets();
         const wallets = Array.isArray(response?.wallets) ? response.wallets : [];
 
-        tokenLaunchState.wallets = wallets;
-
-        walletSelect.innerHTML = '';
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = wallets.length ? 'Select wallet...' : 'No wallets available';
-        placeholder.disabled = true;
-        placeholder.selected = true;
-        walletSelect.appendChild(placeholder);
-
-        wallets.forEach(wallet => {
-            const option = document.createElement('option');
-            option.value = wallet.id || wallet.publicKey;
-            option.textContent = `${wallet.name || 'Unnamed'} • ${truncateAddress(wallet.publicKey)}`;
-            option.dataset.balance = typeof wallet.balance === 'number' ? wallet.balance.toFixed(4) : '';
-            walletSelect.appendChild(option);
-        });
-
-        if (tokenLaunchState.selectedWalletId) {
-            const matchingOption = Array.from(walletSelect.options).find(
-                opt => opt.value === tokenLaunchState.selectedWalletId
-            );
-            if (matchingOption) {
-                matchingOption.selected = true;
-                placeholder.selected = false;
-            }
-        } else if (wallets.length === 1) {
-            walletSelect.value = wallets[0].id || wallets[0].publicKey;
-            tokenLaunchState.selectedWalletId = walletSelect.value;
+        if (wallets.length) {
+            populateCreatorWalletSelect(walletSelect, wallets, { walletStatus });
+            tokenLaunchState.wallets = wallets;
+            return;
         }
 
-        walletSelect.disabled = wallets.length === 0;
-
-        if (walletStatus) {
-            if (wallets.length) {
-                walletStatus.textContent = `${wallets.length} wallet${wallets.length === 1 ? '' : 's'} available for launch.`;
-                walletStatus.classList.remove('text-red-400');
-                walletStatus.classList.add('text-gray-500');
-            } else {
-                walletStatus.textContent = 'No creator wallets available. Add wallets from the backend manager.';
-                walletStatus.classList.remove('text-gray-500');
-                walletStatus.classList.add('text-red-400');
-            }
+        // Fall back to local wallets if backend has none (useful during migration)
+        const localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+        if (localWallets.length) {
+            populateCreatorWalletSelect(walletSelect, localWallets, {
+                walletStatus,
+                local: true
+            });
+            tokenLaunchState.wallets = [];
+            return;
         }
+
+        populateCreatorWalletSelect(walletSelect, [], { walletStatus });
+        tokenLaunchState.wallets = [];
     } catch (error) {
         console.error('Failed to load creator wallets:', error);
         if (walletStatus) {
@@ -848,6 +823,70 @@ async function loadCreatorWallets() {
         }
         walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
         walletSelect.disabled = true;
+    }
+}
+
+function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
+    const walletStatus = options.walletStatus;
+    const isLocal = options.local;
+
+    selectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = wallets.length ? 'Select wallet...' : 'No wallets available';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    selectEl.appendChild(placeholder);
+
+    wallets.forEach(wallet => {
+        const value = wallet.id || wallet.publicKey;
+        if (!value) return;
+
+        const option = document.createElement('option');
+        option.value = value;
+        const baseLabel = wallet.name || 'Unnamed';
+        const suffix = isLocal ? ' (local)' : '';
+        option.textContent = `${baseLabel}${suffix} • ${truncateAddress(wallet.publicKey || wallet.address || value)}`;
+
+        const balance = wallet.balance ?? wallet.solBalance;
+        if (typeof balance === 'number') {
+            option.dataset.balance = balance.toFixed(4);
+        }
+        selectEl.appendChild(option);
+    });
+
+    if (tokenLaunchState.selectedWalletId) {
+        const matchingOption = Array.from(selectEl.options).find(
+            opt => opt.value === tokenLaunchState.selectedWalletId
+        );
+        if (matchingOption) {
+            matchingOption.selected = true;
+            placeholder.selected = false;
+        }
+    } else if (wallets.length === 1) {
+        selectEl.value = wallets[0].id || wallets[0].publicKey;
+        tokenLaunchState.selectedWalletId = selectEl.value;
+        placeholder.selected = false;
+    }
+
+    selectEl.disabled = wallets.length === 0;
+
+    if (!walletStatus) return;
+
+    if (wallets.length) {
+        const sourceLabel = isLocal ? 'local storage' : 'backend';
+        walletStatus.textContent = `${wallets.length} wallet${wallets.length === 1 ? '' : 's'} available (${sourceLabel}).`;
+        walletStatus.classList.remove('text-red-400');
+        walletStatus.classList.remove('text-yellow-300');
+        walletStatus.classList.add('text-gray-500');
+        if (isLocal) {
+            walletStatus.textContent += ' Import them through the backend to enable automations.';
+            walletStatus.classList.add('text-yellow-300');
+        }
+    } else {
+        walletStatus.textContent = 'No creator wallets available. Add wallets from the backend manager.';
+        walletStatus.classList.remove('text-gray-500');
+        walletStatus.classList.add('text-red-400');
     }
 }
 

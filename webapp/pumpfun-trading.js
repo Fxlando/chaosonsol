@@ -2,10 +2,40 @@
 // 100% On-Chain Functionality
 
 class PumpFunTrading {
-    constructor(solanaIntegration) {
+    constructor(solanaIntegration, settingsProvider = null) {
         this.solana = solanaIntegration;
         this.PUMPFUN_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'; // PumpFun Program
         this.activeAutomations = new Map(); // Track active bots
+        this.settingsProvider = typeof settingsProvider === 'function'
+            ? settingsProvider
+            : () => (window.settingsManager?.getSettings?.() || window.__CHAOS_SETTINGS__);
+    }
+
+    setSettingsProvider(provider) {
+        if (typeof provider === 'function') {
+            this.settingsProvider = provider;
+        }
+    }
+
+    getSettings() {
+        try {
+            return this.settingsProvider ? this.settingsProvider() : null;
+        } catch (error) {
+            console.warn('Error retrieving settings:', error);
+            return null;
+        }
+    }
+
+    getTransactionOptions(overrides = {}) {
+        if (this.solana && typeof this.solana.getTransactionOptions === 'function') {
+            return this.solana.getTransactionOptions(overrides);
+        }
+
+        return {
+            skipPreflight: this.solana?.skipPreflight ?? false,
+            priorityFee: this.solana?.priorityFee ?? 0,
+            ...overrides
+        };
     }
 
     // Create and launch token on PumpFun
@@ -139,6 +169,9 @@ class PumpFunTrading {
                 Keypair
             } = window.solanaWeb3;
 
+            const txOptions = this.getTransactionOptions();
+            console.log('⚙️ Transaction options:', txOptions);
+
             // Generate new token mint
             const mintKeypair = Keypair.generate();
             const mintPubkey = mintKeypair.publicKey;
@@ -162,6 +195,8 @@ class PumpFunTrading {
     async buyToken(walletPrivateKey, tokenMint, solAmount) {
         try {
             console.log(`💰 Buying ${solAmount} SOL worth of ${tokenMint}`);
+            const txOptions = this.getTransactionOptions();
+            console.log('⚙️ Transaction options:', txOptions);
 
             const {
                 Keypair,
@@ -203,6 +238,8 @@ class PumpFunTrading {
     async sellToken(walletPrivateKey, tokenMint, tokenAmount) {
         try {
             console.log(`💸 Selling ${tokenAmount} of ${tokenMint}`);
+            const txOptions = this.getTransactionOptions();
+            console.log('⚙️ Transaction options:', txOptions);
 
             const {
                 Keypair,

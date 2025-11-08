@@ -4,13 +4,41 @@
 class SettingsManager {
     constructor(solanaIntegration) {
         this.solana = solanaIntegration;
+        this.storageKey = 'chaosbot_settings';
         this.settings = this.loadSettings();
+        this.applySettings();
+    }
+
+    // Deep merge helper
+    deepMerge(target = {}, source = {}) {
+        const output = Array.isArray(target) ? [...target] : { ...target };
+        if (!source || typeof source !== 'object') {
+            return output;
+        }
+
+        Object.keys(source).forEach((key) => {
+            const srcValue = source[key];
+            const tgtValue = output[key];
+
+            if (Array.isArray(srcValue)) {
+                output[key] = [...srcValue];
+            } else if (srcValue && typeof srcValue === 'object') {
+                output[key] = this.deepMerge(
+                    tgtValue && typeof tgtValue === 'object' ? tgtValue : {},
+                    srcValue
+                );
+            } else if (srcValue !== undefined) {
+                output[key] = srcValue;
+            }
+        });
+
+        return output;
     }
 
     // Get default settings
     getDefaultSettings() {
         return {
-            // RPC Settings
+            // Legacy RPC Block (kept for backward compatibility)
             rpc: {
                 mainnet: 'https://api.mainnet-beta.solana.com',
                 devnet: 'https://api.devnet.solana.com',
@@ -19,23 +47,74 @@ class SettingsManager {
                 timeout: 30000,
                 commitment: 'confirmed'
             },
-            
+
+            // Solana Connectivity
+            solana: {
+                rpcHttp: 'https://api.mainnet-beta.solana.com',
+                rpcWebsocket: 'wss://api.mainnet-beta.solana.com',
+                network: 'mainnet',
+                skipPreflight: false,
+                priorityFee: 0.0005,
+                commitment: 'confirmed'
+            },
+
             // Jito Settings
             jito: {
-                enabled: false,
-                blockEngineUrl: 'https://mainnet.block-engine.jito.wtf',
-                tipAmount: 0.001, // SOL
-                bundleSize: 5
+                location: 'New York',
+                bundleMaxTip: 0.001,
+                transactionMaxTip: 0.001,
+                forwarder: 'Astralane'
             },
-            
-            // Trading Settings
+
+            // Astralane Settings
+            astralane: {
+                location: 'New York',
+                apiKey: '',
+                minPriorityFee: 0.0001,
+                maxPriorityFee: 0.0005
+            },
+
+            // Proxy Settings
+            proxies: {
+                endpoints: ''
+            },
+
+            // Launchpad Trading
+            launchpad: {
+                buySlippage: 20,
+                sellSlippage: 20
+            },
+
+            // DEX Trading
+            dex: {
+                buySlippage: 5,
+                sellSlippage: 50
+            },
+
+            // Customization
+            customization: {
+                defaultExecutor: 'jito',
+                quickBuyOptions: [0.1, 0.5, 1],
+                quickSellOptions: [25, 50, 100],
+                autoOpenLinks: {
+                    solscan: true,
+                    axiom: false,
+                    gmgn: false,
+                    pumpfun: false,
+                    raydium: false,
+                    bonk: false
+                },
+                hideAddresses: false
+            },
+
+            // Trading Settings (legacy compatibility)
             trading: {
-                defaultSlippage: 1, // %
-                priorityFee: 0.0001, // SOL
+                defaultSlippage: 1,
+                priorityFee: 0.0001,
                 maxRetries: 3,
                 confirmTimeout: 30000
             },
-            
+
             // Automation Settings
             automation: {
                 smartSell: {
@@ -51,7 +130,7 @@ class SettingsManager {
                     defaultSellDelay: 30
                 }
             },
-            
+
             // UI Settings
             ui: {
                 theme: 'dark',
@@ -60,13 +139,13 @@ class SettingsManager {
                 showNotifications: true,
                 soundEnabled: false
             },
-            
+
             // Security Settings
             security: {
                 requireConfirmation: true,
                 showPrivateKeys: false,
                 autoLogout: false,
-                logoutTimeout: 3600000 // 1 hour
+                logoutTimeout: 3600000
             }
         };
     }
@@ -74,22 +153,25 @@ class SettingsManager {
     // Load settings from localStorage
     loadSettings() {
         try {
-            const saved = localStorage.getItem('chaosbot_settings');
+            const saved = localStorage.getItem(this.storageKey);
+            const defaults = this.getDefaultSettings();
+
             if (saved) {
                 const loaded = JSON.parse(saved);
-                // Merge with defaults to ensure all keys exist
-                return { ...this.getDefaultSettings(), ...loaded };
+                return this.deepMerge(defaults, loaded);
             }
+
+            return defaults;
         } catch (error) {
             console.error('Error loading settings:', error);
+            return this.getDefaultSettings();
         }
-        return this.getDefaultSettings();
     }
 
-    // Save settings to localStorage
+    // Persist settings
     saveSettings() {
         try {
-            localStorage.setItem('chaosbot_settings', JSON.stringify(this.settings));
+            localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
             console.log('✅ Settings saved');
             return true;
         } catch (error) {
@@ -98,44 +180,109 @@ class SettingsManager {
         }
     }
 
-    // Update RPC endpoint
-    async updateRPC(network, customUrl = null) {
+    publish() {
+        const snapshot = this.getSettings();
+        window.__CHAOS_SETTINGS__ = JSON.parse(JSON.stringify(snapshot));
+        document.dispatchEvent(new CustomEvent('chaosSettingsUpdated', { detail: snapshot }));
+    }
+
+    // Apply settings to the application
+    applySettings() {
+        if (this.solana) {
+            const solanaSettings = this.settings.solana || {};
+            if (solanaSettings.rpcHttp) {
+                this.solana.setRPCEndpoint(solanaSettings.rpcHttp);
+            }
+            if (solanaSettings.rpcWebsocket && this.solana.setWebsocketEndpoint) {
+                this.solana.setWebsocketEndpoint(solanaSettings.rpcWebsocket);
+            }
+            if (typeof solanaSettings.skipPreflight === 'boolean' && this.solana.setSkipPreflight) {
+                this.solana.setSkipPreflight(solanaSettings.skipPreflight);
+            }
+            if (typeof solanaSettings.priorityFee === 'number' && this.solana.setPriorityFee) {
+                this.solana.setPriorityFee(solanaSettings.priorityFee);
+            }
+        }
+
+        // Apply UI theme
+        if (this.settings.ui?.theme) {
+            document.body.classList.toggle('light-theme', this.settings.ui.theme === 'light');
+        }
+
+        // Hide addresses when necessary
+        const shouldHideAddresses = !!this.settings.customization?.hideAddresses;
+        document.body.classList.toggle('hide-addresses', shouldHideAddresses);
+
+        this.publish();
+
+        console.log('✅ Settings applied');
+    }
+
+    async updateSolana(config = {}) {
+        const parsedConfig = { ...config };
+
+        if (parsedConfig.priorityFee !== undefined) {
+            parsedConfig.priorityFee = Number(parsedConfig.priorityFee) || 0;
+        }
+
+        if (parsedConfig.skipPreflight !== undefined) {
+            parsedConfig.skipPreflight = !!parsedConfig.skipPreflight;
+        }
+
+        const previousSolana = this.deepMerge({}, this.settings.solana);
+        const previousRpc = this.deepMerge({}, this.settings.rpc);
+
         try {
-            let rpcUrl;
+            const nextSolanaSettings = this.deepMerge(previousSolana, parsedConfig);
 
-            if (network === 'custom' && customUrl) {
-                rpcUrl = customUrl;
-                this.settings.rpc.custom = customUrl;
-            } else if (network === 'mainnet') {
-                rpcUrl = this.settings.rpc.mainnet;
-            } else if (network === 'devnet') {
-                rpcUrl = this.settings.rpc.devnet;
-            } else {
-                throw new Error('Invalid network');
+            if (this.solana && parsedConfig.rpcHttp) {
+                this.solana.setRPCEndpoint(parsedConfig.rpcHttp);
+            }
+            if (this.solana && parsedConfig.rpcWebsocket && this.solana.setWebsocketEndpoint) {
+                this.solana.setWebsocketEndpoint(parsedConfig.rpcWebsocket);
+            }
+            if (this.solana && parsedConfig.skipPreflight !== undefined && this.solana.setSkipPreflight) {
+                this.solana.setSkipPreflight(parsedConfig.skipPreflight);
+            }
+            if (this.solana && parsedConfig.priorityFee !== undefined && this.solana.setPriorityFee) {
+                this.solana.setPriorityFee(parsedConfig.priorityFee);
             }
 
-            // Update Solana connection
-            this.solana.setRPCEndpoint(rpcUrl);
-            this.settings.rpc.current = network;
-
-            // Test connection
-            const health = await this.solana.checkRPCHealth();
-            
-            if (health.healthy) {
-                this.saveSettings();
-                console.log(`✅ RPC updated to ${network}: ${rpcUrl}`);
-                return {
-                    success: true,
-                    network: network,
-                    url: rpcUrl,
-                    health: health
-                };
-            } else {
-                throw new Error('RPC connection failed');
+            const health = this.solana ? await this.solana.checkRPCHealth() : { healthy: true };
+            if (!health.healthy) {
+                throw new Error(health.error || 'RPC connection failed');
             }
 
+            this.settings.solana = nextSolanaSettings;
+
+            if (parsedConfig.rpcHttp) {
+                this.settings.rpc.custom = parsedConfig.rpcHttp;
+                this.settings.rpc.current = parsedConfig.network || 'custom';
+            }
+
+            this.saveSettings();
+            this.applySettings();
+            return { success: true, health };
         } catch (error) {
             console.error('RPC update error:', error);
+
+            if (this.solana && previousSolana.rpcHttp) {
+                this.solana.setRPCEndpoint(previousSolana.rpcHttp);
+            }
+            if (this.solana && this.solana.setWebsocketEndpoint && previousSolana.rpcWebsocket) {
+                this.solana.setWebsocketEndpoint(previousSolana.rpcWebsocket);
+            }
+            if (this.solana && this.solana.setSkipPreflight) {
+                this.solana.setSkipPreflight(previousSolana.skipPreflight ?? false);
+            }
+            if (this.solana && this.solana.setPriorityFee) {
+                this.solana.setPriorityFee(previousSolana.priorityFee ?? 0);
+            }
+
+            this.settings.solana = previousSolana;
+            this.settings.rpc = previousRpc;
+            this.applySettings();
+
             return {
                 success: false,
                 error: error.message
@@ -143,18 +290,88 @@ class SettingsManager {
         }
     }
 
-    // Update Jito settings
-    updateJito(config) {
-        this.settings.jito = { ...this.settings.jito, ...config };
+    // Legacy RPC update helper
+    async updateRPC(network, customUrl = null) {
+        const nextUrl =
+            network === 'custom'
+                ? customUrl || this.settings.rpc.custom
+                : this.settings.rpc[network];
+
+        if (!nextUrl) {
+            return { success: false, error: 'RPC URL not provided' };
+        }
+
+        const result = await this.updateSolana({
+            rpcHttp: nextUrl,
+            network,
+            ...(network === 'custom' && customUrl ? { customEndpoint: customUrl } : {})
+        });
+
+        if (result.success) {
+            this.settings.rpc.current = network;
+            if (network === 'custom' && customUrl) {
+                this.settings.rpc.custom = customUrl;
+            }
+            this.saveSettings();
+            this.applySettings();
+        }
+
+        return result;
+    }
+
+    updateJito(config = {}) {
+        this.settings.jito = this.deepMerge(this.settings.jito, config);
         this.saveSettings();
+        this.applySettings();
         console.log('✅ Jito settings updated');
+        return true;
+    }
+
+    updateAstralane(config = {}) {
+        this.settings.astralane = this.deepMerge(this.settings.astralane, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ Astralane settings updated');
+        return true;
+    }
+
+    updateProxies(config = {}) {
+        this.settings.proxies = this.deepMerge(this.settings.proxies, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ Proxy settings updated');
+        return true;
+    }
+
+    updateLaunchpad(config = {}) {
+        this.settings.launchpad = this.deepMerge(this.settings.launchpad, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ Launchpad settings updated');
+        return true;
+    }
+
+    updateDex(config = {}) {
+        this.settings.dex = this.deepMerge(this.settings.dex, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ DEX settings updated');
+        return true;
+    }
+
+    updateCustomization(config = {}) {
+        this.settings.customization = this.deepMerge(this.settings.customization, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ Customization settings updated');
         return true;
     }
 
     // Update trading settings
     updateTrading(config) {
-        this.settings.trading = { ...this.settings.trading, ...config };
+        this.settings.trading = this.deepMerge(this.settings.trading, config);
         this.saveSettings();
+        this.applySettings();
         console.log('✅ Trading settings updated');
         return true;
     }
@@ -162,8 +379,9 @@ class SettingsManager {
     // Update automation settings
     updateAutomation(type, config) {
         if (this.settings.automation[type]) {
-            this.settings.automation[type] = { ...this.settings.automation[type], ...config };
+            this.settings.automation[type] = this.deepMerge(this.settings.automation[type], config);
             this.saveSettings();
+            this.applySettings();
             console.log(`✅ ${type} settings updated`);
             return true;
         }
@@ -172,23 +390,25 @@ class SettingsManager {
 
     // Update UI settings
     updateUI(config) {
-        this.settings.ui = { ...this.settings.ui, ...config };
+        this.settings.ui = this.deepMerge(this.settings.ui, config);
         this.saveSettings();
+        this.applySettings();
         console.log('✅ UI settings updated');
         return true;
     }
 
     // Update security settings
     updateSecurity(config) {
-        this.settings.security = { ...this.settings.security, ...config };
+        this.settings.security = this.deepMerge(this.settings.security, config);
         this.saveSettings();
+        this.applySettings();
         console.log('✅ Security settings updated');
         return true;
     }
 
     // Get current settings
     getSettings() {
-        return this.settings;
+        return this.deepMerge({}, this.settings);
     }
 
     // Get specific setting
@@ -203,6 +423,7 @@ class SettingsManager {
     resetToDefaults() {
         this.settings = this.getDefaultSettings();
         this.saveSettings();
+        this.applySettings();
         console.log('✅ Settings reset to defaults');
         return true;
     }
@@ -231,19 +452,20 @@ class SettingsManager {
         try {
             const text = await file.text();
             const imported = JSON.parse(text);
-            
-            // Validate structure
-            if (imported.rpc && imported.trading && imported.ui) {
-                this.settings = { ...this.getDefaultSettings(), ...imported };
-                this.saveSettings();
-                console.log('✅ Settings imported');
-                return {
-                    success: true,
-                    message: 'Settings imported successfully'
-                };
-            } else {
+
+            if (!imported || typeof imported !== 'object') {
                 throw new Error('Invalid settings file');
             }
+
+            this.settings = this.deepMerge(this.getDefaultSettings(), imported);
+            this.saveSettings();
+            this.applySettings();
+
+            console.log('✅ Settings imported');
+            return {
+                success: true,
+                message: 'Settings imported successfully'
+            };
         } catch (error) {
             console.error('Import error:', error);
             return {
@@ -258,15 +480,17 @@ class SettingsManager {
         try {
             const { Connection } = window.solanaWeb3;
             const testConnection = new Connection(url, 'confirmed');
-            
-            const blockHeight = await testConnection.getBlockHeight();
-            const slot = await testConnection.getSlot();
-            
+
+            const [blockHeight, slot] = await Promise.all([
+                testConnection.getBlockHeight(),
+                testConnection.getSlot()
+            ]);
+
             return {
                 success: true,
                 blockHeight,
                 slot,
-                latency: 'Good' // TODO: Measure actual latency
+                latency: 'Good'
             };
         } catch (error) {
             return {
@@ -278,22 +502,7 @@ class SettingsManager {
 
     // Get RPC health status
     async getRPCHealth() {
-        return await this.solana.checkRPCHealth();
-    }
-
-    // Apply settings to application
-    applySettings() {
-        // Apply RPC settings
-        if (this.settings.rpc.current) {
-            this.updateRPC(this.settings.rpc.current, this.settings.rpc.custom);
-        }
-
-        // Apply UI settings
-        if (this.settings.ui.theme) {
-            document.body.classList.toggle('light-theme', this.settings.ui.theme === 'light');
-        }
-
-        console.log('✅ Settings applied');
+        return this.solana ? this.solana.checkRPCHealth() : { healthy: false };
     }
 }
 

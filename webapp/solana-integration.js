@@ -7,9 +7,12 @@ class SolanaIntegration {
         this.wallet = null;
         this.wallets = []; // User's managed wallets
         this.rpcEndpoint = null;
+        this.websocketEndpoint = null;
         this.jitoEnabled = false;
         this.cachedSolPrice = null;
         this.cachedSolPriceTimestamp = 0;
+        this.skipPreflight = false;
+        this.priorityFee = 0.0005;
         this.init();
     }
 
@@ -342,6 +345,32 @@ class SolanaIntegration {
         this.rpcEndpoint = endpoint;
         this.connection = new Connection(endpoint, 'confirmed');
         console.log('✅ RPC endpoint updated:', endpoint);
+    }
+
+    setWebsocketEndpoint(endpoint) {
+        this.websocketEndpoint = endpoint;
+        console.log('✅ RPC websocket endpoint updated:', endpoint);
+    }
+
+    setSkipPreflight(shouldSkip) {
+        this.skipPreflight = !!shouldSkip;
+        console.log(`✅ Skip preflight ${this.skipPreflight ? 'enabled' : 'disabled'}`);
+    }
+
+    setPriorityFee(fee) {
+        const parsed = Number(fee);
+        if (Number.isFinite(parsed) && parsed >= 0) {
+            this.priorityFee = parsed;
+            console.log('✅ Priority fee updated:', parsed);
+        }
+    }
+
+    getTransactionOptions(overrides = {}) {
+        return {
+            skipPreflight: this.skipPreflight,
+            priorityFee: this.priorityFee,
+            ...overrides
+        };
     }
 
     // Real transaction monitoring

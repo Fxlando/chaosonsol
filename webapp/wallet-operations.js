@@ -243,7 +243,7 @@ function walletOperationsRenderTable() {
         </div>
       </td>
       <td class="p-4">
-        <code class="text-sm font-mono cursor-pointer hover:text-purple-400" onclick="copyToClipboard('${address}')">
+        <code class="text-sm font-mono cursor-pointer hover:text-purple-400" data-address onclick="copyToClipboard('${address}')">
           ${truncateAddress(address)}
         </code>
       </td>
@@ -334,7 +334,7 @@ function walletOperationsRenderGroupingTable() {
           <div class="text-xs text-gray-500 mt-1">${wallet.tags && wallet.tags.length ? wallet.tags.join(', ') : 'No tags'}</div>
         </td>
         <td class="p-3 align-top">
-          <code class="text-xs font-mono">${truncateAddress(address)}</code>
+          <code class="text-xs font-mono" data-address>${truncateAddress(address)}</code>
         </td>
         <td class="p-3 align-top">
           <span class="font-mono">${balance.toFixed(4)}</span>

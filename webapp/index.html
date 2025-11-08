@@ -19,6 +19,8 @@
     <script src="vanity-generator.js"></script>
     <!-- Settings Manager -->
     <script src="settings-manager.js"></script>
+    <!-- Settings UI Controller -->
+    <script src="settings-ui.js"></script>
     <!-- New API Client (Production Backend) -->
     <script src="services/api-client.js"></script>
     <script src="services/integration.js"></script>
@@ -164,6 +166,15 @@
 
         .floating-window.minimized .floating-window-footer {
             display: none;
+        }
+
+        body.hide-addresses [data-address] {
+            filter: blur(6px);
+            transition: filter 0.2s ease;
+        }
+
+        body.hide-addresses [data-address]:hover {
+            filter: blur(6px);
         }
 
         /* Method Selection Buttons */
@@ -387,7 +398,7 @@
                 <div class="text-green-400 font-mono text-sm mb-3" id="fee-wallet-balance">0.3300 SOL</div>
                 <div class="text-xs text-gray-500 mb-1">Address:</div>
                 <div class="flex items-center gap-2">
-                    <div class="text-xs font-mono truncate flex-1" id="fee-wallet-address">6NBcSPLV...1YnDb8L</div>
+                    <div class="text-xs font-mono truncate flex-1" id="fee-wallet-address" data-address>6NBcSPLV...1YnDb8L</div>
                     <i data-lucide="copy" class="w-3 h-3 text-gray-500 cursor-pointer hover:text-gray-300" onclick="copyFeeWalletAddress()"></i>
                 </div>
                 <button class="w-full mt-3 bg-neutral-700 hover:bg-neutral-600 text-white text-xs py-2 px-3 rounded flex items-center justify-center gap-2 transition" onclick="copyFeeWalletKey()">
@@ -3157,6 +3168,7 @@
                                 <label class="block mb-2 text-sm font-medium">Solana RPC HTTP Endpoint</label>
                                 <input
                                     type="text"
+                                    id="solana-rpc-http"
                                     value="https://rpc.va.shyft.to?api_key=<key here>"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3167,6 +3179,7 @@
                                 <label class="block mb-2 text-sm font-medium">Solana RPC Websocket Endpoint</label>
                                 <input
                                     type="text"
+                                    id="solana-rpc-ws"
                                     value="wss://rpc.va.shyft.to?api_key=<key here>"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3190,6 +3203,7 @@
                             <label class="block mb-2 text-sm font-medium">Priority Fee</label>
                             <input
                                 type="number"
+                                id="solana-priority-fee"
                                 value="0.0005"
                                 step="0.0001"
                                 class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3210,7 +3224,7 @@
                         <div class="grid grid-cols-2 gap-6">
                             <div>
                                 <label class="block mb-2 text-sm font-medium">Jito Location</label>
-                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                <select id="jito-location" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
                                     <option>New York</option>
                                     <option>Amsterdam</option>
                                     <option>Frankfurt</option>
@@ -3227,6 +3241,7 @@
                                 <label class="block mb-2 text-sm font-medium">Jito Bundle Max Tip</label>
                                 <input
                                     type="number"
+                                    id="jito-bundle-max-tip"
                                     value="0.001"
                                     step="0.0001"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3240,6 +3255,7 @@
                                 <label class="block mb-2 text-sm font-medium">Jito Transaction Max Tip</label>
                                 <input
                                     type="number"
+                                    id="jito-transaction-max-tip"
                                     value="0.001"
                                     step="0.0001"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3252,7 +3268,7 @@
 
                         <div class="mt-6">
                             <label class="block mb-2 text-sm font-medium">Jito Forwarder</label>
-                            <select class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                            <select id="jito-forwarder" class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
                                 <option>Astralane</option>
                                 <option>Direct</option>
                             </select>
@@ -3272,7 +3288,7 @@
                         <div class="grid grid-cols-2 gap-6">
                             <div>
                                 <label class="block mb-2 text-sm font-medium">Astralane Location</label>
-                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
+                                <select id="astralane-location" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
                                     <option>New York</option>
                                     <option>Amsterdam</option>
                                     <option>Frankfurt</option>
@@ -3287,6 +3303,7 @@
                                 <label class="block mb-2 text-sm font-medium">Astralane API Key</label>
                                 <input
                                     type="text"
+                                    id="astralane-api-key"
                                     placeholder="Optional"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3301,6 +3318,7 @@
                                 <label class="block mb-2 text-sm font-medium">Astralane Min Priority Fee</label>
                                 <input
                                     type="number"
+                                    id="astralane-min-priority-fee"
                                     value="0.0001"
                                     step="0.0001"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3312,6 +3330,7 @@
                                 <label class="block mb-2 text-sm font-medium">Astralane Max Priority Fee</label>
                                 <input
                                     type="number"
+                                    id="astralane-max-priority-fee"
                                     value="0.0005"
                                     step="0.0001"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3332,6 +3351,7 @@
                             <label class="block mb-2 text-sm font-medium">Proxy Endpoints</label>
                             <textarea
                                 rows="4"
+                                id="proxy-endpoints"
                                 placeholder="host:port:username:password"
                                 class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 font-mono"
                             ></textarea>
@@ -3355,6 +3375,7 @@
                                 <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
                                 <input
                                     type="number"
+                                    id="launchpad-buy-slippage"
                                     value="20"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3367,6 +3388,7 @@
                                 <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
                                 <input
                                     type="number"
+                                    id="launchpad-sell-slippage"
                                     value="20"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3391,6 +3413,7 @@
                                 <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
                                 <input
                                     type="number"
+                                    id="dex-buy-slippage"
                                     value="5"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3403,6 +3426,7 @@
                                 <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
                                 <input
                                     type="number"
+                                    id="dex-sell-slippage"
                                     value="50"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3420,7 +3444,7 @@
 
                         <div class="mb-6">
                             <label class="block mb-3 text-sm font-medium">Default Executor</label>
-                            <div class="flex gap-3">
+                            <div class="flex gap-3" data-settings-default-executor>
                                 <button id="default-executor-jito" class="px-4 py-2 rounded text-sm font-medium transition bg-purple-700 text-white" onclick="selectDefaultExecutor('jito')">
                                     Jito
                                 </button>
@@ -3428,6 +3452,7 @@
                                     RPC
                                 </button>
                             </div>
+                            <input type="hidden" id="default-executor-value" value="jito" />
                             <p class="text-xs text-gray-500 mt-2">
                                 Choose the default transaction executor. You can override this on a per-task basis.
                             </p>
@@ -3438,18 +3463,21 @@
                             <div class="flex gap-3">
                                 <input
                                     type="number"
+                                    id="quick-buy-option-1"
                                     value="0.1"
                                     step="0.1"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
                                 <input
                                     type="number"
+                                    id="quick-buy-option-2"
                                     value="0.5"
                                     step="0.1"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
                                 <input
                                     type="number"
+                                    id="quick-buy-option-3"
                                     value="1"
                                     step="0.1"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
@@ -3463,16 +3491,19 @@
                             <div class="flex gap-3">
                                 <input
                                     type="number"
+                                    id="quick-sell-option-1"
                                     value="25"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
                                 <input
                                     type="number"
+                                    id="quick-sell-option-2"
                                     value="50"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
                                 <input
                                     type="number"
+                                    id="quick-sell-option-3"
                                     value="100"
                                     class="w-32 bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
@@ -3484,27 +3515,27 @@
                             <label class="block mb-3 text-sm font-medium">Automatically Open Links On Launch</label>
                             <div class="space-y-2">
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-solscan" class="rounded auto-open-checkbox" checked />
                                     <span class="text-sm">Solscan</span>
                                 </label>
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-axiom" class="rounded auto-open-checkbox" />
                                     <span class="text-sm">Axiom</span>
                                 </label>
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-gmgn" class="rounded auto-open-checkbox" />
                                     <span class="text-sm">GMGN</span>
                                 </label>
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-pumpfun" class="rounded auto-open-checkbox" />
                                     <span class="text-sm">Pumpfun</span>
                                 </label>
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-raydium" class="rounded auto-open-checkbox" />
                                     <span class="text-sm">Raydium</span>
                                 </label>
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" class="rounded" />
+                                    <input type="checkbox" id="auto-open-bonk" class="rounded auto-open-checkbox" />
                                     <span class="text-sm">Bonk</span>
                                 </label>
                             </div>
@@ -3790,6 +3821,13 @@
 
         // Settings Functions
         function selectDefaultExecutor(executor) {
+            const hiddenInput = document.getElementById('default-executor-value');
+            if (hiddenInput) {
+                hiddenInput.value = executor;
+            }
+            if (window.settingsUI && typeof window.settingsUI.syncDefaultExecutorButtons === 'function') {
+                window.settingsUI.syncDefaultExecutorButtons(executor);
+            }
             const jitoBtn = document.getElementById('default-executor-jito');
             const rpcBtn = document.getElementById('default-executor-rpc');
             
@@ -3809,71 +3847,6 @@
             }
             
             addConsoleLog(`Selected ${executor.toUpperCase()} as default executor`, 'info');
-        }
-
-        function saveSettings() {
-            // Collect all settings values
-            const settings = {
-                solana: {
-                    rpcHttp: document.querySelector('input[value*="rpc.va.shyft.to"]').value,
-                    rpcWebsocket: document.querySelector('input[value*="wss://rpc.va.shyft.to"]').value,
-                    skipPreflight: document.getElementById('skipPreflight').checked,
-                    priorityFee: document.querySelector('input[value="0.0005"]').value
-                },
-                jito: {
-                    location: document.querySelector('select option:checked').textContent,
-                    bundleMaxTip: document.querySelector('input[value="0.001"]').value,
-                    transactionMaxTip: document.querySelectorAll('input[value="0.001"]')[1].value,
-                    forwarder: document.querySelectorAll('select')[1].value
-                },
-                astralane: {
-                    location: document.querySelectorAll('select')[2].value,
-                    apiKey: document.querySelector('input[placeholder="Optional"]').value,
-                    minPriorityFee: document.querySelector('input[value="0.0001"]').value,
-                    maxPriorityFee: document.querySelector('input[value="0.0005"]').value
-                },
-                proxies: {
-                    endpoints: document.querySelector('textarea').value
-                },
-                launchpad: {
-                    buySlippage: document.querySelector('input[value="20"]').value,
-                    sellSlippage: document.querySelectorAll('input[value="20"]')[1].value
-                },
-                dex: {
-                    buySlippage: document.querySelector('input[value="5"]').value,
-                    sellSlippage: document.querySelector('input[value="50"]').value
-                },
-                customization: {
-                    defaultExecutor: document.querySelector('#default-executor-jito').classList.contains('bg-purple-700') ? 'jito' : 'rpc',
-                    quickBuyOptions: [
-                        document.querySelectorAll('input[value="0.1"]')[0].value,
-                        document.querySelectorAll('input[value="0.5"]')[0].value,
-                        document.querySelectorAll('input[value="1"]')[0].value
-                    ],
-                    quickSellOptions: [
-                        document.querySelectorAll('input[value="25"]')[0].value,
-                        document.querySelectorAll('input[value="50"]')[0].value,
-                        document.querySelectorAll('input[value="100"]')[0].value
-                    ],
-                    autoOpenLinks: {
-                        solscan: document.querySelectorAll('input[type="checkbox"]')[1].checked,
-                        axiom: document.querySelectorAll('input[type="checkbox"]')[2].checked,
-                        gmgn: document.querySelectorAll('input[type="checkbox"]')[3].checked,
-                        pumpfun: document.querySelectorAll('input[type="checkbox"]')[4].checked,
-                        raydium: document.querySelectorAll('input[type="checkbox"]')[5].checked,
-                        bonk: document.querySelectorAll('input[type="checkbox"]')[6].checked
-                    },
-                    hideAddresses: document.getElementById('hideAddresses').checked
-                }
-            };
-            
-            // Save to localStorage (in a real app, this would be sent to the backend)
-            localStorage.setItem('chaosonsolana-settings', JSON.stringify(settings));
-            
-            addConsoleLog('Settings saved successfully!', 'success');
-            
-            // Show success message
-            showToast('Settings saved successfully!', 'success');
         }
 
         // Floating Window Management Functions

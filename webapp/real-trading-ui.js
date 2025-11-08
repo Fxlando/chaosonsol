@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('Error adding console log:', error);
     }
 
+    initializeSettings();
     loadVanityKeysFromStorage();
     console.log('✅ Real Trading Platform Ready');
 });
@@ -225,7 +226,7 @@ function renderWallets(wallets) {
                 </div>
             </td>
             <td class="p-4">
-                <div class="font-mono text-sm text-gray-400">
+                <div class="font-mono text-sm text-gray-400" data-address>
                     ${truncateAddress(wallet.publicKey)}
                 </div>
             </td>
@@ -591,6 +592,11 @@ function switchView(viewName) {
         renderVanityList();
     }
 
+    if (viewName === 'settings') {
+        initializeSettings();
+        document.dispatchEvent(new Event('chaosSettingsViewOpened'));
+    }
+
     // Re-initialize Lucide icons for the new view
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -625,7 +631,8 @@ const tokenLaunchState = {
 // Initialize PumpFun Trading
 function initializePumpFun() {
     if (!pumpFunTrading && solana) {
-        pumpFunTrading = new PumpFunTrading(solana);
+        const settingsProvider = () => window.settingsManager?.getSettings();
+        pumpFunTrading = new PumpFunTrading(solana, settingsProvider);
         console.log('✅ PumpFun Trading initialized');
     }
 }
@@ -648,11 +655,30 @@ function initializeVanity() {
 }
 
 // Initialize Settings Manager
-function initializeSettings() {
-    if (!settingsManager && solana) {
-        settingsManager = new SettingsManager(solana);
+function initializeSettings(force = false) {
+    if (!solana) {
+        console.warn('Solana integration not ready for settings initialization');
+        return;
+    }
+
+    if (!settingsManager || force) {
+        if (!settingsManager) {
+            settingsManager = new SettingsManager(solana);
+            console.log('✅ Settings Manager initialized');
+        } else if (force) {
+            settingsManager.applySettings();
+        }
+
+        window.settingsManager = settingsManager;
+    }
+
+    if (settingsManager) {
         settingsManager.applySettings();
-        console.log('✅ Settings Manager initialized');
+        document.dispatchEvent(
+            new CustomEvent('chaosSettingsManagerReady', {
+                detail: settingsManager.getSettings()
+            })
+        );
     }
 }
 
@@ -1044,6 +1070,40 @@ function toggleVolumeBotConfig() {
     }
 }
 
+function openLaunchLinks(tokenMint) {
+    if (!tokenMint) return;
+
+    const settings =
+        (window.settingsManager && typeof window.settingsManager.getSettings === 'function'
+            ? window.settingsManager.getSettings()
+            : window.__CHAOS_SETTINGS__) || {};
+
+    const autoOpen = settings.customization?.autoOpenLinks || {};
+
+    const builders = {
+        solscan: (mint) => `https://solscan.io/token/${mint}`,
+        axiom: (mint) => `https://axiom.xyz/token/${mint}`,
+        gmgn: (mint) => `https://gmgn.ai/swap/sol/${mint}`,
+        pumpfun: (mint) => `https://pump.fun/coin/${mint}`,
+        raydium: (mint) => `https://raydium.io/swap/?inputMint=sol&outputMint=${mint}`,
+        bonk: (mint) => `https://bonkbot.io/?mint=${mint}`
+    };
+
+    Object.entries(autoOpen).forEach(([key, enabled]) => {
+        if (!enabled) return;
+        const builder = builders[key];
+        if (!builder) return;
+        try {
+            const url = builder(tokenMint);
+            if (url) {
+                window.open(url, '_blank', 'noopener');
+            }
+        } catch (error) {
+            console.warn(`Failed to open ${key} link for mint ${tokenMint}:`, error);
+        }
+    });
+}
+
 // Execute Token Creation & Launch with Automations
 async function executeCreateAndLaunchToken() {
     try {
@@ -1178,7 +1238,7 @@ async function executeCreateAndLaunchToken() {
             }
 
             if (result.tokenMint) {
-                window.open(`https://solscan.io/token/${result.tokenMint}`, '_blank');
+                openLaunchLinks(result.tokenMint);
             }
 
             resetCreateTokenForm();
@@ -1491,8 +1551,10 @@ function updateSlippage(slippage) {
 function updatePriorityFee(fee) {
     initializeSettings();
     
-    settingsManager.updateTrading({ priorityFee: fee });
-    addConsoleLog(`✅ Priority fee set to ${fee} SOL`, 'success');
+    const parsedFee = Number(fee);
+    const safeFee = Number.isFinite(parsedFee) ? parsedFee : 0;
+    settingsManager.updateSolana({ priorityFee: safeFee });
+    addConsoleLog(`✅ Priority fee set to ${safeFee} SOL`, 'success');
 }
 
 // Reset settings to defaults

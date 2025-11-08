@@ -7,6 +7,8 @@ class MultiWalletManager {
         this.blueprints = [];
         this.activeBlueprints = new Map();
         this.feeCollectionHistory = [];
+
+        this.loadFeeHistory();
     }
 
     // ==================== BLUEPRINT OPERATIONS ====================
@@ -269,14 +271,63 @@ class MultiWalletManager {
         }
     }
 
+    saveFeeHistory() {
+        try {
+            const trimmed = this.feeCollectionHistory.slice(-100);
+            localStorage.setItem('chaosbot_fee_history', JSON.stringify(trimmed));
+        } catch (error) {
+            console.error('Error saving fee history:', error);
+        }
+    }
+
+    loadFeeHistory() {
+        try {
+            const saved = localStorage.getItem('chaosbot_fee_history');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed)) {
+                    this.feeCollectionHistory = parsed.map(entry => ({
+                        id: entry.id || `fee-${Date.now()}`,
+                        timestamp: entry.timestamp || Date.now(),
+                        totalCollected: Number(entry.totalCollected) || 0,
+                        walletsProcessed: Number(entry.walletsProcessed) || 0,
+                        successful: Number(entry.successful) || 0,
+                        targetWallet: entry.targetWallet || null,
+                        category: entry.category || 'all',
+                        walletIds: Array.isArray(entry.walletIds) ? entry.walletIds : [],
+                        results: Array.isArray(entry.results) ? entry.results : []
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error('Error loading fee history:', error);
+            this.feeCollectionHistory = [];
+        }
+    }
+
+    getFeeHistory() {
+        return Array.isArray(this.feeCollectionHistory)
+            ? [...this.feeCollectionHistory].sort((a, b) => b.timestamp - a.timestamp)
+            : [];
+    }
+
     // ==================== FEE COLLECTION ====================
     
     // Collect all SOL from multiple wallets to main wallet
-    async collectFees(targetWallet) {
+    async collectFees(targetWallet, options = {}) {
         try {
-            console.log('💎 Starting fee collection...');
+            const {
+                walletIds = null,
+                category = 'all'
+            } = options;
 
-            const wallets = this.solana.wallets;
+            console.log(`💎 Starting fee collection (${category})...`);
+
+            const availableWallets = Array.isArray(walletIds) && walletIds.length > 0
+                ? this.solana.wallets.filter(wallet => walletIds.includes(wallet.publicKey))
+                : this.solana.wallets;
+
+            const wallets = Array.isArray(availableWallets) ? availableWallets : [];
             if (!wallets || wallets.length === 0) {
                 throw new Error('No wallets found');
             }
@@ -338,14 +389,20 @@ class MultiWalletManager {
             }
 
             // Save to history
-            this.feeCollectionHistory.push({
+            const historyEntry = {
+                id: `fee-${Date.now()}`,
                 timestamp: Date.now(),
                 totalCollected,
                 walletsProcessed: results.length,
                 successful: results.filter(r => r.success).length,
                 targetWallet,
+                category,
+                walletIds: wallets.map(wallet => wallet.publicKey),
                 results
-            });
+            };
+
+            this.feeCollectionHistory.push(historyEntry);
+            this.saveFeeHistory();
 
             console.log(`✅ Fee collection complete: ${totalCollected.toFixed(4)} SOL collected`);
 
@@ -354,7 +411,9 @@ class MultiWalletManager {
                 totalCollected,
                 walletsProcessed: results.length,
                 successful: results.filter(r => r.success).length,
-                results
+                category,
+                results,
+                historyEntry
             };
 
         } catch (error) {
@@ -379,6 +438,12 @@ class MultiWalletManager {
                 
                 if (!wallet) {
                     console.error(`Wallet not found: ${publicKey}`);
+                    results.push({
+                        wallet: publicKey,
+                        amount: 0,
+                        error: 'Wallet not loaded in session',
+                        success: false
+                    });
                     continue;
                 }
 
@@ -402,20 +467,57 @@ class MultiWalletManager {
                                 signature: result.signature,
                                 success: true
                             });
+                        } else {
+                            results.push({
+                                wallet: wallet.publicKey,
+                                amount: 0,
+                                error: result.error,
+                                success: false
+                            });
                         }
+                    } else {
+                        results.push({
+                            wallet: wallet.publicKey,
+                            amount: 0,
+                            error: 'Insufficient balance',
+                            success: false
+                        });
                     }
 
                     await this.sleep(1000);
 
                 } catch (error) {
                     console.error(`Error collecting from ${wallet.publicKey}:`, error.message);
+                    results.push({
+                        wallet: wallet.publicKey,
+                        amount: 0,
+                        error: error.message,
+                        success: false
+                    });
                 }
             }
+
+            const historyEntry = {
+                id: `fee-${Date.now()}`,
+                timestamp: Date.now(),
+                totalCollected,
+                walletsProcessed: results.length,
+                successful: results.filter(r => r.success).length,
+                targetWallet,
+                category: 'custom',
+                walletIds: walletPublicKeys,
+                results
+            };
+
+            this.feeCollectionHistory.push(historyEntry);
+            this.saveFeeHistory();
 
             return {
                 success: true,
                 totalCollected,
-                results
+                category: 'custom',
+                results,
+                historyEntry
             };
 
         } catch (error) {

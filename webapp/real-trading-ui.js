@@ -7,6 +7,15 @@ let rtCurrentView = 'wallets';
 let vanityKeyStore = [];
 let vanityVisibility = new Set();
 let rtAutoScroll = true;
+const MIN_RENT_BUFFER_SOL = 0.001;
+
+let collectFeesState = {
+    initialized: false,
+    loading: false,
+    autoCollectEnabled: false,
+    metrics: null,
+    history: []
+};
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -14,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // FIRST: Set up navigation immediately - this is critical
     initializeEventListeners();
+    setupMintSelectionToggle();
     
     // Initialize Lucide icons
     if (typeof lucide !== 'undefined') {
@@ -58,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initializeSettings();
+    initializeCollectFeesView();
     loadVanityKeysFromStorage();
     console.log('✅ Real Trading Platform Ready');
 });
@@ -79,6 +90,10 @@ async function loadRealData() {
         updateRPCStatus(rpcHealth);
         
         addConsoleLog(`✅ Loaded ${wallets.length} wallets with real balances`, 'info');
+
+        if (collectFeesState.initialized) {
+            await refreshCollectFeesView({ silent: true });
+        }
     } catch (error) {
         console.error('Error loading real data:', error);
         addConsoleLog(`❌ Error loading data: ${error.message}`, 'error');
@@ -431,6 +446,27 @@ function clearConsole() {
     addConsoleLog('Console cleared', 'info');
 }
 
+function setupMintSelectionToggle() {
+    const radios = document.querySelectorAll('input[name="mint-selection"]');
+    const customWrapper = document.getElementById('tag-custom-mints-wrapper');
+
+    const toggle = () => {
+        if (!customWrapper) return;
+        const selected = document.querySelector('input[name="mint-selection"]:checked');
+        if (selected && selected.value === 'custom') {
+            customWrapper.classList.remove('hidden');
+        } else {
+            customWrapper.classList.add('hidden');
+        }
+    };
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', toggle);
+    });
+
+    toggle();
+}
+
 const missingGlobalHandlers = [
     'executeFundWallets',
     'executeWithdrawWallets',
@@ -577,6 +613,13 @@ function switchView(viewName) {
         stopInstantTradingRefresh();
     }
 
+    if (viewName === 'collect-fees') {
+        initializeCollectFeesView();
+        refreshCollectFeesView().catch(error => {
+            console.error('Collect fees refresh failed:', error);
+        });
+    }
+
     if (viewName === 'create-token') {
         prepareCreateTokenView().catch(error => {
             console.error('Failed to prepare create token view:', error);
@@ -628,6 +671,9 @@ const tokenLaunchState = {
         size: 0
     }
 };
+
+const PUMPFUN_IMAGE_MAX_BYTES = 15 * 1024 * 1024; // 15 MB limit to match Pump.fun
+const EMBED_IMAGE_MAX_BYTES = 2 * 1024 * 1024; // Embed directly only if <= 2 MB
 
 // Initialize PumpFun Trading
 function initializePumpFun() {
@@ -985,10 +1031,9 @@ async function handleTokenImageFile(file) {
         return;
     }
 
-    const MAX_BYTES = 5 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-        notify('Image is too large. Please select a file smaller than 5MB.', 'error');
-        refreshTokenImageStatus();
+    if (file.size > PUMPFUN_IMAGE_MAX_BYTES) {
+        notify('Pump.fun allows images up to 15MB. Please choose a smaller file.', 'error');
+        refreshTokenImageStatus('Image too large (max 15MB).');
         return;
     }
 
@@ -1048,7 +1093,7 @@ async function ensureTokenImageUploaded() {
         tokenLaunchState.isUploading = true;
         if (statusEl) {
             statusEl.textContent = 'Uploading image to IPFS...';
-            statusEl.classList.remove('text-gray-400', 'text-yellow-300', 'text-green-400');
+            statusEl.classList.remove('text-gray-400', 'text-yellow-300', 'text-green-400', 'text-red-400');
             statusEl.classList.add('text-blue-300');
         }
 
@@ -1085,7 +1130,7 @@ async function ensureTokenImageUploaded() {
             tokenLaunchState.image.base64 &&
             typeof tokenLaunchState.image.base64 === 'string' &&
             tokenLaunchState.image.base64.startsWith('data:') &&
-            tokenLaunchState.image.size <= 2 * 1024 * 1024;
+            tokenLaunchState.image.size <= EMBED_IMAGE_MAX_BYTES;
 
         if (canEmbed) {
             notify('IPFS upload unavailable. Embedding image directly into metadata.', 'warning');
@@ -1442,6 +1487,365 @@ function stopBlueprint(blueprintId) {
 
 // ==================== FEE COLLECTION FUNCTIONS ====================
 
+function initializeCollectFeesView() {
+    if (collectFeesState.initialized) {
+        return;
+    }
+
+    if (!document.getElementById('collect-fees-view')) {
+        console.warn('Collect Fees view not present in DOM');
+        return;
+    }
+
+    initializeMultiWallet();
+
+    collectFeesState.autoCollectEnabled = loadAutoCollectPreference();
+    updateAutoCollectLabel();
+
+    if (multiWalletManager?.getFeeHistory) {
+        collectFeesState.history = multiWalletManager.getFeeHistory();
+    }
+
+    renderFeeHistory(collectFeesState.history);
+    collectFeesState.initialized = true;
+
+    refreshCollectFeesView({ silent: true }).catch(error => {
+        console.warn('Initial collect fees refresh failed:', error);
+    });
+}
+
+async function refreshCollectFeesView(options = {}) {
+    if (!collectFeesState.initialized) {
+        return;
+    }
+
+    if (!solana) {
+        console.warn('Solana integration not ready for fee refresh');
+        return;
+    }
+
+    if (collectFeesState.loading) {
+        if (!options.allowConcurrent) {
+            return;
+        }
+    }
+
+    const { silent = false } = options;
+
+    collectFeesState.loading = true;
+    if (!silent) {
+        setCollectFeesLoading(true);
+    }
+
+    try {
+        initializeMultiWallet();
+
+        const walletsWithBalances = await solana.getAllWalletsWithBalances();
+        const metrics = await calculateCollectFeesMetrics(walletsWithBalances);
+
+        if (multiWalletManager?.getFeeHistory) {
+            collectFeesState.history = multiWalletManager.getFeeHistory();
+        }
+
+        metrics.tradingLastCollected = getLastCollectionTimestamp(collectFeesState.history, ['trading', 'all']);
+        metrics.rentLastCollected = getLastCollectionTimestamp(collectFeesState.history, ['rent', 'all']);
+
+        collectFeesState.metrics = metrics;
+
+        updateCollectFeesDisplay(metrics);
+        renderFeeHistory(collectFeesState.history);
+    } catch (error) {
+        console.error('Failed to refresh collect fees view:', error);
+        addConsoleLog(`❌ Fee dashboard refresh failed: ${error.message}`, 'error');
+    } finally {
+        collectFeesState.loading = false;
+        if (!silent) {
+            setCollectFeesLoading(false);
+        }
+    }
+}
+
+async function calculateCollectFeesMetrics(wallets = []) {
+    const metrics = {
+        tradingFees: 0,
+        rentFees: 0,
+        totalFees: 0,
+        tradingWallets: 0,
+        rentWallets: 0,
+        rentClosableAccounts: 0,
+        usdValue: 0,
+        solPrice: 0
+    };
+
+    try {
+        metrics.solPrice = await solana.getSolPrice();
+    } catch (error) {
+        console.warn('Unable to fetch SOL price for fee dashboard:', error);
+    }
+
+    if (!Array.isArray(wallets) || wallets.length === 0) {
+        return metrics;
+    }
+
+    for (const wallet of wallets) {
+        if (!wallet?.publicKey) {
+            continue;
+        }
+
+        const balance = Number(wallet.balance) || 0;
+        const collectable = Math.max(0, balance - MIN_RENT_BUFFER_SOL);
+
+        if (collectable > 0) {
+            metrics.tradingFees += collectable;
+            metrics.tradingWallets += 1;
+        }
+
+        const rentInfo = await estimateRentReclaimForWallet(wallet.publicKey);
+        if (rentInfo.rentLamports > 0) {
+            metrics.rentFees += rentInfo.rentLamports / (window.solanaWeb3?.LAMPORTS_PER_SOL || 1_000_000_000);
+            metrics.rentWallets += rentInfo.closableAccounts > 0 ? 1 : 0;
+            metrics.rentClosableAccounts += rentInfo.closableAccounts;
+        }
+    }
+
+    metrics.totalFees = metrics.tradingFees + metrics.rentFees;
+    metrics.usdValue = metrics.totalFees * metrics.solPrice;
+
+    return metrics;
+}
+
+async function estimateRentReclaimForWallet(publicKeyString) {
+    if (!solana?.connection || !window.solanaWeb3?.PublicKey) {
+        return { rentLamports: 0, closableAccounts: 0 };
+    }
+
+    try {
+        if (!window.__CHAOSBOT_TOKEN_PROGRAM) {
+            window.__CHAOSBOT_TOKEN_PROGRAM = new window.solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        }
+
+        const owner = new window.solanaWeb3.PublicKey(publicKeyString);
+        const response = await solana.connection.getParsedTokenAccountsByOwner(owner, {
+            programId: window.__CHAOSBOT_TOKEN_PROGRAM
+        });
+
+        if (!response?.value) {
+            return { rentLamports: 0, closableAccounts: 0 };
+        }
+
+        let rentLamports = 0;
+        let closableAccounts = 0;
+
+        for (const account of response.value) {
+            const lamports = Number(account.account?.lamports) || 0;
+            const tokenAmount = account.account?.data?.parsed?.info?.tokenAmount;
+
+            let hasBalance = false;
+            if (tokenAmount) {
+                if (typeof tokenAmount.uiAmount === 'number') {
+                    hasBalance = tokenAmount.uiAmount > 0;
+                } else if (typeof tokenAmount.uiAmountString === 'string') {
+                    hasBalance = Number(tokenAmount.uiAmountString) > 0;
+                } else if (typeof tokenAmount.amount === 'string') {
+                    try {
+                        hasBalance = BigInt(tokenAmount.amount) > 0n;
+                    } catch (error) {
+                        hasBalance = Number(tokenAmount.amount) > 0;
+                    }
+                }
+            }
+
+            if (!hasBalance && lamports > 0) {
+                rentLamports += lamports;
+                closableAccounts += 1;
+            }
+        }
+
+        return { rentLamports, closableAccounts };
+    } catch (error) {
+        console.warn(`Rent estimation failed for ${publicKeyString}:`, error.message);
+        return { rentLamports: 0, closableAccounts: 0 };
+    }
+}
+
+function updateCollectFeesDisplay(data = {}) {
+    const metrics = {
+        tradingFees: Number(data.tradingFees) || 0,
+        rentFees: Number(data.rentFees) || 0,
+        totalFees: Number(data.totalFees) || 0,
+        tradingWallets: Number(data.tradingWallets) || 0,
+        rentWallets: Number(data.rentWallets) || 0,
+        usdValue: Number(data.usdValue) || 0,
+        tradingLastCollected: data.tradingLastCollected || null,
+        rentLastCollected: data.rentLastCollected || null
+    };
+
+    const tradingFeesEl = document.getElementById('trading-fees');
+    const rentFeesEl = document.getElementById('rent-fees');
+    const totalFeesEl = document.getElementById('total-fees');
+    const tradingWalletsEl = document.getElementById('trading-wallets');
+    const rentWalletsEl = document.getElementById('rent-wallets');
+    const tradingLastEl = document.getElementById('trading-last');
+    const rentLastEl = document.getElementById('rent-last');
+    const usdEl = document.getElementById('fees-usd');
+
+    if (tradingFeesEl) tradingFeesEl.textContent = `${metrics.tradingFees.toFixed(4)} SOL`;
+    if (rentFeesEl) rentFeesEl.textContent = `${metrics.rentFees.toFixed(4)} SOL`;
+    if (totalFeesEl) totalFeesEl.textContent = `${metrics.totalFees.toFixed(4)} SOL`;
+    if (tradingWalletsEl) tradingWalletsEl.textContent = metrics.tradingWallets.toString();
+    if (rentWalletsEl) rentWalletsEl.textContent = metrics.rentWallets.toString();
+    if (usdEl) usdEl.textContent = `$${metrics.usdValue.toFixed(2)}`;
+
+    if (tradingLastEl) {
+        tradingLastEl.textContent = metrics.tradingLastCollected ? formatTimestamp(metrics.tradingLastCollected) : 'Never';
+    }
+
+    if (rentLastEl) {
+        rentLastEl.textContent = metrics.rentLastCollected ? formatTimestamp(metrics.rentLastCollected) : 'Never';
+    }
+
+    updateAutoCollectLabel();
+}
+
+function renderFeeHistory(history = []) {
+    const tbody = document.getElementById('fees-history-body');
+    if (!tbody) {
+        return;
+    }
+
+    if (!Array.isArray(history) || history.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="p-8 text-center text-gray-500">
+                    <div class="flex flex-col items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-inbox w-8 h-8 text-gray-600"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+                        <span>No collection history yet</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const rows = history.slice(0, 25).map(entry => {
+        const successful = Number(entry.successful) || 0;
+        const processed = Number(entry.walletsProcessed) || entry.walletIds?.length || 0;
+        const amount = Number(entry.totalCollected) || 0;
+
+        const statusClass = successful === processed
+            ? 'text-green-400'
+            : successful === 0
+                ? 'text-red-400'
+                : 'text-yellow-400';
+
+        return `
+            <tr class="border-b border-neutral-800 hover:bg-neutral-800/40 transition">
+                <td class="p-4 text-sm text-gray-300">${formatTimestamp(entry.timestamp)}</td>
+                <td class="p-4 text-sm text-gray-300">${getFeeCategoryLabel(entry.category)}</td>
+                <td class="p-4 text-sm font-mono text-purple-200">${amount.toFixed(4)} SOL</td>
+                <td class="p-4 text-sm text-gray-300">${processed}</td>
+                <td class="p-4 text-sm font-mono ${statusClass}">${successful}/${processed}</td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.innerHTML = rows;
+}
+
+function getLastCollectionTimestamp(history = [], categories = []) {
+    if (!Array.isArray(history) || history.length === 0) {
+        return null;
+    }
+
+    const match = history.find(entry => {
+        if (!entry || Number(entry.successful) === 0) {
+            return false;
+        }
+        return categories.includes(entry.category);
+    });
+
+    return match ? match.timestamp : null;
+}
+
+function getFeeCategoryLabel(category) {
+    switch (category) {
+        case 'trading':
+            return 'Trading';
+        case 'rent':
+            return 'Rent';
+        case 'custom':
+            return 'Custom';
+        case 'all':
+        default:
+            return 'All Wallets';
+    }
+}
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) {
+        return 'Never';
+    }
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+        return 'Never';
+    }
+    return date.toLocaleString();
+}
+
+function setCollectFeesLoading(isLoading) {
+    const selectors = [
+        'button[onclick="collectAllFees()"]',
+        'button[onclick="collectTradingFees()"]',
+        'button[onclick="collectRentFees()"]'
+    ];
+
+    selectors.forEach(selector => {
+        const button = document.querySelector(selector);
+        if (!button) return;
+
+        if (isLoading) {
+            button.setAttribute('disabled', 'disabled');
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            button.removeAttribute('disabled');
+            button.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    });
+}
+
+function loadAutoCollectPreference() {
+    try {
+        const stored = localStorage.getItem('chaosbot_auto_collect_enabled');
+        return stored === 'true';
+    } catch (error) {
+        console.warn('Auto collect preference load failed:', error);
+        return false;
+    }
+}
+
+function storeAutoCollectPreference(value) {
+    try {
+        localStorage.setItem('chaosbot_auto_collect_enabled', value ? 'true' : 'false');
+    } catch (error) {
+        console.warn('Auto collect preference save failed:', error);
+    }
+}
+
+function updateAutoCollectLabel() {
+    const label = document.getElementById('auto-collect');
+    if (!label) {
+        return;
+    }
+
+    if (collectFeesState.autoCollectEnabled) {
+        label.textContent = 'Enabled';
+        label.className = 'text-sm font-mono text-green-400';
+    } else {
+        label.textContent = 'Disabled';
+        label.className = 'text-sm font-mono text-gray-400';
+    }
+}
+
 // Collect all fees
 async function collectAllFees(options = {}) {
     initializeMultiWallet();
@@ -1457,7 +1861,8 @@ async function collectAllFees(options = {}) {
         walletIds: Array.isArray(options.walletIds) ? options.walletIds : null,
         closeEmptyAccounts: options.closeEmptyAccounts ?? window.__reclaimRentConfig?.closeEmptyAccounts ?? true,
         includeActive: options.includeActive ?? window.__reclaimRentConfig?.includeActive ?? true,
-        confirmMessage: options.confirmMessage || null
+        confirmMessage: options.confirmMessage || null,
+        category: options.category || (options.walletIds ? 'custom' : 'all')
     };
 
     // Ask for target wallet
@@ -1476,51 +1881,74 @@ async function collectAllFees(options = {}) {
     
     if (!confirm) return;
     
-    addConsoleLog('💎 Starting fee collection...', 'info');
+    addConsoleLog(`💎 Starting fee collection (${config.category})...`, 'info');
+    setCollectFeesLoading(true);
     
-    const result = await multiWalletManager.collectFees(targetWallet);
-    window.__reclaimRentConfig = null;
-    
-    if (result.success) {
-        addConsoleLog(`✅ Fee collection complete!`, 'success');
-        addConsoleLog(`   Total collected: ${result.totalCollected.toFixed(4)} SOL`, 'success');
-        addConsoleLog(`   Wallets processed: ${result.walletsProcessed}`, 'info');
-        addConsoleLog(`   Successful: ${result.successful}`, 'info');
+    try {
+        const result = await multiWalletManager.collectFees(targetWallet, {
+            walletIds: config.walletIds,
+            category: config.category
+        });
+        window.__reclaimRentConfig = null;
         
-        alert(`✅ Collected ${result.totalCollected.toFixed(4)} SOL from ${result.successful} wallets!`);
-        
-        // Refresh wallets
-        await loadRealData();
-    } else {
-        addConsoleLog(`❌ Fee collection failed: ${result.error}`, 'error');
-        alert(`Fee collection failed: ${result.error}`);
+        if (result.success) {
+            addConsoleLog(`✅ Fee collection complete!`, 'success');
+            addConsoleLog(`   Total collected: ${result.totalCollected.toFixed(4)} SOL`, 'success');
+            addConsoleLog(`   Wallets processed: ${result.walletsProcessed}`, 'info');
+            addConsoleLog(`   Successful: ${result.successful}`, 'info');
+            
+            alert(`✅ Collected ${result.totalCollected.toFixed(4)} SOL from ${result.successful} wallets!`);
+            
+            // Refresh wallets
+            await loadRealData();
+            await refreshCollectFeesView();
+        } else {
+            addConsoleLog(`❌ Fee collection failed: ${result.error}`, 'error');
+            alert(`Fee collection failed: ${result.error}`);
+        }
+    } catch (error) {
+        window.__reclaimRentConfig = null;
+        console.error('Fee collection threw error:', error);
+        addConsoleLog(`❌ Fee collection error: ${error.message}`, 'error');
+        alert(`Fee collection error: ${error.message}`);
+    } finally {
+        setCollectFeesLoading(false);
     }
 }
 
 // Collect trading fees
 async function collectTradingFees() {
     addConsoleLog('💰 Collecting trading fees...', 'info');
-    // TODO: Implement specific trading fee collection
-    await collectAllFees();
+    await collectAllFees({ category: 'trading' });
 }
 
 // Collect rent fees
 async function collectRentFees(targetWallet = null, options = {}) {
     addConsoleLog('🏠 Collecting rent fees...', 'info');
-    // TODO: Implement specific rent fee collection
     const config = window.__reclaimRentConfig || {};
+    const shouldCloseAccounts = options.closeEmptyAccounts ?? config.closeEmptyAccounts;
+    if (shouldCloseAccounts) {
+        addConsoleLog('⚠️ Token account closure automation is not yet available. Manual review required after collection.', 'warning');
+    }
     await collectAllFees({
         targetWallet: targetWallet || config.targetAddress,
         walletIds: options.walletIds || config.walletIds,
-        closeEmptyAccounts: options.closeEmptyAccounts ?? config.closeEmptyAccounts,
-        includeActive: options.includeActive ?? config.includeActive
+        closeEmptyAccounts: shouldCloseAccounts,
+        includeActive: options.includeActive ?? config.includeActive,
+        category: 'rent'
     });
 }
 
 // Toggle auto-collect
 function toggleAutoCollect() {
-    addConsoleLog('⚙️ Auto-collect feature coming soon', 'info');
-    // TODO: Implement auto-collect scheduling
+    collectFeesState.autoCollectEnabled = !collectFeesState.autoCollectEnabled;
+    storeAutoCollectPreference(collectFeesState.autoCollectEnabled);
+    updateAutoCollectLabel();
+
+    addConsoleLog(`⚙️ Auto-collect ${collectFeesState.autoCollectEnabled ? 'enabled' : 'disabled'}`, 'info');
+    if (collectFeesState.autoCollectEnabled) {
+        addConsoleLog('ℹ️ Auto-collect will monitor balances when the dashboard is open.', 'info');
+    }
 }
 
 // ==================== VANITY FUNCTIONS ====================
@@ -2150,27 +2578,217 @@ registerGlobalHandler('selectTagExecutor', (executor) => {
     const jitoBtn = getElement('tag-jito-btn');
     const rpcBtn = getElement('tag-rpc-btn');
     if (!jitoBtn || !rpcBtn) return;
-    jitoBtn.classList.toggle('bg-purple-600', executor === 'jito');
-    jitoBtn.classList.toggle('bg-neutral-800', executor !== 'jito');
-    rpcBtn.classList.toggle('bg-purple-600', executor === 'rpc');
-    rpcBtn.classList.toggle('bg-neutral-800', executor !== 'rpc');
+    jitoBtn.classList.toggle('executor-pill--active', executor === 'jito');
+    jitoBtn.classList.toggle('executor-pill--muted', executor !== 'jito');
+    rpcBtn.classList.toggle('executor-pill--active', executor === 'rpc');
+    rpcBtn.classList.toggle('executor-pill--muted', executor !== 'rpc');
     notify(`Tag executor switched to ${executor.toUpperCase()}`, 'info');
 });
 
 registerGlobalHandler('toggleTag', (tag) => {
-    const button = document.querySelector(`[onclick="toggleTag('${tag}')"]`);
+    const button = document.querySelector(`[data-tag-button="${tag}"]`);
     if (!button) return;
     if (uiHelperState.tagFilters.has(tag)) {
         uiHelperState.tagFilters.delete(tag);
-        button.classList.remove('bg-blue-600', 'text-white');
-        button.classList.add('bg-neutral-700');
+        button.classList.remove('tag-option--active');
     } else {
         uiHelperState.tagFilters.add(tag);
-        button.classList.add('bg-blue-600', 'text-white');
-        button.classList.remove('bg-neutral-700');
+        button.classList.add('tag-option--active');
     }
     notify(`Tag filter updated: ${Array.from(uiHelperState.tagFilters).join(', ') || 'none'}`, 'info');
 });
+
+registerGlobalHandler('executeTagWallets', async () => {
+    try {
+        const walletIds = getSelectedWalletIds();
+        if (walletIds.length === 0) {
+            notify('Select at least one wallet from the table before tagging.', 'warning');
+            return;
+        }
+
+        const selectedTags = Array.from(uiHelperState.tagFilters);
+        if (selectedTags.length === 0) {
+            notify('Choose at least one trading platform to tag before starting.', 'warning');
+            return;
+        }
+
+        const minAmountInput = document.getElementById('tag-min-amount');
+        const maxAmountInput = document.getElementById('tag-max-amount');
+        const minAmount = parseFloat(minAmountInput?.value || '0');
+        const maxAmount = parseFloat(maxAmountInput?.value || '0');
+
+        if (!Number.isFinite(minAmount) || minAmount <= 0) {
+            notify('Enter a valid minimum buy amount greater than zero.', 'error');
+            return;
+        }
+
+        if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
+            notify('Enter a valid maximum buy amount greater than zero.', 'error');
+            return;
+        }
+
+        if (maxAmount < minAmount) {
+            notify('Max buy amount must be greater than or equal to the minimum amount.', 'error');
+            return;
+        }
+
+        const mintMode = document.querySelector('input[name="mint-selection"]:checked')?.value || 'auto';
+        const method = document.querySelector('input[name="tag-method"]:checked')?.value || 'uniform';
+
+        let mintCandidates = [];
+        if (mintMode === 'custom') {
+            mintCandidates = parseCustomMintList();
+            if (mintCandidates.length === 0) {
+                notify('Enter at least one mint address when using custom mint selection.', 'warning');
+                return;
+            }
+        } else {
+            notify('Fetching trending mints for tagging...', 'info');
+            mintCandidates = await resolveAutoMintCandidates();
+            if (mintCandidates.length === 0) {
+                notify('Unable to load auto mint list. Please provide custom mints.', 'error');
+                return;
+            }
+        }
+
+        const payload = {
+            walletIds,
+            tags: selectedTags,
+            minAmount,
+            maxAmount,
+            executor: uiHelperState.tagExecutor,
+            method,
+            mintMode,
+            mintCandidates,
+            sellDelaySeconds: 6
+        };
+
+        notify(`Tagging ${walletIds.length} wallet(s) via ${uiHelperState.tagExecutor.toUpperCase()} executor...`, 'info');
+        addConsoleLog(`Tagging started for ${walletIds.length} wallet(s) with tags: ${selectedTags.join(', ')}`, 'info');
+
+        const button = document.querySelector('#tag-page button[onclick="executeTagWallets()"]');
+        if (button) {
+            button.disabled = true;
+            button.classList.add('opacity-60', 'cursor-not-allowed');
+        }
+
+        const response = await window.apiClient?.tagWallets(payload);
+
+        if (!response) {
+            throw new Error('No response from tagging endpoint');
+        }
+
+        if (response.success === false) {
+            throw new Error(response.error || 'Tagging workflow reported failure');
+        }
+
+        const successes = (response.results || []).filter(result => result.success);
+        const failures = (response.results || []).filter(result => !result.success);
+
+        successes.forEach(result => {
+            addConsoleLog(`✅ Tagged wallet ${result.walletId} via ${result.mint} (${result.solAmount} SOL)`, 'success');
+        });
+
+        failures.forEach(result => {
+            addConsoleLog(`❌ Wallet ${result.walletId} tagging failed at ${result.stage || 'workflow'}: ${result.error}`, 'error');
+        });
+
+        notify(`Tagging complete: ${successes.length} success, ${failures.length} failed. Updating wallet metadata...`, failures.length ? 'warning' : 'success');
+
+        if (typeof window.loadWallets === 'function') {
+            await window.loadWallets();
+        }
+        if (typeof window.walletOperationsUpdateTagInfo === 'function') {
+            window.walletOperationsUpdateTagInfo();
+        }
+        if (typeof window.walletOperationsUpdateBulkActions === 'function') {
+            window.walletOperationsUpdateBulkActions();
+        }
+
+        notify('Wallet tags refreshed. Check GMGN/Photon dashboards to confirm.', failures.length ? 'warning' : 'success');
+    } catch (error) {
+        console.error('executeTagWallets error:', error);
+        notify(error.message || 'Tagging workflow failed. Check console for details.', 'error');
+        addConsoleLog(`❌ Tagging failed: ${error.message || error}`, 'error');
+    } finally {
+        const button = document.querySelector('#tag-page button[onclick="executeTagWallets()"]');
+        if (button) {
+            button.disabled = false;
+            button.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+    }
+});
+
+function getSelectedWalletIds() {
+    if (typeof window.walletOperationsGetSelectedWalletIds === 'function') {
+        return window.walletOperationsGetSelectedWalletIds();
+    }
+    if (window.walletOperations && typeof window.walletOperations.getSelectedWalletIds === 'function') {
+        return window.walletOperations.getSelectedWalletIds();
+    }
+    return [];
+}
+
+function parseCustomMintList() {
+    const textarea = document.getElementById('tag-custom-mints');
+    if (!textarea) return [];
+
+    const entries = textarea.value
+        .split(/\r?\n|,/)
+        .map(entry => entry.trim())
+        .filter(entry => entry.length > 0);
+
+    const unique = Array.from(new Set(entries));
+    return unique.map(mint => ({ mint, source: 'custom' }));
+}
+
+async function resolveAutoMintCandidates(limit = 40) {
+    const candidates = new Map();
+
+    if (window.apiClient && typeof window.apiClient.getTrendingTokens === 'function') {
+        try {
+            const trending = await window.apiClient.getTrendingTokens(limit);
+            const tokens = trending?.tokens || [];
+            tokens.forEach(token => {
+                if (token?.mint) {
+                    candidates.set(token.mint, {
+                        mint: token.mint,
+                        symbol: token.symbol || null,
+                        source: 'pumpfun'
+                    });
+                }
+            });
+        } catch (error) {
+            console.warn('Trending mint fetch failed:', error);
+            addConsoleLog(`⚠️ Unable to fetch PumpFun trending tokens: ${error.message}`, 'warning');
+        }
+    }
+
+    if (candidates.size < limit && window.apiClient && typeof window.apiClient.getJupiterTokens === 'function') {
+        try {
+            const tokenList = await window.apiClient.getJupiterTokens();
+            const tokens = tokenList?.tokens || [];
+            for (const token of tokens) {
+                if (!token?.address) continue;
+                if (token.verified !== undefined && token.verified === false) continue;
+                if (!candidates.has(token.address)) {
+                    candidates.set(token.address, {
+                        mint: token.address,
+                        symbol: token.symbol || null,
+                        decimals: token.decimals,
+                        source: 'jupiter'
+                    });
+                }
+                if (candidates.size >= limit) break;
+            }
+        } catch (error) {
+            console.warn('Jupiter token fetch failed:', error);
+            addConsoleLog(`⚠️ Unable to fetch Jupiter token list: ${error.message}`, 'warning');
+        }
+    }
+
+    return Array.from(candidates.values());
+}
 
 registerGlobalHandler('selectWarmExecutor', (executor) => {
     uiHelperState.warmExecutor = executor;

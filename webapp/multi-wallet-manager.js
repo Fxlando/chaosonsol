@@ -45,6 +45,98 @@ class MultiWalletManager {
         return blueprint;
     }
 
+    getWalletIdentifier(wallet) {
+        return wallet?.id || wallet?.publicKey || wallet?.address || null;
+    }
+
+    resolveWalletsByIds(ids) {
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return [];
+        }
+        const idSet = new Set(
+            ids
+                .filter(Boolean)
+                .map((value) => value.toString().toLowerCase())
+        );
+        if (idSet.size === 0) {
+            return [];
+        }
+        const source = Array.isArray(this.solana?.wallets) ? this.solana.wallets : [];
+        return source.filter((wallet) => {
+            const identifier = this.getWalletIdentifier(wallet);
+            return identifier && idSet.has(identifier.toLowerCase());
+        });
+    }
+
+    filterWalletsByGroup(groupSelector = {}) {
+        const { id: groupId, name: groupName } = groupSelector || {};
+        if (!groupId && !groupName) {
+            return [];
+        }
+
+        const targets = new Set();
+        if (groupId) targets.add(groupId.toString().toLowerCase());
+        if (groupName) targets.add(groupName.toString().toLowerCase());
+
+        const source = Array.isArray(this.solana?.wallets) ? this.solana.wallets : [];
+
+        return source.filter((wallet) => {
+            const groupCandidates = [];
+            if (typeof wallet.group === 'string') groupCandidates.push(wallet.group);
+            if (typeof wallet.groupName === 'string') groupCandidates.push(wallet.groupName);
+            if (Array.isArray(wallet.groups)) groupCandidates.push(...wallet.groups);
+
+            return groupCandidates.some((candidate) => {
+                if (typeof candidate !== 'string') return false;
+                return targets.has(candidate.toLowerCase());
+            });
+        });
+    }
+
+    resolveBlueprintWallets(blueprint, automationKey = null) {
+        const availableWallets = Array.isArray(this.solana?.wallets) ? this.solana.wallets : [];
+        const blueprintWallets = Array.isArray(blueprint?.wallets) ? blueprint.wallets : [];
+        const baseWallets = availableWallets.length ? availableWallets : blueprintWallets;
+
+        if (!automationKey) {
+            return baseWallets;
+        }
+
+        const automation = blueprint?.settings?.automations?.[automationKey];
+        if (!automation) {
+            return baseWallets;
+        }
+
+        const selector = automation.walletSelector || {
+            mode: automation.walletMode,
+            walletIds: automation.walletIds,
+            groupId: automation.walletGroupId || automation.walletGroup,
+            groupName: automation.walletGroupName
+        };
+
+        if (!selector || !selector.mode) {
+            return baseWallets;
+        }
+
+        switch (selector.mode) {
+            case 'all':
+                return baseWallets;
+            case 'custom':
+            case 'creator': {
+                const resolved = this.resolveWalletsByIds(selector.walletIds);
+                return resolved.length ? resolved : baseWallets;
+            }
+            case 'group': {
+                const groupId = selector.groupId || automation.walletGroupId || null;
+                const groupName = selector.groupName || automation.walletGroupName || null;
+                const resolved = this.filterWalletsByGroup({ id: groupId, name: groupName });
+                return resolved.length ? resolved : baseWallets;
+            }
+            default:
+                return baseWallets;
+        }
+    }
+
     // Execute blueprint across multiple wallets
     async executeBlueprint(blueprintId) {
         try {
@@ -94,7 +186,8 @@ class MultiWalletManager {
 
     // Sniper blueprint: Buy new tokens instantly
     async executeSniperBlueprint(blueprint) {
-        const { wallets, settings } = blueprint;
+        const wallets = this.resolveBlueprintWallets(blueprint, 'sniper');
+        const settings = blueprint.settings || {};
         const { tokenMint, buyAmount, slippage } = settings;
 
         console.log(`🎯 Sniper: ${wallets.length} wallets buying ${buyAmount} SOL of ${tokenMint}`);
@@ -132,8 +225,13 @@ class MultiWalletManager {
 
     // Volume blueprint: Generate trading volume
     async executeVolumeBlueprint(blueprint) {
-        const { wallets, settings } = blueprint;
+        const settings = blueprint.settings || {};
+        const wallets = this.resolveBlueprintWallets(blueprint, 'volumeBot');
         const { tokenMint, cycles, buyAmount, sellDelay } = settings;
+
+        if (!wallets || wallets.length === 0) {
+            throw new Error('No wallets available for Volume Bot automation');
+        }
 
         console.log(`📊 Volume: ${cycles} cycles with ${wallets.length} wallets`);
 

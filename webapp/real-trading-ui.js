@@ -937,6 +937,21 @@ const tokenLaunchState = {
     selectedWalletId: '',
     isUploading: false,
     isLaunching: false,
+    walletGroups: [],
+    isLoadingGroups: false,
+    automationControlsReady: false,
+    automations: {
+        smartSell: {
+            mode: 'creator',
+            walletIds: [],
+            groupId: ''
+        },
+        volumeBot: {
+            mode: 'creator',
+            walletIds: [],
+            groupId: ''
+        }
+    },
     image: {
         base64: null,
         uri: null,
@@ -945,6 +960,10 @@ const tokenLaunchState = {
         fileName: null,
         size: 0
     }
+};
+
+const blueprintFormState = {
+    controlsReady: false
 };
 
 const PUMPFUN_IMAGE_MAX_BYTES = 15 * 1024 * 1024; // 15 MB limit to match Pump.fun
@@ -1035,6 +1054,8 @@ async function prepareCreateTokenView() {
     }
 
     await loadCreatorWallets();
+    await ensureWalletGroupsLoaded();
+    setupLaunchAutomationWalletControls();
 
     if (typeof window.selectTokenPlatform === 'function') {
         window.selectTokenPlatform(uiHelperState.tokenPlatform || 'pumpfun', { silent: true });
@@ -1487,6 +1508,326 @@ function toggleVolumeBotConfig() {
     }
 }
 
+function getLaunchAutomationSelectors(type) {
+    if (type === 'smartSell') {
+        return {
+            mode: 'smart-sell-wallet-mode',
+            walletWrapper: 'smart-sell-wallets-wrapper',
+            walletSelect: 'smart-sell-wallet-select',
+            groupWrapper: 'smart-sell-group-wrapper',
+            groupSelect: 'smart-sell-group-select'
+        };
+    }
+    return {
+        mode: 'volume-bot-wallet-mode',
+        walletWrapper: 'volume-bot-wallets-wrapper',
+        walletSelect: 'volume-bot-wallet-select',
+        groupWrapper: 'volume-bot-group-wrapper',
+        groupSelect: 'volume-bot-group-select'
+    };
+}
+
+function getWalletIdentifier(wallet) {
+    return wallet?.id || wallet?.publicKey || wallet?.address || '';
+}
+
+function buildWalletOptionLabel(wallet) {
+    const name = wallet?.name?.trim() || 'Unnamed';
+    const address = truncateAddress(wallet?.publicKey || wallet?.address || wallet?.id || '');
+    const balance =
+        typeof wallet?.balance === 'number'
+            ? ` • ${wallet.balance.toFixed(Math.min(wallet.balance > 1 ? 2 : 4, 4))} SOL`
+            : '';
+    return `${name} • ${address}${balance}`;
+}
+
+function setupLaunchAutomationWalletControls() {
+    const types = ['smartSell', 'volumeBot'];
+
+    if (!tokenLaunchState.automationControlsReady) {
+        types.forEach((type) => {
+            const selectors = getLaunchAutomationSelectors(type);
+            const modeSelect = getElement(selectors.mode);
+            const walletSelect = getElement(selectors.walletSelect);
+            const groupSelect = getElement(selectors.groupSelect);
+
+            if (modeSelect) {
+                modeSelect.addEventListener('change', (event) => {
+                    handleLaunchAutomationModeChange(type, event.target.value);
+                });
+            }
+
+            if (walletSelect) {
+                walletSelect.addEventListener('change', () => handleLaunchAutomationWalletSelectionChange(type));
+            }
+
+            if (groupSelect) {
+                groupSelect.addEventListener('change', () => handleLaunchAutomationGroupSelectionChange(type));
+            }
+        });
+
+        tokenLaunchState.automationControlsReady = true;
+    }
+
+    populateLaunchAutomationWalletOptions();
+    populateLaunchAutomationGroupOptions();
+    types.forEach((type) => reflectLaunchAutomationState(type));
+}
+
+function populateLaunchAutomationWalletOptions() {
+    const wallets = Array.isArray(tokenLaunchState.wallets) ? tokenLaunchState.wallets : [];
+    const types = ['smartSell', 'volumeBot'];
+
+    types.forEach((type) => {
+        const selectors = getLaunchAutomationSelectors(type);
+        const selectEl = getElement(selectors.walletSelect);
+        const state = tokenLaunchState.automations[type];
+
+        if (!selectEl || !state) {
+            return;
+        }
+
+        const previousIds = Array.isArray(state.walletIds) ? [...state.walletIds] : [];
+        const selectedSet = new Set((state.walletIds || []).map((id) => id.toLowerCase()));
+        selectEl.innerHTML = '';
+
+        if (wallets.length === 0) {
+            state.walletIds = previousIds;
+            return;
+        }
+
+        wallets.forEach((wallet) => {
+            const value = getWalletIdentifier(wallet);
+            if (!value) return;
+
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = buildWalletOptionLabel(wallet);
+            option.selected = selectedSet.has(value.toLowerCase());
+            selectEl.appendChild(option);
+        });
+
+        state.walletIds = getSelectValues(selectEl);
+    });
+}
+
+function populateLaunchAutomationGroupOptions() {
+    const groups = Array.isArray(tokenLaunchState.walletGroups) ? tokenLaunchState.walletGroups : [];
+    const types = ['smartSell', 'volumeBot'];
+
+    types.forEach((type) => {
+        const selectors = getLaunchAutomationSelectors(type);
+        const selectEl = getElement(selectors.groupSelect);
+        const state = tokenLaunchState.automations[type];
+
+        if (!selectEl || !state) {
+            return;
+        }
+
+        const previousValue = state.groupId || '';
+
+        selectEl.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Select group...';
+        selectEl.appendChild(placeholder);
+
+        groups.forEach((group) => {
+            const value = group?.id || group?.name;
+            if (!value) return;
+            const option = document.createElement('option');
+            option.value = value;
+            const walletCount = Number(group.walletCount);
+            const countLabel = Number.isFinite(walletCount) && walletCount > 0 ? ` (${walletCount} wallets)` : '';
+            option.textContent = `${group.name || value}${countLabel}`;
+            selectEl.appendChild(option);
+        });
+
+        if (previousValue && Array.from(selectEl.options).some((opt) => opt.value === previousValue)) {
+            selectEl.value = previousValue;
+        } else if (groups.length > 0) {
+            selectEl.value = '';
+            state.groupId = '';
+        }
+    });
+}
+
+function handleLaunchAutomationModeChange(type, mode) {
+    const state = tokenLaunchState.automations[type];
+    if (!state) {
+        return;
+    }
+
+    state.mode = mode || 'creator';
+
+    if (state.mode !== 'custom') {
+        state.walletIds = [];
+    }
+
+    if (state.mode !== 'group') {
+        state.groupId = '';
+    }
+
+    reflectLaunchAutomationState(type);
+
+    if (state.mode === 'custom') {
+        handleLaunchAutomationWalletSelectionChange(type);
+    } else if (state.mode === 'group') {
+        handleLaunchAutomationGroupSelectionChange(type);
+    }
+}
+
+function handleLaunchAutomationWalletSelectionChange(type) {
+    const selectors = getLaunchAutomationSelectors(type);
+    const selectEl = getElement(selectors.walletSelect);
+    const state = tokenLaunchState.automations[type];
+
+    if (!selectEl || !state) {
+        return;
+    }
+
+    state.walletIds = getSelectValues(selectEl);
+}
+
+function handleLaunchAutomationGroupSelectionChange(type) {
+    const selectors = getLaunchAutomationSelectors(type);
+    const selectEl = getElement(selectors.groupSelect);
+    const state = tokenLaunchState.automations[type];
+
+    if (!selectEl || !state) {
+        return;
+    }
+
+    state.groupId = selectEl.value || '';
+}
+
+function reflectLaunchAutomationState(type) {
+    const state = tokenLaunchState.automations[type];
+    if (!state) {
+        return;
+    }
+
+    const selectors = getLaunchAutomationSelectors(type);
+    const modeSelect = getElement(selectors.mode);
+    const walletWrapper = getElement(selectors.walletWrapper);
+    const groupWrapper = getElement(selectors.groupWrapper);
+    const walletSelect = getElement(selectors.walletSelect);
+    const groupSelect = getElement(selectors.groupSelect);
+
+    if (modeSelect) {
+        modeSelect.value = state.mode || 'creator';
+    }
+
+    if (walletWrapper) {
+        walletWrapper.classList.toggle('hidden', state.mode !== 'custom');
+    }
+
+    if (groupWrapper) {
+        groupWrapper.classList.toggle('hidden', state.mode !== 'group');
+    }
+
+    if (walletSelect) {
+        const selectedSet = new Set((state.walletIds || []).map((id) => id.toLowerCase()));
+        Array.from(walletSelect.options).forEach((option) => {
+            option.selected = selectedSet.has(option.value.toLowerCase());
+        });
+    }
+
+    if (groupSelect) {
+        groupSelect.value = state.groupId || '';
+    }
+}
+
+async function ensureWalletGroupsLoaded() {
+    if (tokenLaunchState.walletGroups.length || tokenLaunchState.isLoadingGroups) {
+        return;
+    }
+
+    tokenLaunchState.isLoadingGroups = true;
+
+    try {
+        const response = await fetch('/.netlify/functions/groups', {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-cache'
+        });
+
+        if (response.ok) {
+            const payload = await response.json();
+            if (Array.isArray(payload)) {
+                tokenLaunchState.walletGroups = payload;
+            } else if (Array.isArray(payload?.groups)) {
+                tokenLaunchState.walletGroups = payload.groups;
+            }
+        } else {
+            console.warn(`Wallet group request failed with status ${response.status}`);
+        }
+    } catch (error) {
+        console.warn('Unable to load wallet groups:', error);
+    } finally {
+        tokenLaunchState.isLoadingGroups = false;
+    }
+}
+
+function resolveLaunchAutomationSelection(type, creatorWalletId) {
+    const state =
+        tokenLaunchState.automations[type] ||
+        {
+            mode: 'creator',
+            walletIds: [],
+            groupId: ''
+        };
+
+    const selection = {
+        mode: state.mode || 'creator',
+        walletIds: [],
+        groupId: state.groupId || ''
+    };
+
+    if (selection.mode === 'custom') {
+        selection.walletIds = Array.isArray(state.walletIds) ? state.walletIds.filter(Boolean) : [];
+    } else if (selection.mode === 'creator') {
+        if (creatorWalletId) {
+            selection.walletIds = [creatorWalletId];
+        }
+    }
+
+    return selection;
+}
+
+function getWalletGroupById(groupId) {
+    if (!groupId) {
+        return null;
+    }
+    return (
+        tokenLaunchState.walletGroups.find(
+            (group) =>
+                (group?.id && group.id === groupId) ||
+                (group?.name && group.name === groupId)
+        ) || null
+    );
+}
+
+function validateAutomationSelection(label, selection) {
+    if (!selection) {
+        return { valid: false, message: `Missing wallet selection for ${label}.` };
+    }
+
+    if (selection.mode === 'custom' && (!Array.isArray(selection.walletIds) || selection.walletIds.length === 0)) {
+        return { valid: false, message: `Select at least one wallet for ${label}.` };
+    }
+
+    if (selection.mode === 'group' && !selection.groupId) {
+        return { valid: false, message: `Choose a wallet group for ${label}.` };
+    }
+
+    if (selection.mode === 'creator' && (!Array.isArray(selection.walletIds) || selection.walletIds.length === 0)) {
+        return { valid: false, message: `Select a creator wallet before enabling ${label}.` };
+    }
+
+    return { valid: true };
+}
+
 function openLaunchLinks(tokenMint) {
     if (!tokenMint) return;
 
@@ -1572,34 +1913,98 @@ async function executeCreateAndLaunchToken() {
             await window.apiClient.initialize();
         }
 
+        const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
+        const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
+
+        const smartSellSelection = resolveLaunchAutomationSelection('smartSell', creatorWalletId);
+        const volumeSelection = resolveLaunchAutomationSelection('volumeBot', creatorWalletId);
+
+        if (enableSmartSell) {
+            const validation = validateAutomationSelection('Smart Sell', smartSellSelection);
+            if (!validation.valid) {
+                notify(validation.message, 'error');
+                addConsoleLog(`❌ Smart Sell configuration invalid: ${validation.message}`, 'error');
+                return;
+            }
+        }
+
+        if (enableVolumeBot) {
+            const validation = validateAutomationSelection('Volume Bot', volumeSelection);
+            if (!validation.valid) {
+                notify(validation.message, 'error');
+                addConsoleLog(`❌ Volume Bot configuration invalid: ${validation.message}`, 'error');
+                return;
+            }
+        }
+
         tokenLaunchState.isLaunching = true;
         setCreateLaunchButtonLoading(true, 'Launching...');
 
         const imageUri = await ensureTokenImageUploaded();
 
-        const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
-        const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
-
         const smartSellConfig = enableSmartSell
-            ? {
-                  enabled: true,
-                  profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
-                  stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
-                  trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
-                  partialSells: document.getElementById('smart-sell-partial')?.checked || true,
-                  sellPercentages: [25, 25, 25, 25]
-              }
+            ? (() => {
+                  const config = {
+                      enabled: true,
+                      walletSelector: smartSellSelection,
+                      walletMode: smartSellSelection.mode,
+                      walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
+                      walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
+                      walletGroupName:
+                          smartSellSelection.mode === 'group'
+                              ? getWalletGroupById(smartSellSelection.groupId)?.name || null
+                              : null,
+                      profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
+                      stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
+                      trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
+                      partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
+                      sellPercentages: [25, 25, 25, 25]
+                  };
+
+                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                      delete config.walletIds;
+                  }
+                  if (!config.walletGroupId) {
+                      delete config.walletGroupId;
+                  }
+                  if (!config.walletGroupName) {
+                      delete config.walletGroupName;
+                  }
+
+                  return config;
+              })()
             : null;
 
         const volumeBotConfig = enableVolumeBot
-            ? {
-                  enabled: true,
-                  walletIds: [creatorWalletId],
-                  buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
-                  sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
-                  cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
-                  randomizeAmounts: document.getElementById('volume-bot-randomize')?.checked ?? true
-              }
+            ? (() => {
+                  const config = {
+                      enabled: true,
+                      walletSelector: volumeSelection,
+                      walletMode: volumeSelection.mode,
+                      walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
+                      walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
+                      walletGroupName:
+                          volumeSelection.mode === 'group'
+                              ? getWalletGroupById(volumeSelection.groupId)?.name || null
+                              : null,
+                      buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
+                      sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
+                      cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
+                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked)
+                  };
+
+                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                      delete config.walletIds;
+                  }
+                  if (!config.walletGroupId) {
+                      delete config.walletGroupId;
+                  }
+                  if (!config.walletGroupName) {
+                      delete config.walletGroupName;
+                  }
+
+                  return config;
+              })()
             : null;
 
         const automationsPayload = {};
@@ -1711,6 +2116,203 @@ function stopAutomation(botId) {
 }
 
 // ==================== BLUEPRINT FUNCTIONS ====================
+
+function getBlueprintAutomationSelectors(prefix) {
+    return {
+        mode: `${prefix}-wallet-mode`,
+        walletWrapper: `${prefix}-wallets-wrapper`,
+        walletSelect: `${prefix}-wallet-select`,
+        groupWrapper: `${prefix}-group-wrapper`,
+        groupSelect: `${prefix}-group-select`
+    };
+}
+
+function toggleBlueprintAutomationWrappers(prefix, mode) {
+    const selectors = getBlueprintAutomationSelectors(prefix);
+    const walletWrapper = getElement(selectors.walletWrapper);
+    const groupWrapper = getElement(selectors.groupWrapper);
+
+    if (walletWrapper) {
+        walletWrapper.classList.toggle('hidden', mode !== 'custom');
+    }
+    if (groupWrapper) {
+        groupWrapper.classList.toggle('hidden', mode !== 'group');
+    }
+}
+
+function populateBlueprintAutomationWalletOptions() {
+    const wallets = Array.isArray(solana?.wallets) ? solana.wallets : [];
+    const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
+
+    prefixes.forEach((prefix) => {
+        const selectors = getBlueprintAutomationSelectors(prefix);
+        const selectEl = getElement(selectors.walletSelect);
+        if (!selectEl) return;
+
+        const previousValues = new Set(getSelectValues(selectEl).map((value) => value.toLowerCase()));
+        selectEl.innerHTML = '';
+
+        wallets.forEach((wallet) => {
+            const value = getWalletIdentifier(wallet);
+            if (!value) return;
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = buildWalletOptionLabel(wallet);
+            option.selected = previousValues.has(value.toLowerCase());
+            selectEl.appendChild(option);
+        });
+    });
+}
+
+function populateBlueprintAutomationGroupOptions() {
+    const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
+    const groups = Array.isArray(tokenLaunchState.walletGroups) ? tokenLaunchState.walletGroups : [];
+
+    prefixes.forEach((prefix) => {
+        const selectors = getBlueprintAutomationSelectors(prefix);
+        const selectEl = getElement(selectors.groupSelect);
+        if (!selectEl) return;
+
+        const previousValue = selectEl.value;
+
+        selectEl.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Select group...';
+        selectEl.appendChild(placeholder);
+
+        groups.forEach((group) => {
+            const value = group?.id || group?.name;
+            if (!value) return;
+            const option = document.createElement('option');
+            option.value = value;
+            const walletCount = Number(group?.walletCount);
+            const countLabel = Number.isFinite(walletCount) && walletCount > 0 ? ` (${walletCount} wallets)` : '';
+            option.textContent = `${group?.name || value}${countLabel}`;
+            selectEl.appendChild(option);
+        });
+
+        if (previousValue && Array.from(selectEl.options).some((opt) => opt.value === previousValue)) {
+            selectEl.value = previousValue;
+        } else {
+            selectEl.value = '';
+        }
+    });
+}
+
+function setupBlueprintAutomationControls() {
+    if (!blueprintFormState.controlsReady) {
+        const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
+        prefixes.forEach((prefix) => {
+            const selectors = getBlueprintAutomationSelectors(prefix);
+            const modeSelect = getElement(selectors.mode);
+            if (modeSelect) {
+                modeSelect.addEventListener('change', (event) => {
+                    toggleBlueprintAutomationWrappers(prefix, event.target.value);
+                });
+            }
+        });
+        blueprintFormState.controlsReady = true;
+    }
+
+    populateBlueprintAutomationWalletOptions();
+    populateBlueprintAutomationGroupOptions();
+
+    const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
+    prefixes.forEach((prefix) => {
+        const selectors = getBlueprintAutomationSelectors(prefix);
+        const modeSelect = getElement(selectors.mode);
+        if (modeSelect) {
+            toggleBlueprintAutomationWrappers(prefix, modeSelect.value || 'all');
+        }
+    });
+}
+
+function resetBlueprintAutomationSelectors() {
+    const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
+    prefixes.forEach((prefix) => {
+        const selectors = getBlueprintAutomationSelectors(prefix);
+        const modeSelect = getElement(selectors.mode);
+        const walletSelect = getElement(selectors.walletSelect);
+        const groupSelect = getElement(selectors.groupSelect);
+
+        if (modeSelect) {
+            modeSelect.value = 'all';
+        }
+        if (walletSelect) {
+            Array.from(walletSelect.options).forEach((option) => {
+                option.selected = false;
+            });
+        }
+        if (groupSelect) {
+            groupSelect.value = '';
+        }
+        toggleBlueprintAutomationWrappers(prefix, 'all');
+    });
+}
+
+function readBlueprintAutomationSelector(prefix) {
+    const selectors = getBlueprintAutomationSelectors(prefix);
+    const mode = getElement(selectors.mode)?.value || 'all';
+    const walletIds = mode === 'custom' ? getSelectValues(getElement(selectors.walletSelect)) : [];
+    const groupId = mode === 'group' ? (getElement(selectors.groupSelect)?.value || '') : '';
+    return {
+        mode,
+        walletIds,
+        groupId
+    };
+}
+
+function validateBlueprintAutomationSelection(label, enabled, selection) {
+    if (!enabled) {
+        return { valid: true };
+    }
+    if (!selection) {
+        return { valid: false, message: `Missing wallet configuration for ${label}.` };
+    }
+    if (selection.mode === 'custom' && (!Array.isArray(selection.walletIds) || selection.walletIds.length === 0)) {
+        return { valid: false, message: `Select at least one wallet for ${label}.` };
+    }
+    if (selection.mode === 'group' && !selection.groupId) {
+        return { valid: false, message: `Choose a wallet group for ${label}.` };
+    }
+    return { valid: true };
+}
+
+function describeAutomationSelector(automationConfig) {
+    if (!automationConfig) {
+        return 'Default wallets';
+    }
+    if (automationConfig.enabled === false) {
+        return 'Disabled';
+    }
+    const selector = automationConfig.walletSelector || {};
+    switch (selector.mode) {
+        case 'all':
+            return 'All active wallets';
+        case 'custom': {
+            const count = Array.isArray(selector.walletIds) ? selector.walletIds.length : 0;
+            return count > 0 ? `${count} wallet${count === 1 ? '' : 's'} selected` : 'Specific wallets (none selected)';
+        }
+        case 'group': {
+            if (selector.groupId || selector.walletGroupId || automationConfig.walletGroupId) {
+                const groupLabel =
+                    automationConfig.walletGroupName ||
+                    selector.walletGroupName ||
+                    selector.groupName ||
+                    automationConfig.walletGroupId ||
+                    selector.groupId ||
+                    'Unnamed group';
+                return `Group: ${groupLabel}`;
+            }
+            return 'Wallet group (not selected)';
+        }
+        case 'creator':
+            return 'Creator wallet';
+        default:
+            return 'Default wallets';
+    }
+}
 
 // Create blueprint
 async function createBlueprint(type) {
@@ -2738,6 +3340,13 @@ function getElement(id) {
     return document.getElementById(id);
 }
 
+function getSelectValues(selectEl) {
+    if (!selectEl) {
+        return [];
+    }
+    return Array.from(selectEl.selectedOptions || []).map((option) => option.value).filter(Boolean);
+}
+
 registerGlobalHandler('navigateToPage', (page) => {
     if (!page) return;
 
@@ -3529,6 +4138,25 @@ function getBlueprintFormValues() {
         throw new Error('Blueprint name is required');
     }
 
+    const smartSellEnabled = Boolean(getElement('blueprint-smart-sell-enabled')?.checked);
+    const volumeEnabled = Boolean(getElement('blueprint-volume-enabled')?.checked);
+
+    const smartSellSelector = readBlueprintAutomationSelector('blueprint-smart-sell');
+    const volumeSelector = readBlueprintAutomationSelector('blueprint-volume');
+
+    const smartSellValidation = validateBlueprintAutomationSelection('Smart Sell', smartSellEnabled, smartSellSelector);
+    if (!smartSellValidation.valid) {
+        throw new Error(smartSellValidation.message);
+    }
+
+    const volumeValidation = validateBlueprintAutomationSelection('Volume Bot', volumeEnabled, volumeSelector);
+    if (!volumeValidation.valid) {
+        throw new Error(volumeValidation.message);
+    }
+
+    const smartSellGroup = getWalletGroupById(smartSellSelector.groupId);
+    const volumeGroup = getWalletGroupById(volumeSelector.groupId);
+
     return {
         template,
         name,
@@ -3544,15 +4172,25 @@ function getBlueprintFormValues() {
             },
             automations: {
                 smartSell: {
-                    enabled: Boolean(getElement('blueprint-smart-sell-enabled')?.checked),
+                    enabled: smartSellEnabled,
                     profitTarget: parseFloat(getElement('blueprint-smart-sell-profit')?.value || '0') || 0,
-                    stopLoss: parseFloat(getElement('blueprint-smart-sell-stoploss')?.value || '0') || 0
+                    stopLoss: parseFloat(getElement('blueprint-smart-sell-stoploss')?.value || '0') || 0,
+                    walletSelector: smartSellSelector,
+                    walletMode: smartSellSelector.mode,
+                    walletIds: smartSellSelector.walletIds,
+                    walletGroupId: smartSellSelector.groupId || null,
+                    walletGroupName: smartSellGroup?.name || null
                 },
                 volumeBot: {
-                    enabled: Boolean(getElement('blueprint-volume-enabled')?.checked),
+                    enabled: volumeEnabled,
                     buyAmount: parseFloat(getElement('blueprint-volume-amount')?.value || '0') || 0,
                     cycles: parseInt(getElement('blueprint-volume-cycles')?.value || '0', 10) || 0,
-                    sellDelay: parseInt(getElement('blueprint-volume-delay')?.value || '0', 10) || 0
+                    sellDelay: parseInt(getElement('blueprint-volume-delay')?.value || '0', 10) || 0,
+                    walletSelector: volumeSelector,
+                    walletMode: volumeSelector.mode,
+                    walletIds: volumeSelector.walletIds,
+                    walletGroupId: volumeSelector.groupId || null,
+                    walletGroupName: volumeGroup?.name || null
                 }
             }
         }
@@ -3595,6 +4233,13 @@ function openCreateBlueprintModal(template = 'custom') {
     setBlueprintFormValue('blueprint-template', template);
     applyBlueprintPreset(template);
 
+    ensureWalletGroupsLoaded()
+        .catch((error) => console.warn('Wallet groups unavailable for blueprint modal:', error))
+        .finally(() => {
+            setupBlueprintAutomationControls();
+            resetBlueprintAutomationSelectors();
+        });
+
     window.openModal('create-blueprint-modal');
     setTimeout(() => {
         getElement('blueprint-name')?.focus();
@@ -3606,6 +4251,7 @@ function resetBlueprintForm() {
     form?.reset();
     setBlueprintFormValue('blueprint-template', 'custom');
     applyBlueprintPreset('custom');
+    resetBlueprintAutomationSelectors();
 }
 
 function submitBlueprintForm() {
@@ -3695,6 +4341,14 @@ function buildBlueprintCard(blueprint) {
         Smart Sell ${automationSettings.smartSell?.enabled ? '✅' : '❌'} • Volume Bot ${automationSettings.volumeBot?.enabled ? '✅' : '❌'}
     `;
     body.appendChild(automationSummary);
+
+    const walletSummary = document.createElement('div');
+    walletSummary.className = 'text-xs text-gray-400 space-y-1';
+    walletSummary.innerHTML = `
+        <div>Smart Sell wallets: ${describeAutomationSelector(automationSettings.smartSell)}</div>
+        <div>Volume Bot wallets: ${describeAutomationSelector(automationSettings.volumeBot)}</div>
+    `;
+    body.appendChild(walletSummary);
 
     if (blueprint.notes) {
         const notes = document.createElement('div');
@@ -3848,6 +4502,38 @@ function applyBlueprintToLaunch(blueprint) {
             volumeDelay.value = automations.volumeBot.sellDelay;
         }
     }
+
+    const normalizeSelectorForLaunch = (automationConfig = {}) => {
+        const selector = automationConfig.walletSelector || {};
+        let mode = selector.mode || automationConfig.walletMode || 'creator';
+        let walletIds = Array.isArray(selector.walletIds) ? [...selector.walletIds] : [];
+        let groupId = selector.groupId || automationConfig.walletGroupId || automationConfig.walletGroup || '';
+
+        if (mode === 'all') {
+            mode = 'custom';
+            walletIds = (tokenLaunchState.wallets || [])
+                .map((wallet) => getWalletIdentifier(wallet))
+                .filter(Boolean);
+        }
+
+        if (mode === 'creator' && walletIds.length === 0 && tokenLaunchState.selectedWalletId) {
+            walletIds = [tokenLaunchState.selectedWalletId];
+        }
+
+        return {
+            mode,
+            walletIds,
+            groupId
+        };
+    };
+
+    tokenLaunchState.automations.smartSell = normalizeSelectorForLaunch(automations.smartSell);
+    tokenLaunchState.automations.volumeBot = normalizeSelectorForLaunch(automations.volumeBot);
+
+    populateLaunchAutomationWalletOptions();
+    populateLaunchAutomationGroupOptions();
+    reflectLaunchAutomationState('smartSell');
+    reflectLaunchAutomationState('volumeBot');
 
     if (blueprint.notes) {
         notify(blueprint.notes, 'info');

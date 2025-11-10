@@ -11,6 +11,20 @@ let rtAutoScroll = true;
 let closeMobileSidebar = () => {};
 const MIN_RENT_BUFFER_SOL = 0.001;
 
+const CREATOR_WALLET_STORAGE_KEY = 'chaosbot_creator_wallet';
+const CREATOR_WALLET_TARGET_SOL = 1; // Target SOL used for sidebar progress
+
+let creatorWalletState = {
+    id: null,
+    address: '',
+    name: '',
+    balance: null,
+    tags: [],
+    lastSynced: 0
+};
+
+let creatorWalletImportLock = false;
+
 let collectFeesState = {
     initialized: false,
     loading: false,
@@ -69,6 +83,9 @@ let revealObserver = null;
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 Initializing Real On-Chain Trading Platform...');
     
+    loadStoredCreatorWalletState();
+    updateCreatorWalletUI();
+
     hydrateTopBar();
     setupAnimatedViews();
     setupScrollObserver();
@@ -111,6 +128,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('Error starting real-time updates:', error);
     }
     
+    try {
+        await syncCreatorWalletFromBackend({ silent: true });
+    } catch (error) {
+        console.warn('Creator wallet sync skipped:', error);
+    }
+    
     // Add console log
     try {
         if (typeof addConsoleLog === 'function') {
@@ -141,6 +164,10 @@ async function loadRealData() {
         const wallets = await solana.getAllWalletsWithBalances();
         renderWallets(wallets);
         updateTotalBalance(wallets);
+        syncCreatorWalletFromWallets(wallets, {
+            preferredId: creatorWalletState.id,
+            fallbackAddress: creatorWalletState.address
+        });
         
         // Check RPC health
         const rpcHealth = await solana.checkRPCHealth();
@@ -561,7 +588,7 @@ function ensureGlobalFunction(name) {
         return;
     }
 
-    window[name] = (...args) => {
+    const placeholder = (...args) => {
         const message = `${name} is not available in this build yet.`;
         if (typeof notify === 'function') {
             notify(message, 'warning');
@@ -570,6 +597,9 @@ function ensureGlobalFunction(name) {
         }
         return null;
     };
+
+    placeholder.__placeholder = true;
+    window[name] = placeholder;
 }
 
 missingGlobalHandlers.forEach(ensureGlobalFunction);
@@ -3974,9 +4004,11 @@ function ensureMultiWalletReady() {
 }
 
 function registerGlobalHandler(name, handler) {
-    if (typeof window[name] !== 'function') {
-        window[name] = handler;
+    const existing = window[name];
+    if (typeof existing === 'function' && !existing.__placeholder) {
+        return;
     }
+    window[name] = handler;
 }
 
 function notify(message, type = 'info') {
@@ -3992,6 +4024,461 @@ function notify(message, type = 'info') {
 
 function getElement(id) {
     return document.getElementById(id);
+}
+
+function loadStoredCreatorWalletState() {
+    try {
+        const raw = localStorage.getItem(CREATOR_WALLET_STORAGE_KEY);
+        if (!raw) {
+            return;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return;
+        }
+        creatorWalletState = {
+            ...creatorWalletState,
+            id: parsed.id || parsed.address || creatorWalletState.id,
+            address: parsed.address || creatorWalletState.address,
+            name: parsed.name || creatorWalletState.name,
+            balance: typeof parsed.balance === 'number' ? parsed.balance : creatorWalletState.balance,
+            tags: Array.isArray(parsed.tags) ? parsed.tags : creatorWalletState.tags,
+            lastSynced: parsed.lastSynced || parsed.timestamp || creatorWalletState.lastSynced
+        };
+    } catch (error) {
+        console.warn('Unable to load creator wallet from storage:', error);
+    }
+}
+
+function persistCreatorWalletState(state = creatorWalletState) {
+    try {
+        const payload = {
+            id: state.id || null,
+            address: state.address || '',
+            name: state.name || '',
+            balance: typeof state.balance === 'number' ? state.balance : null,
+            tags: Array.isArray(state.tags) ? state.tags : [],
+            lastSynced: state.lastSynced || Date.now()
+        };
+        localStorage.setItem(CREATOR_WALLET_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Unable to persist creator wallet:', error);
+    }
+}
+
+function applyCreatorWalletState(update = {}, options = {}) {
+    creatorWalletState = {
+        ...creatorWalletState,
+        ...update
+    };
+
+    if (!options.skipPersist) {
+        persistCreatorWalletState(creatorWalletState);
+    }
+
+    if (!options.skipUI) {
+        updateCreatorWalletUI();
+        updateCreatorWalletSummary();
+    }
+}
+
+function updateCreatorWalletUI() {
+    const addressEl = getElement('fee-wallet-address');
+    const balanceEl = getElement('fee-wallet-balance');
+    const percentEl = getElement('fee-wallet-percent');
+    const levelEl = getElement('fee-wallet-level');
+
+    const hasAddress = Boolean(creatorWalletState.address);
+    const formattedAddress = hasAddress ? truncateAddress(creatorWalletState.address) : 'No creator wallet';
+
+    if (addressEl) {
+        addressEl.textContent = formattedAddress;
+        if (addressEl.dataset) {
+            addressEl.dataset.address = creatorWalletState.address || '';
+        }
+        addressEl.classList.toggle('text-gray-400', !hasAddress);
+    }
+
+    const balance =
+        typeof creatorWalletState.balance === 'number'
+            ? creatorWalletState.balance
+            : null;
+    const balanceText = balance !== null ? `${balance.toFixed(4)} SOL` : '0.0000 SOL';
+
+    if (balanceEl) {
+        balanceEl.textContent = balanceText;
+        balanceEl.classList.toggle('text-purple-300', hasAddress);
+        balanceEl.classList.toggle('text-gray-500', !hasAddress);
+    }
+
+    const percentValue =
+        balance !== null
+            ? Math.max(0, Math.min(100, Math.round((balance / CREATOR_WALLET_TARGET_SOL) * 100)))
+            : 0;
+
+    if (percentEl) {
+        percentEl.textContent = hasAddress && balance !== null ? `${percentValue}%` : '--';
+    }
+
+    if (levelEl) {
+        levelEl.style.width = `${hasAddress ? percentValue : 0}%`;
+        levelEl.classList.toggle('bg-purple-500', true);
+    }
+}
+
+function updateCreatorWalletSummary() {
+    const summary = getElement('creator-wallet-summary');
+    if (!summary) {
+        return;
+    }
+
+    const nameEl = summary.querySelector('[data-summary-name]');
+    const addressEl = summary.querySelector('[data-summary-address]');
+    const balanceEl = summary.querySelector('[data-summary-balance]');
+
+    const hasAddress = Boolean(creatorWalletState.address);
+    const displayName = creatorWalletState.name || (hasAddress ? 'Creator Wallet' : 'No creator wallet linked');
+    const displayAddress = hasAddress ? creatorWalletState.address : '—';
+    const displayBalance =
+        typeof creatorWalletState.balance === 'number'
+            ? `${creatorWalletState.balance.toFixed(4)} SOL`
+            : '0.0000 SOL';
+
+    if (nameEl) nameEl.textContent = displayName;
+    if (addressEl) addressEl.textContent = displayAddress;
+    if (balanceEl) balanceEl.textContent = displayBalance;
+}
+
+function setCreatorWalletStatus(message, type = 'info') {
+    const statusEl = getElement('creator-wallet-status');
+    if (!statusEl) {
+        return;
+    }
+    const baseClass = 'text-xs';
+    const colorClass =
+        type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-gray-500';
+    statusEl.className = `${baseClass} ${colorClass}`;
+    statusEl.textContent = message || '';
+}
+
+function setCreatorImportButtonLoading(isLoading) {
+    const button = getElement('creator-wallet-import-btn');
+    if (!button) return;
+    const label = button.querySelector('.import-label');
+    const spinner = button.querySelector('.spinner');
+
+    button.disabled = isLoading;
+    button.classList.toggle('opacity-70', isLoading);
+    button.classList.toggle('cursor-wait', isLoading);
+
+    if (label) {
+        label.textContent = isLoading ? 'Importing…' : 'Import Creator Key';
+    }
+    if (spinner) {
+        spinner.classList.toggle('hidden', !isLoading);
+    }
+}
+
+function resetCreatorWalletForm() {
+    const keyInput = getElement('creator-wallet-private-key');
+    const nameInput = getElement('creator-wallet-name');
+    if (keyInput) keyInput.value = '';
+    if (nameInput) nameInput.value = '';
+}
+
+async function refreshCreatorWalletBalance(options = {}) {
+    const address = options.address || creatorWalletState.address;
+    if (!address || !solana || typeof solana.getBalance !== 'function') {
+        return null;
+    }
+    try {
+        const balance = await solana.getBalance(address);
+        applyCreatorWalletState({ balance }, { skipPersist: options.skipPersist, skipUI: options.skipUI });
+        return balance;
+    } catch (error) {
+        console.warn('Unable to refresh creator wallet balance:', error);
+        return null;
+    }
+}
+
+function normalizeValueForMatch(value) {
+    return value ? String(value).toLowerCase() : '';
+}
+
+function findCreatorWalletInList(wallets, preferences = {}) {
+    if (!Array.isArray(wallets) || wallets.length === 0) {
+        return null;
+    }
+
+    const preferredId = normalizeValueForMatch(preferences.preferredId);
+    const fallbackAddress = normalizeValueForMatch(preferences.fallbackAddress);
+    const storedAddress = normalizeValueForMatch(creatorWalletState.address);
+
+    if (preferredId) {
+        const match = wallets.find((wallet) => {
+            const candidates = [
+                wallet?.id,
+                wallet?.publicKey,
+                wallet?.address,
+                wallet?.pubkey
+            ].map(normalizeValueForMatch);
+            return candidates.includes(preferredId);
+        });
+        if (match) {
+            return match;
+        }
+    }
+
+    const tagged = wallets.find(
+        (wallet) =>
+            Array.isArray(wallet?.tags) &&
+            wallet.tags.some((tag) => normalizeValueForMatch(tag) === 'creator')
+    );
+    if (tagged) {
+        return tagged;
+    }
+
+    if (fallbackAddress) {
+        const match = wallets.find((wallet) => {
+            const candidates = [
+                wallet?.publicKey,
+                wallet?.address,
+                wallet?.pubkey
+            ].map(normalizeValueForMatch);
+            return candidates.includes(fallbackAddress);
+        });
+        if (match) {
+            return match;
+        }
+    }
+
+    if (storedAddress) {
+        const match = wallets.find((wallet) =>
+            [wallet?.publicKey, wallet?.address, wallet?.pubkey]
+                .map(normalizeValueForMatch)
+                .includes(storedAddress)
+        );
+        if (match) {
+            return match;
+        }
+    }
+
+    return null;
+}
+
+function syncCreatorWalletFromWallets(wallets, preferences = {}) {
+    const match = findCreatorWalletInList(wallets, preferences);
+    if (!match) {
+        return false;
+    }
+
+    const address = match.publicKey || match.address || match.pubkey || '';
+    const balance = typeof match.balance === 'number' ? match.balance : null;
+    const name = match.name || match.label || creatorWalletState.name || 'Creator Wallet';
+    const tags = Array.isArray(match.tags) ? match.tags : creatorWalletState.tags;
+
+    applyCreatorWalletState(
+        {
+            id: match.id || address,
+            address,
+            name,
+            balance,
+            tags,
+            lastSynced: Date.now()
+        },
+        { skipPersist: false }
+    );
+
+    if (balance === null) {
+        refreshCreatorWalletBalance({ address });
+    }
+
+    return true;
+}
+
+async function syncCreatorWalletFromBackend(options = {}) {
+    if (!window.apiClient) {
+        return null;
+    }
+
+    const { silent = false, preferredId = null, fallbackAddress = null, privateKey = null } = options || {};
+
+    try {
+        await ensureApiClientReady();
+        const response = await window.apiClient.getAllWallets();
+        const wallets = Array.isArray(response?.wallets)
+            ? response.wallets
+            : Array.isArray(response)
+            ? response
+            : [];
+
+        const synced = syncCreatorWalletFromWallets(wallets, { preferredId, fallbackAddress });
+        if (!synced) {
+            if (!silent && creatorWalletState.address) {
+                notify('Creator wallet not found in backend wallet list. Import or tag a wallet as creator.', 'warning');
+            }
+            return null;
+        }
+
+        const address = creatorWalletState.address;
+        if (address && (privateKey || typeof creatorWalletState.balance === 'number')) {
+            ensureVanityHasCreatorKey(address, privateKey, creatorWalletState.name);
+        }
+
+        return creatorWalletState;
+    } catch (error) {
+        if (!silent) {
+            notify(`Unable to sync creator wallet: ${error.message}`, 'error');
+        }
+        throw error;
+    }
+}
+
+function ensureVanityHasCreatorKey(address, privateKey, label) {
+    if (!address || !privateKey) {
+        return;
+    }
+
+    if (!Array.isArray(vanityKeyStore)) {
+        vanityKeyStore = [];
+    }
+
+    const existing = vanityKeyStore.find((entry) => entry.address === address);
+    const timestamp = Date.now();
+
+    if (existing) {
+        let updated = false;
+        if (!existing.privateKey) {
+            existing.privateKey = privateKey;
+            updated = true;
+        }
+        if (existing.status === 'used') {
+            existing.status = 'available';
+            updated = true;
+        }
+        if (existing.source !== 'creator') {
+            existing.source = 'creator';
+            updated = true;
+        }
+        if (label && !existing.label) {
+            existing.label = label;
+            updated = true;
+        }
+        if (updated) {
+            existing.updatedAt = timestamp;
+            persistVanityStore();
+            renderVanityList();
+        }
+        return;
+    }
+
+    vanityKeyStore.push({
+        id: `vanity-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+        launchpad: detectLaunchpad(address),
+        address,
+        privateKey,
+        status: 'available',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        source: 'creator',
+        label: label || 'Creator Wallet'
+    });
+
+    persistVanityStore();
+    renderVanityList();
+}
+
+function openCreatorWalletModal() {
+    updateCreatorWalletSummary();
+    setCreatorWalletStatus('');
+
+    window.openModal('creator-wallet-modal');
+
+    setTimeout(() => {
+        getElement('creator-wallet-private-key')?.focus();
+    }, 150);
+}
+
+async function submitCreatorWalletImport() {
+    if (creatorWalletImportLock) {
+        return;
+    }
+
+    const keyInput = getElement('creator-wallet-private-key');
+    const nameInput = getElement('creator-wallet-name');
+
+    const privateKeyRaw = keyInput?.value?.trim();
+    if (!privateKeyRaw) {
+        notify('Paste the creator private key before importing.', 'warning');
+        keyInput?.focus();
+        return;
+    }
+
+    creatorWalletImportLock = true;
+    setCreatorImportButtonLoading(true);
+    setCreatorWalletStatus('Importing creator wallet…', 'info');
+
+    try {
+        await ensureApiClientReady();
+        const requestedName = nameInput?.value?.trim();
+        const desiredName = requestedName || 'Creator Wallet';
+
+        const result = await window.apiClient.importWallet(privateKeyRaw, desiredName, ['creator']);
+        if (!result?.success) {
+            throw new Error(result?.error || 'Import failed');
+        }
+
+        const wallet = result.wallet || {};
+        const address = wallet.publicKey || wallet.address;
+        if (!address) {
+            throw new Error('Backend did not return a wallet address');
+        }
+        const walletId = wallet.id || address;
+        const privateKey = wallet.privateKey || privateKeyRaw;
+
+        applyCreatorWalletState({
+            id: walletId,
+            address,
+            name: wallet.name || desiredName,
+            tags: Array.isArray(wallet.tags) ? wallet.tags : ['creator'],
+            balance: typeof wallet.balance === 'number' ? wallet.balance : creatorWalletState.balance,
+            lastSynced: Date.now()
+        });
+
+        tokenLaunchState.selectedWalletId = walletId;
+
+        await syncCreatorWalletFromBackend({
+            silent: true,
+            preferredId: walletId,
+            fallbackAddress: address,
+            privateKey
+        });
+
+        await loadCreatorWallets();
+
+        if (typeof window.walletOperations?.loadWallets === 'function') {
+            try {
+                await window.walletOperations.loadWallets();
+            } catch (walletError) {
+                console.warn('Unable to reload wallet operations after creator import:', walletError);
+            }
+        }
+
+        await refreshCreatorWalletBalance({ address });
+
+        setCreatorWalletStatus('Creator wallet imported successfully.', 'success');
+        notify('Creator wallet imported and linked.', 'success');
+        resetCreatorWalletForm();
+        updateCreatorWalletSummary();
+        closeModal('creator-wallet-modal');
+    } catch (error) {
+        console.error('Creator wallet import failed:', error);
+        setCreatorWalletStatus(error.message || 'Import failed', 'error');
+        notify(`Creator wallet import failed: ${error.message}`, 'error');
+    } finally {
+        creatorWalletImportLock = false;
+        setCreatorImportButtonLoading(false);
+    }
 }
 
 function getSelectValues(selectEl) {
@@ -4257,6 +4744,157 @@ registerGlobalHandler('executeTagWallets', async () => {
     }
 });
 
+registerGlobalHandler('executeWarmWallets', async () => {
+    const button = document.querySelector('#warm-page button[onclick="executeWarmWallets()"]');
+    try {
+        const walletIds = getSelectedWalletIds();
+        if (!walletIds.length) {
+            notify('Select at least one wallet from the table before warming.', 'warning');
+            return;
+        }
+
+        const minSwapsInput = document.getElementById('warm-min-swaps');
+        const maxSwapsInput = document.getElementById('warm-max-swaps');
+        const minAmountInput = document.getElementById('warm-min-amount');
+        const maxAmountInput = document.getElementById('warm-max-amount');
+        const minDelayInput = document.getElementById('warm-min-delay');
+        const maxDelayInput = document.getElementById('warm-max-delay');
+
+        const minSwaps = parseInt(minSwapsInput?.value, 10);
+        const maxSwaps = parseInt(maxSwapsInput?.value, 10);
+        const minAmount = parseFloat(minAmountInput?.value);
+        const maxAmount = parseFloat(maxAmountInput?.value);
+        const minDelay = parseInt(minDelayInput?.value, 10);
+        const maxDelay = parseInt(maxDelayInput?.value, 10);
+
+        if (!Number.isFinite(minSwaps) || minSwaps <= 0) {
+            notify('Enter a valid minimum swap count greater than zero.', 'error');
+            return;
+        }
+        if (!Number.isFinite(maxSwaps) || maxSwaps <= 0) {
+            notify('Enter a valid maximum swap count greater than zero.', 'error');
+            return;
+        }
+        if (maxSwaps < minSwaps) {
+            notify('Max swaps must be greater than or equal to min swaps.', 'error');
+            return;
+        }
+
+        if (!Number.isFinite(minAmount) || minAmount <= 0) {
+            notify('Enter a valid minimum buy amount greater than zero.', 'error');
+            return;
+        }
+        if (!Number.isFinite(maxAmount) || maxAmount <= 0) {
+            notify('Enter a valid maximum buy amount greater than zero.', 'error');
+            return;
+        }
+        if (maxAmount < minAmount) {
+            notify('Max buy amount must be greater than or equal to the minimum amount.', 'error');
+            return;
+        }
+
+        if (!Number.isFinite(minDelay) || minDelay < 0) {
+            notify('Enter a valid minimum delay (seconds).', 'error');
+            return;
+        }
+        if (!Number.isFinite(maxDelay) || maxDelay < 0) {
+            notify('Enter a valid maximum delay (seconds).', 'error');
+            return;
+        }
+        if (maxDelay < minDelay) {
+            notify('Max delay must be greater than or equal to min delay.', 'error');
+            return;
+        }
+
+        const mintMode = document.querySelector('input[name="mint-warm"]:checked')?.value || 'auto';
+        let mintCandidates = [];
+
+        if (mintMode === 'custom') {
+            mintCandidates = parseWarmCustomMintList();
+            if (mintCandidates.length === 0) {
+                notify('Enter at least one mint address when using custom mint selection.', 'warning');
+                return;
+            }
+        } else {
+            notify('Fetching trending mints for warming...', 'info');
+            mintCandidates = await resolveAutoMintCandidates();
+            if (mintCandidates.length === 0) {
+                notify('Unable to load auto mint list. Please provide custom mints.', 'error');
+                return;
+            }
+        }
+
+        const payload = {
+            walletIds,
+            executor: uiHelperState.warmExecutor,
+            minSwaps,
+            maxSwaps,
+            minAmount,
+            maxAmount,
+            minDelay,
+            maxDelay,
+            mintMode,
+            mintCandidates,
+            priorityFee: 7500,
+            slippage: 2.5
+        };
+
+        notify(`Warming ${walletIds.length} wallet(s) via ${uiHelperState.warmExecutor.toUpperCase()} executor...`, 'info');
+        addConsoleLog(
+            `Warming initiated for ${walletIds.length} wallet(s) | Swaps: ${minSwaps}-${maxSwaps} | Amount: ${minAmount}-${maxAmount} SOL`,
+            'info'
+        );
+
+        if (button) {
+            setButtonLoading(button, true, 'Warming...');
+        }
+
+        const response = await window.apiClient?.warmWallets(payload);
+
+        if (!response) {
+            throw new Error('No response from warming endpoint');
+        }
+
+        if (response.success === false) {
+            throw new Error(response.error || 'Warming workflow reported failure');
+        }
+
+        const results = Array.isArray(response.results) ? response.results : [];
+        const successes = results.filter(result => result.success);
+        const failures = results.filter(result => !result.success);
+
+        successes.forEach(result => {
+            const swapInfo = `wallet ${result.walletId} | swap #${result.swapIndex + 1} | ${result.solAmount} SOL -> ${result.mint}`;
+            const signatureInfo = result.buy?.signature || result.sell?.signature
+                ? ` | tx: ${(result.sell?.signature || result.buy?.signature).slice(0, 10)}…`
+                : '';
+            addConsoleLog(`✅ Warmed ${swapInfo}${signatureInfo}`, 'success');
+        });
+
+        failures.forEach(result => {
+            const stage = result.stage || 'workflow';
+            addConsoleLog(`❌ Warm swap failed for wallet ${result.walletId} at ${stage}: ${result.error}`, 'error');
+        });
+
+        notify(
+            `Warming complete: ${successes.length} successful swap${successes.length === 1 ? '' : 's'}, ${failures.length} failed.`,
+            failures.length ? 'warning' : 'success'
+        );
+
+        if (typeof window.loadWallets === 'function') {
+            await window.loadWallets();
+        }
+    } catch (error) {
+        console.error('executeWarmWallets error:', error);
+        notify(error.message || 'Warming workflow failed. Check console for details.', 'error');
+        addConsoleLog(`❌ Warming failed: ${error.message || error}`, 'error');
+    } finally {
+        if (button) {
+            setButtonLoading(button, false);
+        }
+    }
+});
+
 function getSelectedWalletIds() {
     if (typeof window.walletOperationsGetSelectedWalletIds === 'function') {
         return window.walletOperationsGetSelectedWalletIds();
@@ -4278,6 +4916,21 @@ function parseCustomMintList() {
 
     const unique = Array.from(new Set(entries));
     return unique.map(mint => ({ mint, source: 'custom' }));
+}
+
+function parseWarmCustomMintList() {
+    const textarea = document.getElementById('warm-custom-mints');
+    if (textarea) {
+        const entries = textarea.value
+            .split(/\r?\n|,/)
+            .map(entry => entry.trim())
+            .filter(Boolean);
+        const unique = Array.from(new Set(entries));
+        return unique.map(mint => ({ mint, source: 'custom' }));
+    }
+
+    // Fallback to tagging custom mint parser if warm-specific textarea not present
+    return parseCustomMintList();
 }
 
 async function resolveAutoMintCandidates(limit = 40) {
@@ -5025,7 +5678,9 @@ function loadVanityKeysFromStorage() {
                     privateKey: entry.privateKey || '',
                     status: entry.status || 'available',
                     createdAt: entry.createdAt || Date.now(),
-                    updatedAt: entry.updatedAt || entry.createdAt || Date.now()
+                    updatedAt: entry.updatedAt || entry.createdAt || Date.now(),
+                    source: entry.source || 'manual',
+                    label: entry.label || ''
                 }))
                 : [];
             persistVanityStore();
@@ -5126,7 +5781,9 @@ function saveVanityKeys() {
                 privateKey,
                 status: 'available',
                 createdAt: timestamp,
-                updatedAt: timestamp
+                updatedAt: timestamp,
+                source: 'manual',
+                label: ''
             });
 
             added++;
@@ -5278,6 +5935,15 @@ function renderVanityList() {
         const toggleLabel = isRevealed ? 'Hide' : 'View';
         const statusAction = entry.status === 'used' ? 'available' : 'used';
         const statusLabel = entry.status === 'used' ? 'Mark Available' : 'Mark Used';
+        const sourceBadge =
+            entry.source === 'creator'
+                ? '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-900/60 text-purple-200 uppercase tracking-wide">Creator</span>'
+                : entry.source && entry.source !== 'manual'
+                ? `<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-neutral-800 text-gray-300 uppercase tracking-wide">${entry.source}</span>`
+                : '';
+        const labelLine = entry.label
+            ? `<div class="text-xs text-gray-500 mt-1">${entry.label}</div>`
+            : '';
 
         return `
             <tr class="border-b border-neutral-800 last:border-b-0">
@@ -5285,10 +5951,12 @@ function renderVanityList() {
                     ${formatLaunchpadBadge(entry.launchpad)}
                 </td>
                 <td class="px-4 py-3">
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <code class="font-mono text-sm text-gray-200">${entry.address}</code>
+                        ${sourceBadge}
                         <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="copyVanityAddress('${entry.id}')">Copy</button>
                     </div>
+                    ${labelLine}
                 </td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
@@ -5940,6 +6608,7 @@ registerGlobalHandler('refreshFeeWallet', async () => {
     notify('Refreshing fee wallet...', 'info');
     try {
         await loadRealData();
+        await refreshCreatorWalletBalance({ address: creatorWalletState.address });
         notify('Fee wallet refreshed from on-chain data', 'success');
     } catch (error) {
         notify(`Unable to refresh fee wallet: ${error.message}`, 'error');
@@ -5960,15 +6629,19 @@ function copyInnerText(elementId, label) {
     });
 }
 
-registerGlobalHandler('copyFeeWalletAddress', () => copyInnerText('fee-wallet-address', 'Fee wallet address'));
-registerGlobalHandler('copyFeeWalletKey', () => {
-    const storedKeyElement = getElement('fee-wallet-key');
-    if (storedKeyElement) {
-        copyInnerText('fee-wallet-key', 'Fee wallet private key');
+registerGlobalHandler('copyFeeWalletAddress', () => {
+    if (!creatorWalletState.address) {
+        notify('No creator wallet configured yet. Import one first.', 'warning');
         return;
     }
-    notify('Fee wallet private key is stored securely. Download wallets to export keys.', 'warning');
+    navigator.clipboard
+        .writeText(creatorWalletState.address)
+        .then(() => notify('Creator wallet address copied.', 'success'))
+        .catch(() => notify('Unable to copy creator wallet address.', 'error'));
 });
+registerGlobalHandler('copyFeeWalletKey', () => openCreatorWalletModal());
+registerGlobalHandler('openCreatorWalletModal', () => openCreatorWalletModal());
+registerGlobalHandler('submitCreatorWalletImport', () => submitCreatorWalletImport());
 
 registerGlobalHandler('openDocumentation', () => {
     window.open('https://docs.chaosbotonsol.xyz', '_blank', 'noopener');

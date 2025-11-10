@@ -1,22 +1,19 @@
 /**
  * Netlify Serverless Function - Production API
  * Wraps the new production backend for Netlify deployment
- * 
- * Note: Netlify functions need CommonJS, but we'll use dynamic import for ES modules
  */
 
-let App = null;
+import { handler as walletsHandler } from './wallets.js';
 
-// Initialize app (singleton)
+let App = null;
 let appInstance = null;
 
 async function getApp() {
   if (!App) {
-    // Dynamic import for ES modules
     const appModule = await import('../../src/App.js');
     App = appModule.App || appModule.default;
   }
-  
+
   if (!appInstance) {
     appInstance = new App({
       network: process.env.NETWORK || 'mainnet-beta'
@@ -26,7 +23,7 @@ async function getApp() {
   return appInstance;
 }
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   // Set longer timeout for Netlify functions (up to 10s free tier, 26s pro)
   context.callbackWaitsForEmptyEventLoop = false;
   
@@ -68,7 +65,6 @@ exports.handler = async (event, context) => {
 
     // Delegate wallet routes to dedicated Netlify function to reuse persistent storage layer
     if (method === 'GET' && path === '/wallets') {
-      const { handler: walletsHandler } = await import('./wallets.js');
       const response = await walletsHandler(
         {
           httpMethod: 'GET',

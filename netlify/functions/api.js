@@ -7,12 +7,18 @@
  * dynamic import only for the ESM application modules.
  */
 
+const path = require('path');
+const { pathToFileURL } = require('url');
+
+const dynamicImport = new Function('modulePath', 'return import(modulePath);');
+const APP_MODULE_URL = pathToFileURL(path.resolve(__dirname, '../../src/App.js')).href;
+
 let App = null;
 let appInstance = null;
 
 async function getApp() {
   if (!App) {
-    const appModule = await import('../../src/App.js');
+    const appModule = await dynamicImport(APP_MODULE_URL);
     App = appModule.App || appModule.default;
   }
 

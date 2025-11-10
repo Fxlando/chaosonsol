@@ -1,12 +1,20 @@
 // Netlify Function for Complete Wallet Management
 import axios from 'axios';
 import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getStore } from '@netlify/blobs';
 import bs58 from 'bs58';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import path from 'path';
 
 const PROJECT_ROOT = process.env.LAMBDA_TASK_ROOT || process.cwd();
 const MAIN_WALLET_FILE = 'wallets-main.json';
+const MAIN_WALLET_BLOB_KEY = 'wallets-main';
+const isBlobStorageAvailable = Boolean(
+  process.env.NETLIFY ||
+    process.env.NETLIFY_LOCAL ||
+    process.env.NETLIFY_DEV ||
+    process.env.NETLIFY_BLOBS_CONTEXT
+);
 
 function loadJson(relativePath) {
   try {
@@ -25,9 +33,9 @@ const pumpWallets = loadJson('pump-wallets-public.json');
 
 // In-memory wallet storage (in production, use a database)
 let walletStorage = new Map();
-
-ensureMainWalletFileExists();
-const mainWalletSeed = loadJson(MAIN_WALLET_FILE);
+let blobStore = null;
+let storageInitPromise = null;
+let storageInitialized = false;
 
 function ensureMainWalletFileExists() {
   try {
@@ -38,6 +46,40 @@ function ensureMainWalletFileExists() {
   } catch (error) {
     console.error('Failed to ensure main wallet file exists:', error.message);
   }
+}
+
+async function getBlobStoreInstance() {
+  if (!isBlobStorageAvailable) {
+    return null;
+  }
+
+  if (!blobStore) {
+    try {
+      blobStore = getStore({ name: 'chaosbot-wallets', consistency: 'strong' });
+    } catch (error) {
+      console.error('Failed to initialize Netlify Blob store:', error.message);
+      blobStore = null;
+    }
+  }
+
+  return blobStore;
+}
+
+async function loadPersistentMainWalletSeed() {
+  const store = await getBlobStoreInstance();
+  if (store) {
+    try {
+      const data = await store.get(MAIN_WALLET_BLOB_KEY, { type: 'json' });
+      if (data && Array.isArray(data.wallets)) {
+        return data;
+      }
+    } catch (error) {
+      console.error('Failed to load wallets from Netlify Blob store:', error.message);
+    }
+  }
+
+  ensureMainWalletFileExists();
+  return loadJson(MAIN_WALLET_FILE);
 }
 
 function normalizeWalletRecord(wallet, defaults = {}) {
@@ -64,33 +106,43 @@ function normalizeWalletRecord(wallet, defaults = {}) {
   };
 }
 
-function persistMainWallets() {
-  try {
-    const payload = {
-      wallets: Array.from(walletStorage.values())
-        .filter((wallet) => wallet?.source === 'main')
-        .map((wallet) => ({
-          id: wallet.id,
-          name: wallet.name,
-          address: wallet.address,
-          publicKey: wallet.publicKey,
-          privateKey: wallet.privateKey,
-          group: wallet.group,
-          groupName: wallet.groupName,
-          status: wallet.status,
-          tags: wallet.tags,
-          balance: wallet.balance,
-          tokenHoldings: wallet.tokenHoldings,
-          unclaimedRent: wallet.unclaimedRent,
-          createdAt: wallet.createdAt,
-          updatedAt: wallet.updatedAt
-        }))
-    };
+async function persistMainWallets() {
+  const payload = {
+    wallets: Array.from(walletStorage.values())
+      .filter((wallet) => wallet?.source === 'main')
+      .map((wallet) => ({
+        id: wallet.id,
+        name: wallet.name,
+        address: wallet.address,
+        publicKey: wallet.publicKey,
+        privateKey: wallet.privateKey,
+        group: wallet.group,
+        groupName: wallet.groupName,
+        status: wallet.status,
+        tags: wallet.tags,
+        balance: wallet.balance,
+        tokenHoldings: wallet.tokenHoldings,
+        unclaimedRent: wallet.unclaimedRent,
+        createdAt: wallet.createdAt,
+        updatedAt: wallet.updatedAt
+      }))
+  };
 
+  const store = await getBlobStoreInstance();
+  if (store) {
+    try {
+      await store.set(MAIN_WALLET_BLOB_KEY, payload, { type: 'json' });
+      return;
+    } catch (error) {
+      console.error('Failed to persist wallets to Netlify Blob store:', error.message);
+    }
+  }
+
+  try {
     const absolutePath = path.resolve(PROJECT_ROOT, MAIN_WALLET_FILE);
     writeFileSync(absolutePath, JSON.stringify(payload, null, 2), 'utf-8');
   } catch (error) {
-    console.error('Failed to persist main wallets:', error.message);
+    console.error('Failed to persist main wallets to filesystem:', error.message);
   }
 }
 
@@ -106,8 +158,10 @@ function sanitizeWallet(wallet) {
   return sanitized;
 }
 
-// Initialize wallet storage from JSON files
-function initializeWalletStorage() {
+// Initialize wallet storage from persistent sources
+async function initializeWalletStorage() {
+  walletStorage = new Map();
+
   if (volumeWallets.wallets) {
     volumeWallets.wallets.forEach((wallet, index) => {
       const record = normalizeWalletRecord(wallet, {
@@ -120,7 +174,7 @@ function initializeWalletStorage() {
       walletStorage.set(record.id, record);
     });
   }
-  
+
   if (pumpWallets.wallets) {
     pumpWallets.wallets.forEach((wallet, index) => {
       const record = normalizeWalletRecord(wallet, {
@@ -134,22 +188,41 @@ function initializeWalletStorage() {
     });
   }
 
-  const rootWallets = Array.isArray(mainWalletSeed.wallets) ? mainWalletSeed.wallets : [];
-  rootWallets.forEach((wallet, index) => {
-    const record = normalizeWalletRecord(wallet, {
-      id: wallet?.id || `wallet_${index}`,
-      group: wallet?.group || wallet?.groupName || 'default',
-      groupName: wallet?.groupName || wallet?.group || 'default',
-      source: 'main'
+  try {
+    const mainWalletSeed = await loadPersistentMainWalletSeed();
+    const rootWallets = Array.isArray(mainWalletSeed.wallets) ? mainWalletSeed.wallets : [];
+    rootWallets.forEach((wallet, index) => {
+      const record = normalizeWalletRecord(wallet, {
+        id: wallet?.id || `wallet_${index}`,
+        group: wallet?.group || wallet?.groupName || 'default',
+        groupName: wallet?.groupName || wallet?.group || 'default',
+        source: 'main'
+      });
+      walletStorage.set(record.id, record);
     });
-    walletStorage.set(record.id, record);
-  });
+  } catch (error) {
+    console.error('Failed to load main wallets:', error.message);
+  }
 
-  persistMainWallets();
+  storageInitialized = true;
 }
 
-// Initialize on module load
-initializeWalletStorage();
+async function ensureWalletStorageInitialized() {
+  if (storageInitialized) {
+    return;
+  }
+
+  if (!storageInitPromise) {
+    storageInitPromise = initializeWalletStorage().catch((error) => {
+      storageInitialized = false;
+      storageInitPromise = null;
+      console.error('Failed to initialize wallet storage:', error.message);
+      throw error;
+    });
+  }
+
+  return storageInitPromise;
+}
 
 const RPC_URL = process.env.RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
 const connection = new Connection(RPC_URL, 'confirmed');
@@ -168,6 +241,7 @@ async function getSolPrice() {
 }
 
 async function getAllWalletsWithBalances() {
+  await ensureWalletStorageInitialized();
   const wallets = Array.from(walletStorage.values());
 
   if (wallets.length === 0) {
@@ -241,6 +315,7 @@ async function getAllWalletsWithBalances() {
 
 async function generateWallet(name = null, tags = []) {
   try {
+    await ensureWalletStorageInitialized();
     const keypair = Keypair.generate();
     const walletId = `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date().toISOString();
@@ -283,6 +358,7 @@ async function generateWallet(name = null, tags = []) {
 
 async function importWallet(privateKey, name = null, tags = []) {
   try {
+    await ensureWalletStorageInitialized();
     let secretKey;
     
     // Handle different private key formats
@@ -338,7 +414,7 @@ async function importWallet(privateKey, name = null, tags = []) {
     };
     
     walletStorage.set(walletId, wallet);
-    persistMainWallets();
+    await persistMainWallets();
     
     return {
       success: true,
@@ -390,6 +466,8 @@ export const handler = async (event, context) => {
       }
     }
 
+    await ensureWalletStorageInitialized();
+
     // GET /wallets - Get all wallets
     if ((path === '' || path === '/') && method === 'GET') {
       const wallets = await getAllWalletsWithBalances();
@@ -417,8 +495,8 @@ export const handler = async (event, context) => {
         }
       }
 
-      persistMainWallets();
-      
+      await persistMainWallets();
+
       return {
         statusCode: 200,
         headers,
@@ -465,9 +543,9 @@ export const handler = async (event, context) => {
       });
       
       if (touchedMainWallet) {
-        persistMainWallets();
+        await persistMainWallets();
       }
-      
+
       return {
         statusCode: 200,
         headers,
@@ -498,7 +576,7 @@ export const handler = async (event, context) => {
       });
       
       if (touchedMainWallet) {
-        persistMainWallets();
+        await persistMainWallets();
       }
       
       return {
@@ -532,7 +610,7 @@ export const handler = async (event, context) => {
       });
       
       if (touchedMainWallet) {
-        persistMainWallets();
+        await persistMainWallets();
       }
       
       return {
@@ -567,7 +645,7 @@ export const handler = async (event, context) => {
       });
       
       if (touchedMainWallet) {
-        persistMainWallets();
+        await persistMainWallets();
       }
       
       return {
@@ -625,7 +703,7 @@ export const handler = async (event, context) => {
       walletStorage.set(walletId, wallet);
 
       if (wallet.source === 'main') {
-        persistMainWallets();
+        await persistMainWallets();
       }
 
       return {

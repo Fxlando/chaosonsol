@@ -224,6 +224,74 @@ export class TradingEngine {
     }
   }
 
+  async copyToken(walletId, sourceMint, options = {}) {
+    try {
+      const { metadata, info } = await this.pumpFun.buildMetadataFromMint(sourceMint);
+      const initialBuyAmount =
+        Number(options.initialBuyAmount ?? options.initialBuy ?? 0) || 0;
+
+      const launchOptions = {
+        ...options,
+        platform: options.platform || 'pumpfun',
+        copySourceMint: sourceMint,
+        sourceMetadataUri: info.metadataUri
+      };
+
+      const result = await this.launchToken(walletId, metadata, initialBuyAmount, launchOptions);
+
+      if (!result.success) {
+        return result;
+      }
+
+      return {
+        ...result,
+        source: info,
+        copiedMetadata: metadata
+      };
+    } catch (error) {
+      logger.error('Copy token failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async importToken(tokenMint, options = {}) {
+    try {
+      const { metadata, info } = await this.pumpFun.buildMetadataFromMint(tokenMint);
+      const bondingCurve = await this.pumpFun.getBondingCurveData(tokenMint);
+
+      return {
+        success: true,
+        token: {
+          mint: tokenMint,
+          name: metadata.name,
+          symbol: metadata.symbol,
+          description: metadata.description,
+          image: metadata.image,
+          twitter: metadata.twitter,
+          telegram: metadata.telegram,
+          website: metadata.website,
+          metadataUri: info.metadataUri,
+          marketCap: info.marketCap,
+          price: info.price,
+          totalSupply: info.totalSupply,
+          decimals: info.decimals,
+          bondingCurve
+        },
+        source: info,
+        platform: options.platform || 'pumpfun'
+      };
+    } catch (error) {
+      logger.error('Import token failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
   /**
    * Get quote for swap
    */

@@ -261,6 +261,30 @@ export class APIServer {
       }
     });
 
+    this.app.post('/api/tokens/copy', async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const { walletId, sourceMint, options } = req.body;
+        const result = await this.chaosApp.copyToken(walletId, sourceMint, options || {});
+        res.json(result);
+      } catch (error) {
+        logger.error('Copy token failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    this.app.post('/api/tokens/import', async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const { tokenMint, options } = req.body;
+        const result = await this.chaosApp.importToken(tokenMint, options || {});
+        res.json(result);
+      } catch (error) {
+        logger.error('Import token failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // Smart Sell routes
     this.app.post('/api/smartsell/add', async (req, res) => {
       try {

@@ -523,6 +523,36 @@ register('post', '/tokens/create', async (req, res) => {
   return backend.createToken(walletId, metadata, options || {});
 });
 
+register('post', '/tokens/copy', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletId, sourceMint, options } = req.body || {};
+
+  if (!walletId || !sourceMint) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'walletId and sourceMint are required'
+    };
+  }
+
+  return backend.copyToken(walletId, sourceMint, options || {});
+});
+
+register('post', '/tokens/import', async (req, res) => {
+  const backend = await loadBackend();
+  const { tokenMint, options } = req.body || {};
+
+  if (!tokenMint) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'tokenMint is required'
+    };
+  }
+
+  return backend.importToken(tokenMint, options || {});
+});
+
 register('post', '/tagging/run', async (req) => {
   const backend = await loadBackend();
   return backend.tagWallets(req.body || {});

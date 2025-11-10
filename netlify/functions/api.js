@@ -178,6 +178,52 @@ exports.handler = async (event, context) => {
       };
     }
 
+    if (path === '/tokens/copy' && method === 'POST') {
+      const { walletId, sourceMint, options } = body;
+
+      if (!walletId || !sourceMint) {
+        return {
+          statusCode: 400,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'walletId and sourceMint are required'
+          })
+        };
+      }
+
+      const result = await app.copyToken(walletId, sourceMint, options || {});
+
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result)
+      };
+    }
+
+    if (path === '/tokens/import' && method === 'POST') {
+      const { tokenMint, options } = body;
+
+      if (!tokenMint) {
+        return {
+          statusCode: 400,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'tokenMint is required'
+          })
+        };
+      }
+
+      const result = await app.importToken(tokenMint, options || {});
+
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(result)
+      };
+    }
+
     // Get tokens from wallets (on-chain data)
     if (path === '/tokens' && method === 'GET') {
       // This will be handled by the tokens.js function

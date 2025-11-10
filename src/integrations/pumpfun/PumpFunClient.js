@@ -94,12 +94,28 @@ export class PumpFunClient {
       });
 
       if (response.data) {
+        const metadataUri =
+          response.data.metadata_uri ||
+          response.data.metadataUri ||
+          (response.data.metadata && response.data.metadata.uri) ||
+          '';
+
+        const unpackSocial = (key) =>
+          response.data[key] ||
+          (response.data.socials && response.data.socials[key]) ||
+          (response.data.metadata && response.data.metadata[key]) ||
+          null;
+
         const tokenData = {
           mint: tokenMint,
           name: response.data.name || 'Unknown',
           symbol: response.data.symbol || 'UNK',
-          description: response.data.description || '',
-          image: response.data.image_uri || '',
+          description: response.data.description || (response.data.metadata && response.data.metadata.description) || '',
+          image: response.data.image_uri || response.data.imageUri || '',
+          metadataUri,
+          twitter: unpackSocial('twitter'),
+          telegram: unpackSocial('telegram'),
+          website: unpackSocial('website'),
           marketCap: response.data.usd_market_cap || 0,
           price: response.data.usd_market_cap / (response.data.total_supply / Math.pow(10, response.data.decimals)) || 0,
           totalSupply: response.data.total_supply || 0,
@@ -123,6 +139,84 @@ export class PumpFunClient {
       symbol: 'UNK',
       success: false,
       error: 'Unable to fetch token info'
+    };
+  }
+
+  resolveMetadataUri(uri) {
+    if (!uri || typeof uri !== 'string') {
+      return '';
+    }
+
+    if (uri.startsWith('ipfs://')) {
+      return `https://ipfs.io/ipfs/${uri.replace('ipfs://', '')}`;
+    }
+
+    return uri;
+  }
+
+  async fetchMetadataFromUri(metadataUri) {
+    const normalized = this.resolveMetadataUri(metadataUri);
+
+    if (!normalized) {
+      return null;
+    }
+
+    const cacheKey = `pumpfun_metadata_${normalized}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 60000) {
+      return cached.data;
+    }
+
+    try {
+      const response = await axios.get(normalized, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (ChaosBot/PumpFunClient)'
+        }
+      });
+
+      if (response.data && typeof response.data === 'object') {
+        this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() });
+        return response.data;
+      }
+    } catch (error) {
+      logger.warn(`Failed to fetch metadata URI ${normalized}:`, error.message);
+    }
+
+    return null;
+  }
+
+  async buildMetadataFromMint(tokenMint) {
+    const info = await this.getTokenInfo(tokenMint);
+
+    if (!info.success) {
+      throw new Error(info.error || 'Unable to load token info from PumpFun');
+    }
+
+    const metadata = {
+      name: info.name,
+      symbol: info.symbol,
+      description: info.description || '',
+      image: info.image || '',
+      twitter: info.twitter || undefined,
+      telegram: info.telegram || undefined,
+      website: info.website || undefined
+    };
+
+    if (info.metadataUri) {
+      const remote = await this.fetchMetadataFromUri(info.metadataUri);
+      if (remote) {
+        metadata.description = remote.description || metadata.description;
+        metadata.image = remote.image || metadata.image;
+        metadata.twitter = remote.twitter || metadata.twitter;
+        metadata.telegram = remote.telegram || metadata.telegram;
+        metadata.website = remote.website || remote.external_url || metadata.website;
+      }
+    }
+
+    return {
+      metadata,
+      info
     };
   }
 

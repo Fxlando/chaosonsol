@@ -249,6 +249,22 @@ class APIClient {
     });
   }
 
+  async copyToken(walletId, sourceMint, options = {}) {
+    return await this.request('/tokens/copy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletId, sourceMint, options })
+    });
+  }
+
+  async importToken(tokenMint, options = {}) {
+    return await this.request('/tokens/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokenMint, options })
+    });
+  }
+
   /**
    * Smart Sell
    */

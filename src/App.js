@@ -633,6 +633,71 @@ export class App {
   }
 
   /**
+   * Copy existing token metadata and launch new token
+   */
+  async copyToken(walletId, sourceMint, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    if (!walletId) {
+      return {
+        success: false,
+        error: 'walletId is required to copy a token'
+      };
+    }
+
+    if (!sourceMint) {
+      return {
+        success: false,
+        error: 'sourceMint is required to copy a token'
+      };
+    }
+
+    const platform = options.platform || 'pumpfun';
+    if (platform !== 'pumpfun') {
+      return {
+        success: false,
+        error: `Unsupported launch platform: ${platform}`
+      };
+    }
+
+    return await this.tradingEngine.copyToken(walletId, sourceMint, {
+      ...options,
+      platform
+    });
+  }
+
+  /**
+   * Import an existing token from PumpFun
+   */
+  async importToken(tokenMint, options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    if (!tokenMint) {
+      return {
+        success: false,
+        error: 'tokenMint is required to import a token'
+      };
+    }
+
+    const platform = options.platform || 'pumpfun';
+    if (platform !== 'pumpfun') {
+      return {
+        success: false,
+        error: `Unsupported token platform: ${platform}`
+      };
+    }
+
+    return await this.tradingEngine.importToken(tokenMint, {
+      ...options,
+      platform
+    });
+  }
+
+  /**
    * Get quote for swap
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {

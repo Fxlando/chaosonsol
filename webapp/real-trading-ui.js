@@ -940,6 +940,22 @@ function switchView(viewName) {
         });
     }
 
+    if (viewName === 'launch-token') {
+        prepareLaunchTokenView()
+            .then(() => {
+                if (tokenLaunchState.pendingDraftId) {
+                    const draft = tokenRegistry.drafts.get(tokenLaunchState.pendingDraftId);
+                    if (draft) {
+                        hydrateLaunchConfiguratorFromDraft(draft);
+                    }
+                }
+            })
+            .catch((error) => {
+                console.error('Failed to prepare launch token view:', error);
+                notify(`Unable to prepare launch token view: ${error.message}`, 'error');
+            });
+    }
+
     if (viewName === 'blueprint') {
         renderBlueprintList();
     }
@@ -979,6 +995,8 @@ const tokenLaunchState = {
     selectedWalletId: '',
     isUploading: false,
     isSavingDraft: false,
+    launchConfig: createDefaultLaunchConfig(),
+    launchControlsReady: false,
     walletGroups: [],
     isLoadingGroups: false,
     automationControlsReady: false,
@@ -1004,6 +1022,10 @@ const tokenLaunchState = {
         size: 0
     }
 };
+
+function resetLaunchConfigState() {
+    tokenLaunchState.launchConfig = createDefaultLaunchConfig();
+}
 
 const blueprintFormState = {
     controlsReady: false
@@ -1712,6 +1734,337 @@ function populateLaunchAutomationGroupOptions() {
             state.groupId = '';
         }
     });
+}
+
+function getLaunchWallets() {
+    return Array.isArray(tokenLaunchState.wallets) ? tokenLaunchState.wallets : [];
+}
+
+function findLaunchWalletById(walletId) {
+    if (!walletId) {
+        return null;
+    }
+    const id = String(walletId);
+    return getLaunchWallets().find((wallet) => getWalletIdentifier(wallet) === id) || null;
+}
+
+function populateLaunchDevWalletSelect() {
+    const selectEl = getElement('launch-dev-wallet');
+    const statusEl = getElement('launch-dev-wallet-status');
+    if (!selectEl) {
+        return;
+    }
+
+    const wallets = getLaunchWallets();
+    selectEl.innerHTML = '';
+
+    if (wallets.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No wallets available';
+        option.disabled = true;
+        option.selected = true;
+        selectEl.appendChild(option);
+        selectEl.disabled = true;
+
+        if (statusEl) {
+            statusEl.textContent = 'No creator wallets available. Create wallets from the Wallets view.';
+            statusEl.classList.remove('text-gray-500');
+            statusEl.classList.add('text-red-400');
+        }
+        return;
+    }
+
+    selectEl.disabled = false;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select dev wallet...';
+    placeholder.disabled = true;
+    selectEl.appendChild(placeholder);
+
+    let selectedId = tokenLaunchState.launchConfig.devWalletId || tokenLaunchState.selectedWalletId || '';
+    let selectionFound = false;
+
+    wallets.forEach((wallet) => {
+        const walletId = getWalletIdentifier(wallet);
+        if (!walletId) {
+            return;
+        }
+        const option = document.createElement('option');
+        option.value = walletId;
+        option.textContent = buildWalletOptionLabel(wallet);
+        if (selectedId && walletId === selectedId) {
+            option.selected = true;
+            selectionFound = true;
+        }
+        selectEl.appendChild(option);
+    });
+
+    if (!selectionFound) {
+        const firstWallet = wallets[0];
+        if (firstWallet) {
+            const firstId = getWalletIdentifier(firstWallet);
+            const matchingOption = Array.from(selectEl.options).find((opt) => opt.value === firstId);
+            if (matchingOption) {
+                matchingOption.selected = true;
+                selectedId = firstId;
+            }
+        }
+    }
+
+    if (selectedId) {
+        placeholder.selected = false;
+        tokenLaunchState.launchConfig.devWalletId = selectedId;
+        tokenLaunchState.selectedWalletId = selectedId;
+    } else {
+        placeholder.selected = true;
+    }
+
+    if (statusEl) {
+        statusEl.textContent = `${wallets.length} wallet${wallets.length === 1 ? '' : 's'} available.`;
+        statusEl.classList.remove('text-red-400');
+        statusEl.classList.add('text-gray-500');
+    }
+}
+
+function updateBlockZeroModeUI() {
+    const mode = tokenLaunchState.launchConfig.blockZero.mode || 'quick';
+    const quickCard = getElement('block-zero-quick');
+    if (quickCard) {
+        const isActive = mode === 'quick';
+        quickCard.classList.toggle('border-purple-500', isActive);
+        quickCard.classList.toggle('bg-purple-900/20', isActive);
+        quickCard.classList.toggle('border-neutral-700', !isActive);
+    }
+    uiHelperState.blockZeroMode = mode;
+}
+
+function renderBlockZeroWalletList() {
+    const container = getElement('block-zero-wallets');
+    const limitIndicator = getElement('block-zero-limit-indicator');
+    if (!container) {
+        return;
+    }
+
+    const state = tokenLaunchState.launchConfig.blockZero;
+    const enabled = Boolean(state.enabled);
+    const selections = state.selections || (state.selections = {});
+    const wallets = getLaunchWallets();
+    const devWalletId = tokenLaunchState.launchConfig.devWalletId || '';
+
+    if (!enabled) {
+        container.innerHTML = '<div class="text-sm text-gray-500">Enable Block Zero to configure snipe wallets.</div>';
+        if (limitIndicator) {
+            limitIndicator.textContent = '';
+        }
+        updateBlockZeroSummary();
+        return;
+    }
+
+    const eligibleWallets = wallets.filter((wallet) => {
+        const walletId = getWalletIdentifier(wallet);
+        return walletId && walletId !== devWalletId;
+    });
+
+    if (eligibleWallets.length === 0) {
+        container.innerHTML = '<div class="text-sm text-gray-500">No eligible wallets found. Import additional wallets first.</div>';
+        if (limitIndicator) {
+            limitIndicator.textContent = '';
+        }
+        updateBlockZeroSummary();
+        return;
+    }
+
+    const selectedIds = Object.keys(selections);
+    const selectionSet = new Set(selectedIds);
+    const limitReached = selectedIds.length >= BLOCK_ZERO_MAX_SELECTIONS;
+
+    container.innerHTML = eligibleWallets
+        .map((wallet) => {
+            const walletId = getWalletIdentifier(wallet);
+            const selected = selectionSet.has(walletId);
+            const disabled = !selected && limitReached;
+            const balance = safeNumber(wallet.balance ?? wallet.solBalance);
+            const balanceLabel = balance !== null ? formatSol(balance) : null;
+            const storedAmount = safeNumber(selections[walletId]?.amount);
+            const amountValue = storedAmount !== null ? storedAmount : '';
+            return `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-900/60 border border-neutral-800 rounded-lg" data-block-zero-wallet-row="${escapeHtml(walletId)}">
+                    <label class="flex items-start gap-3 text-sm text-gray-200">
+                        <input type="checkbox" class="rounded mt-1" data-block-zero-checkbox value="${escapeHtml(walletId)}" ${selected ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+                        <div>
+                            <div class="font-medium">${escapeHtml(wallet.name || 'Unnamed Wallet')}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(truncateAddress(wallet.publicKey || wallet.address || wallet.id || walletId))}${balanceLabel ? ` • ${escapeHtml(balanceLabel)}` : ''}</div>
+                        </div>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" class="w-28 bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" data-block-zero-amount value="${amountValue !== '' ? escapeHtml(String(amountValue)) : ''}" step="0.001" min="0" placeholder="0.00" ${selected ? '' : 'disabled'}>
+                        <span class="text-xs text-gray-500 uppercase">SOL</span>
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    container.querySelectorAll('[data-block-zero-checkbox]').forEach((checkbox) => {
+        checkbox.addEventListener('change', handleBlockZeroCheckboxChange);
+    });
+
+    container.querySelectorAll('[data-block-zero-amount]').forEach((input) => {
+        input.addEventListener('input', handleBlockZeroAmountChange);
+    });
+
+    if (limitIndicator) {
+        limitIndicator.textContent = `${Math.min(selectedIds.length, BLOCK_ZERO_MAX_SELECTIONS)}/${BLOCK_ZERO_MAX_SELECTIONS} selected`;
+    }
+
+    updateBlockZeroSummary();
+}
+
+function handleLaunchDevWalletChange(event) {
+    const value = event?.target?.value || '';
+    tokenLaunchState.launchConfig.devWalletId = value;
+    tokenLaunchState.selectedWalletId = value;
+
+    if (value && tokenLaunchState.launchConfig.blockZero.selections[value]) {
+        delete tokenLaunchState.launchConfig.blockZero.selections[value];
+    }
+
+    renderBlockZeroWalletList();
+}
+
+function handleDevBuyAmountChange(event) {
+    const value = safeNumber(event?.target?.value);
+    if (value !== null && value >= 0) {
+        tokenLaunchState.launchConfig.devBuyAmount = value;
+    } else if (event?.target?.value === '') {
+        tokenLaunchState.launchConfig.devBuyAmount = null;
+    }
+}
+
+function handleBlockZeroToggle(event) {
+    const enabled = Boolean(event?.target?.checked);
+    tokenLaunchState.launchConfig.blockZero.enabled = enabled;
+    if (!enabled) {
+        tokenLaunchState.launchConfig.blockZero.selections = {};
+    }
+    renderBlockZeroWalletList();
+}
+
+function handleBlockZeroCheckboxChange(event) {
+    const checkbox = event?.target;
+    if (!checkbox) return;
+    const walletId = checkbox.value;
+    if (!walletId) return;
+
+    const state = tokenLaunchState.launchConfig.blockZero;
+    const selections = state.selections || (state.selections = {});
+
+    if (checkbox.checked) {
+        const currentCount = Object.keys(selections).length;
+        if (currentCount >= BLOCK_ZERO_MAX_SELECTIONS) {
+            checkbox.checked = false;
+            notify(`Quick Scope supports up to ${BLOCK_ZERO_MAX_SELECTIONS} wallets.`, 'warning');
+            return;
+        }
+        selections[walletId] = selections[walletId] || { amount: null };
+    } else {
+        delete selections[walletId];
+    }
+
+    renderBlockZeroWalletList();
+}
+
+function handleBlockZeroAmountChange(event) {
+    const input = event?.target;
+    if (!input) return;
+    const walletRow = input.closest('[data-block-zero-wallet-row]');
+    const walletId = walletRow?.getAttribute('data-block-zero-wallet-row');
+    if (!walletId) return;
+
+    const value = safeNumber(input.value);
+    if (!tokenLaunchState.launchConfig.blockZero.selections[walletId]) {
+        tokenLaunchState.launchConfig.blockZero.selections[walletId] = { amount: null };
+    }
+
+    if (value !== null && value >= 0) {
+        tokenLaunchState.launchConfig.blockZero.selections[walletId].amount = value;
+    } else if (input.value === '') {
+        tokenLaunchState.launchConfig.blockZero.selections[walletId].amount = null;
+    }
+
+    updateBlockZeroSummary();
+}
+
+function updateBlockZeroSummary() {
+    const summaryEl = getElement('block-zero-summary');
+    if (!summaryEl) return;
+
+    const state = tokenLaunchState.launchConfig.blockZero;
+    if (!state.enabled) {
+        summaryEl.classList.add('hidden');
+        summaryEl.textContent = '';
+        return;
+    }
+
+    const selections = state.selections || {};
+    const selectedIds = Object.keys(selections);
+    if (selectedIds.length === 0) {
+        summaryEl.classList.add('hidden');
+        summaryEl.textContent = '';
+        return;
+    }
+
+    const totalAmount = selectedIds.reduce((sum, walletId) => {
+        const amount = safeNumber(selections[walletId]?.amount);
+        return sum + (amount !== null && amount >= 0 ? amount : 0);
+    }, 0);
+
+    summaryEl.textContent = `${selectedIds.length}/${BLOCK_ZERO_MAX_SELECTIONS} wallets selected • Total buy ${formatSol(totalAmount)}`;
+    summaryEl.classList.remove('hidden');
+}
+
+async function prepareLaunchTokenView(options = {}) {
+    const { forceWalletReload = false } = options;
+    if (forceWalletReload || getLaunchWallets().length === 0) {
+        try {
+            await loadCreatorWallets();
+        } catch (error) {
+            console.error('Failed to load creator wallets for launch view:', error);
+        }
+    }
+
+    populateLaunchDevWalletSelect();
+
+    if (!tokenLaunchState.launchControlsReady) {
+        const devWalletSelect = getElement('launch-dev-wallet');
+        devWalletSelect?.addEventListener('change', handleLaunchDevWalletChange);
+
+        const devBuyInput = getElement('dev-buy-amount');
+        devBuyInput?.addEventListener('input', handleDevBuyAmountChange);
+
+        const blockZeroToggle = getElement('enable-block-zero');
+        blockZeroToggle?.addEventListener('change', handleBlockZeroToggle);
+
+        const quickCard = getElement('block-zero-quick');
+        quickCard?.addEventListener('click', () => selectBlockZeroMode('quick'));
+
+        tokenLaunchState.launchControlsReady = true;
+    }
+
+    const devBuyInput = getElement('dev-buy-amount');
+    if (devBuyInput) {
+        const value = safeNumber(tokenLaunchState.launchConfig.devBuyAmount);
+        devBuyInput.value = value !== null ? value : '';
+    }
+
+    const blockZeroToggle = getElement('enable-block-zero');
+    if (blockZeroToggle) {
+        blockZeroToggle.checked = Boolean(tokenLaunchState.launchConfig.blockZero.enabled);
+    }
+
+    updateBlockZeroModeUI();
+    renderBlockZeroWalletList();
 }
 
 function handleLaunchAutomationModeChange(type, mode) {
@@ -3433,6 +3786,20 @@ window.loadInstantTradingData = loadInstantTradingData;
 
 console.log('✅ Real Trading UI JavaScript loaded');
 
+function createDefaultLaunchConfig() {
+    return {
+        devWalletId: '',
+        devBuyAmount: 0.2,
+        blockZero: {
+            enabled: false,
+            mode: 'quick',
+            selections: {}
+        }
+    };
+}
+
+const BLOCK_ZERO_MAX_SELECTIONS = 3;
+
 // ==================== UI HELPER REGISTRATION ====================
 
 const uiHelperState = {
@@ -3442,7 +3809,7 @@ const uiHelperState = {
     redistributeMode: 'standard',
     tokenPlatform: 'pumpfun',
     copyPlatform: 'pumpfun',
-    blockZeroMode: 'bundled',
+    blockZeroMode: 'quick',
     tagFilters: new Set(),
     vanityFilter: 'available'
 };
@@ -3817,7 +4184,6 @@ function prepareSavedTokenLaunch() {
     }
 
     tokenLaunchState.pendingDraftId = current.id;
-    hydrateLaunchConfiguratorFromDraft(current);
     navigateToPage('launch-token');
     notify('Draft loaded. Configure launch details below.', 'info');
 }
@@ -5102,12 +5468,12 @@ registerGlobalHandler('selectCopyPlatform', (platform) => {
 });
 
 registerGlobalHandler('selectBlockZeroMode', (mode) => {
-    uiHelperState.blockZeroMode = mode;
-    const bundled = getElement('block-zero-bundled');
-    const undetectable = getElement('block-zero-undetectable');
-    bundled?.classList.toggle('border-white', mode === 'bundled');
-    undetectable?.classList.toggle('border-white', mode === 'undetectable');
-    notify(`Block zero mode set to ${mode}`, 'info');
+    const normalized = mode || 'quick';
+    tokenLaunchState.launchConfig.blockZero.mode = normalized;
+    uiHelperState.blockZeroMode = normalized;
+    updateBlockZeroModeUI();
+    renderBlockZeroWalletList();
+    notify(`Block zero mode set to ${normalized}`, 'info');
 });
 
 registerGlobalHandler('openCreateBlueprintModal', openCreateBlueprintModal);

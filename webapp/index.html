@@ -2680,14 +2680,12 @@
                         <h3 class="text-lg font-semibold mb-4">Dev</h3>
                         <p class="text-sm text-gray-400 mb-4">Configure your Dev settings</p>
                         
-                        <div class="grid grid-cols-2 gap-6 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label class="block mb-2 text-sm font-medium">Dev Wallet</label>
-                                <select class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
-                                    <option>🐘 sour-elephant 0.34 SOL</option>
-                                </select>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    The dev wallet you want to use for the token launch. This wallet will be used to pay for the transaction fees.
+                                <select id="launch-dev-wallet" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"></select>
+                                <p id="launch-dev-wallet-status" class="text-xs text-gray-500 mt-2">
+                                    Loading creator wallets...
                                 </p>
                             </div>
                             <div>
@@ -2695,8 +2693,8 @@
                                 <input
                                     type="number"
                                     id="dev-buy-amount"
-                                    value="0.2"
                                     step="0.01"
+                                    placeholder="0.00"
                                     class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                 />
                                 <p class="text-xs text-gray-500 mt-2">
@@ -2713,23 +2711,16 @@
                         </p>
                         
                         <div class="flex items-center gap-2 mb-6">
-                            <input type="checkbox" id="enable-block-zero" class="rounded" checked />
+                            <input type="checkbox" id="enable-block-zero" class="rounded" />
                             <span class="text-sm font-medium">Enable Block Zero</span>
                         </div>
                         
                         <p class="text-sm text-gray-400 mb-4">
-                            Select which wallets should buy the token in block zero.
+                            Select up to 3 wallets that should buy the token in block zero immediately after launch.
                         </p>
                         
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                            <div id="block-zero-safe" class="border-2 rounded-lg p-4 cursor-pointer transition border-neutral-500 bg-neutral-800" onclick="selectBlockZeroMode('safe')">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-2xl">🛡️</span>
-                                    <h4 class="font-semibold">Safe Mode</h4>
-                                </div>
-                                <p class="text-xs text-gray-400">Up to 20 wallets. May not look organic.</p>
-                            </div>
-                            <div id="block-zero-quick" class="border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20" onclick="selectBlockZeroMode('quick')">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <div id="block-zero-quick" class="border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700 hover:border-purple-500" onclick="selectBlockZeroMode('quick')">
                                 <div class="flex items-center gap-2 mb-2">
                                     <span class="text-2xl">🎯</span>
                                     <h4 class="font-semibold">Quick Scope</h4>
@@ -2739,23 +2730,14 @@
                         </div>
                         
                         <div class="bg-neutral-800 rounded-lg p-4 mb-6">
-                            <h4 class="font-semibold mb-3">Selected Wallets for Block Zero</h4>
-                            <div class="space-y-2" id="block-zero-wallets">
-                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
-                                    <div class="flex items-center gap-2">
-                                        <span>🐘</span>
-                                        <span>sour-elephant</span>
-                                    </div>
-                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
-                                </div>
-                                <div class="flex items-center justify-between p-2 bg-neutral-700 rounded">
-                                    <div class="flex items-center gap-2">
-                                        <span>🦜</span>
-                                        <span>decisive-parrot</span>
-                                    </div>
-                                    <input type="number" value="0.1" step="0.01" class="w-20 bg-black border border-neutral-600 rounded px-2 py-1 text-xs" />
-                                </div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold">Block Zero Wallets</h4>
+                                <span id="block-zero-limit-indicator" class="text-xs text-gray-500"></span>
                             </div>
+                            <div class="space-y-2" id="block-zero-wallets">
+                                <div class="text-sm text-gray-500">Enable Block Zero to configure snipe wallets.</div>
+                            </div>
+                            <p id="block-zero-summary" class="text-xs text-gray-500 mt-3 hidden"></p>
                         </div>
                     </div>
                     

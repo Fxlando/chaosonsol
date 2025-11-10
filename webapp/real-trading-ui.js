@@ -5,6 +5,7 @@ let solana;
 let rtSelectedWallets = new Set();
 let rtCurrentView = 'wallets';
 let vanityKeyStore = [];
+let vanityLaunchStore = [];
 let vanityVisibility = new Set();
 let rtAutoScroll = true;
 let closeMobileSidebar = () => {};
@@ -121,7 +122,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initializeSettings();
     initializeCollectFeesView();
+    loadVanityLaunchesFromStorage();
     loadVanityKeysFromStorage();
+    refreshVanityLaunchPerformance().catch(error => {
+        console.warn('Unable to refresh vanity launch performance:', error);
+    });
     console.log('✅ Real Trading Platform Ready');
 });
 
@@ -879,6 +884,8 @@ function switchView(viewName) {
         } else if (typeof loadRealData === 'function') {
             loadRealData();
         }
+    } else if (viewName === 'tokens') {
+        renderTokensTable();
     } else if (viewName === 'instant') {
         // Load instant trading data
         loadInstantTradingData();
@@ -907,7 +914,11 @@ function switchView(viewName) {
     }
 
     if (viewName === 'vanities') {
+        renderVanityLaunchList();
         renderVanityList();
+        refreshVanityLaunchPerformance().catch(error => {
+            console.warn('Unable to refresh vanity launch performance:', error);
+        });
     }
 
     if (viewName === 'settings') {
@@ -2128,6 +2139,27 @@ async function executeCreateAndLaunchToken() {
                 openLaunchLinks(result.tokenMint);
             }
 
+            if (result.tokenMint) {
+                try {
+                    const walletDetails = resolveCreatorWalletDetails(creatorWalletId) || {};
+                    await recordTokenLaunch({
+                        tokenMint: result.tokenMint,
+                        name,
+                        symbol,
+                        platform,
+                        logo: imageUri || tokenLaunchState.image.gatewayUrl || null,
+                        metadataUri: result.metadataUri || null,
+                        creatorWalletId,
+                        creatorWallet: walletDetails.address || creatorWalletId,
+                        creatorWalletLabel: walletDetails.name || '',
+                        launchedAt: result.createdTimestamp || Date.now(),
+                        initialBuyAmount: Number.isFinite(initialBuyAmount) ? initialBuyAmount : null
+                    });
+                } catch (recordError) {
+                    console.warn('Failed to record token launch:', recordError);
+                }
+            }
+
             resetCreateTokenForm();
             await loadCreatorWallets();
 
@@ -2151,7 +2183,162 @@ async function executeCreateAndLaunchToken() {
     }
 }
 
+async function executeCopyToken() {
+    const button = document.getElementById('copy-token-submit');
+    try {
+        const mintInput = document.getElementById('copy-mint-address');
+        const useVanityInput = document.getElementById('copy-use-vanity');
+        const mintAddress = mintInput?.value?.trim() || '';
+        const platform = uiHelperState.copyPlatform || 'pumpfun';
+        const useVanity = Boolean(useVanityInput?.checked);
+
+        if (!mintAddress) {
+            notify('Enter the source mint you want to copy.', 'warning');
+            mintInput?.focus();
+            return;
+        }
+
+        if (!validateMintAddress(mintAddress)) {
+            notify('That mint address is not valid. Please double-check it.', 'error');
+            mintInput?.focus();
+            return;
+        }
+
+        if (platform !== 'pumpfun') {
+            notify(`Copying via ${platform} isn’t supported yet. Choose Pump.fun.`, 'warning');
+            return;
+        }
+
+        const walletId = await resolveCreatorWalletId();
+
+        setButtonLoading(button, true, 'Copying token…');
+        await ensureApiClientReady();
+
+        addConsoleLog(`📋 Copying token ${mintAddress} with wallet ${walletId}...`, 'info');
+        notify('Copying token metadata and deploying new mint on Pump.fun…', 'info');
+
+        const response = await window.apiClient.copyToken(walletId, mintAddress, {
+            platform,
+            useVanity
+        });
+
+        if (!response?.success) {
+            throw new Error(response?.error || 'Copy request failed');
+        }
+
+        const record = {
+            mint: response.tokenMint,
+            name: response.copiedMetadata?.name || response.metadata?.name || 'Copied Token',
+            symbol: response.copiedMetadata?.symbol || response.metadata?.symbol || '',
+            description: response.copiedMetadata?.description || '',
+            image: response.copiedMetadata?.image || '',
+            status: 'Copied',
+            type: 'copy',
+            launchpad: 'Pump.fun',
+            sourceMint: mintAddress,
+            metadataUri: response.metadataUri || response.copiedMetadata?.metadataUri || '',
+            signature: response.signature,
+            explorerUrl: response.viewOnExplorer,
+            website: response.copiedMetadata?.website,
+            twitter: response.copiedMetadata?.twitter,
+            telegram: response.copiedMetadata?.telegram
+        };
+
+        registerImportedToken(record);
+
+        addConsoleLog(`✅ Token copied successfully. New mint: ${response.tokenMint}`, 'success');
+        notify(`Token copied! New mint: ${response.tokenMint}`, 'success');
+
+        if (response.viewOnExplorer) {
+            window.open(response.viewOnExplorer, '_blank', 'noopener');
+        } else if (response.tokenMint) {
+            openLaunchLinks(response.tokenMint);
+        }
+
+        renderTokensTable();
+        navigateToPage('tokens');
+    } catch (error) {
+        console.error('Copy token error:', error);
+        notify(`Copy failed: ${error.message}`, 'error');
+        addConsoleLog(`❌ Copy token failed: ${error.message}`, 'error');
+    } finally {
+        setButtonLoading(button, false);
+    }
+}
+
+async function executeImportToken() {
+    const button = document.getElementById('import-token-submit');
+    try {
+        const mintInput = document.getElementById('import-mint-address');
+        const mintAddress = mintInput?.value?.trim() || '';
+        const platform = 'pumpfun';
+
+        if (!mintAddress) {
+            notify('Enter the mint address you want to import.', 'warning');
+            mintInput?.focus();
+            return;
+        }
+
+        if (!validateMintAddress(mintAddress)) {
+            notify('That mint address is not valid. Please double-check it.', 'error');
+            mintInput?.focus();
+            return;
+        }
+
+        setButtonLoading(button, true, 'Importing token…');
+        await ensureApiClientReady();
+
+        addConsoleLog(`📥 Importing token ${mintAddress} from Pump.fun...`, 'info');
+        notify('Fetching live token metadata from Pump.fun…', 'info');
+
+        const response = await window.apiClient.importToken(mintAddress, { platform });
+
+        if (!response?.success) {
+            throw new Error(response?.error || 'Import request failed');
+        }
+
+        const info = response.token || {};
+
+        const record = {
+            mint: info.mint || mintAddress,
+            name: info.name || 'Imported Token',
+            symbol: info.symbol || '',
+            description: info.description || '',
+            image: info.image || '',
+            status: 'Imported',
+            type: 'imported',
+            launchpad: 'Pump.fun',
+            metadataUri: info.metadataUri || response.source?.metadataUri || '',
+            website: info.website || response.source?.website,
+            twitter: info.twitter || response.source?.twitter,
+            telegram: info.telegram || response.source?.telegram,
+            marketCap: info.marketCap,
+            price: info.price,
+            totalSupply: info.totalSupply,
+            decimals: info.decimals
+        };
+
+        registerImportedToken(record);
+
+        addConsoleLog(`✅ Imported token metadata for ${record.mint}`, 'success');
+        notify(`Token imported: ${record.name || record.symbol || record.mint}`, 'success');
+
+        populateTokenDetailView(record);
+        renderTokensTable();
+        navigateToPage('token-detail');
+    } catch (error) {
+        console.error('Import token error:', error);
+        notify(`Import failed: ${error.message}`, 'error');
+        addConsoleLog(`❌ Import token failed: ${error.message}`, 'error');
+    } finally {
+        setButtonLoading(button, false);
+    }
+}
+
 // View active automations
+
+window.executeCopyToken = executeCopyToken;
+window.executeImportToken = executeImportToken;
 function viewActiveAutomations() {
     if (!pumpFunTrading) {
         addConsoleLog('⚠️ No automations running', 'info');
@@ -3269,7 +3456,332 @@ const uiHelperState = {
     vanityFilter: 'available'
 };
 
+const tokenRegistry = {
+    imported: new Map(),
+    current: null
+};
+
+function truncateText(value, maxLength = 80) {
+    if (!value || value.length <= maxLength) {
+        return value || '';
+    }
+    return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function formatNumber(value, { decimals = 2, fallback = '—', compact = false } = {}) {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+        return fallback;
+    }
+    const formatter = new Intl.NumberFormat('en-US', {
+        notation: compact ? 'compact' : 'standard',
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+    return formatter.format(Number(value));
+}
+
+function formatUsd(value) {
+    if (!Number.isFinite(value)) {
+        return '—';
+    }
+    const formatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        notation: value >= 1_000_000 ? 'compact' : 'standard',
+        maximumFractionDigits: value >= 1 ? 2 : 4
+    });
+    return formatter.format(value);
+}
+
+function resolveMetadataUri(uri) {
+    if (!uri || typeof uri !== 'string') {
+        return '';
+    }
+    if (uri.startsWith('ipfs://')) {
+        return `https://ipfs.io/ipfs/${uri.replace('ipfs://', '')}`;
+    }
+    return uri;
+}
+
+function setButtonLoading(buttonOrId, isLoading, loadingText) {
+    const button = typeof buttonOrId === 'string' ? document.getElementById(buttonOrId) : buttonOrId;
+    if (!button) return;
+    if (isLoading) {
+        button.dataset.originalText = button.dataset.originalText || button.textContent;
+        button.textContent = loadingText || 'Please wait...';
+        button.disabled = true;
+        button.classList.add('opacity-70', 'cursor-not-allowed');
+    } else {
+        button.textContent = button.dataset.originalText || button.textContent;
+        delete button.dataset.originalText;
+        button.disabled = false;
+        button.classList.remove('opacity-70', 'cursor-not-allowed');
+    }
+}
+
+function tokenAvatar(record) {
+    const placeholder = '<span class="text-2xl">🪙</span>';
+    if (!record?.image) {
+        return `<div class="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center">${placeholder}</div>`;
+    }
+    return `
+        <div class="w-10 h-10 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+            <img src="${escapeHtml(record.image)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover" />
+        </div>
+    `;
+}
+
+function registerImportedToken(record = {}) {
+    if (!record.mint) {
+        return;
+    }
+
+    const normalizedMint = record.mint;
+    const existing = tokenRegistry.imported.get(normalizedMint) || {};
+    const merged = {
+        ...existing,
+        ...record,
+        mint: normalizedMint,
+        addedAt: existing.addedAt || Date.now(),
+        updatedAt: Date.now()
+    };
+
+    tokenRegistry.imported.set(normalizedMint, merged);
+    renderTokensTable();
+}
+
+function renderTokensTable() {
+    const tbody = document.getElementById('tokens-table-body');
+    if (!tbody) {
+        return;
+    }
+
+    const records = Array.from(tokenRegistry.imported.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (records.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="p-12 text-center text-gray-500">
+                    <div class="flex flex-col items-center gap-2">
+                        <i data-lucide="inbox" class="w-10 h-10"></i>
+                        <p class="text-base font-medium">No tokens tracked yet</p>
+                        <p class="text-sm text-gray-500">Copy or import a Pump.fun token to populate this table.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    tbody.innerHTML = records.map(buildTokenRow).join('');
+    attachTokenRowHandlers();
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function buildTokenRow(record) {
+    const balanceLabel = record.balance !== undefined && record.balance !== null
+        ? `${record.balance.toFixed ? record.balance.toFixed(4) : record.balance} SOL`
+        : '—';
+    const realizedProfitLabel = record.realizedProfit !== undefined && record.realizedProfit !== null
+        ? `${formatUsd(record.realizedProfit)}`
+        : '—';
+    const statusClass = record.type === 'copy' ? 'bg-purple-900/40 text-purple-200' : 'bg-blue-900/40 text-blue-200';
+    const statusLabel = record.status || (record.type === 'copy' ? 'Copied' : 'Imported');
+    const description = record.description ? truncateText(record.description, 90) : 'No description available.';
+
+    return `
+        <tr data-token-mint="${escapeHtml(record.mint)}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition cursor-pointer">
+            <td class="p-4">
+                <div class="flex items-center gap-3">
+                    ${tokenAvatar(record)}
+                    <div>
+                        <div class="text-white font-semibold flex items-center gap-2">
+                            <span>${escapeHtml(record.name || 'Unnamed')}</span>
+                            ${record.symbol ? `<span class="text-xs text-gray-400">(${escapeHtml(record.symbol)})</span>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">${escapeHtml(description)}</div>
+                    </div>
+                </div>
+            </td>
+            <td class="p-4 font-mono text-sm text-gray-300">${escapeHtml(record.mint)}</td>
+            <td class="p-4 text-gray-300">${balanceLabel}</td>
+            <td class="p-4 text-gray-300">${realizedProfitLabel}</td>
+            <td class="p-4 text-gray-300">
+                <span class="px-2 py-1 rounded-full text-xs bg-purple-900/40 text-purple-200">${escapeHtml(record.launchpad || 'Pump.fun')}</span>
+            </td>
+            <td class="p-4">
+                <span class="px-2 py-1 rounded-full text-xs ${statusClass}">${escapeHtml(statusLabel)}</span>
+            </td>
+        </tr>
+    `;
+}
+
+function attachTokenRowHandlers() {
+    const tbody = document.getElementById('tokens-table-body');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr[data-token-mint]').forEach(row => {
+        row.addEventListener('click', () => {
+            const mint = row.getAttribute('data-token-mint');
+            viewTokenDetails(mint);
+        });
+    });
+}
+
+function updateTokenDetailLinks(record = {}) {
+    const websiteLink = document.getElementById('selected-token-website');
+    const twitterLink = document.getElementById('selected-token-twitter');
+    const telegramLink = document.getElementById('selected-token-telegram');
+    const metadataLink = document.getElementById('selected-token-metadata');
+
+    const setLink = (element, url) => {
+        if (!element) return;
+        if (url) {
+            element.href = url;
+            element.classList.remove('opacity-40', 'pointer-events-none');
+        } else {
+            element.href = '#';
+            element.classList.add('opacity-40', 'pointer-events-none');
+        }
+    };
+
+    setLink(websiteLink, record.website);
+    setLink(twitterLink, record.twitter);
+    setLink(telegramLink, record.telegram);
+    setLink(metadataLink, record.metadataUri ? resolveMetadataUri(record.metadataUri) : null);
+}
+
+function populateTokenDetailView(record) {
+    if (!record) return;
+    tokenRegistry.current = record;
+
+    const nameEl = document.getElementById('selected-token-name');
+    const titleEl = document.getElementById('selected-token-title');
+    const subtitleEl = document.getElementById('selected-token-subtitle');
+    const addressEl = document.getElementById('selected-token-address');
+    const iconEl = document.getElementById('selected-token-icon');
+    const statusEl = document.getElementById('token-status');
+    const copyIcon = document.getElementById('selected-token-copy');
+
+    if (nameEl) {
+        nameEl.textContent = record.name || 'Token';
+    }
+
+    if (titleEl) {
+        titleEl.textContent = record.name || 'Token';
+        if (subtitleEl) {
+            subtitleEl.textContent = record.symbol ? `(${record.symbol})` : '';
+        }
+    }
+
+    if (addressEl) {
+        addressEl.textContent = record.mint;
+    }
+
+    if (iconEl) {
+        if (record.image) {
+            iconEl.innerHTML = `<img src="${escapeHtml(record.image)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover rounded-full" />`;
+        } else {
+            iconEl.textContent = '🪙';
+        }
+    }
+
+    if (statusEl) {
+        statusEl.textContent = record.status || record.type?.toUpperCase() || 'ACTIVE';
+    }
+
+    if (copyIcon) {
+        copyIcon.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(record.mint);
+                notify('Token mint copied to clipboard.', 'success');
+            } catch (error) {
+                notify('Unable to copy mint address.', 'error');
+            }
+        };
+    }
+
+    updateTokenDetailLinks(record);
+
+    const walletsTable = document.getElementById('token-wallets-table');
+    if (walletsTable) {
+        walletsTable.innerHTML = `
+            <tr>
+                <td colspan="3" class="p-4 text-center text-gray-500 text-sm">
+                    Wallet breakdown will appear once balances are synced.
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function viewTokenDetails(mint) {
+    if (!mint) return;
+    const record = tokenRegistry.imported.get(mint);
+    if (!record) {
+        notify('Token not found in registry.', 'warning');
+        return;
+    }
+
+    populateTokenDetailView(record);
+    navigateToPage('token-detail');
+}
+
+window.viewTokenDetails = viewTokenDetails;
+
+function validateMintAddress(value) {
+    if (!value || typeof value !== 'string') {
+        return false;
+    }
+    const trimmed = value.trim();
+    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    return base58Regex.test(trimmed);
+}
+
+async function resolveCreatorWalletId() {
+    if (tokenLaunchState.selectedWalletId) {
+        return tokenLaunchState.selectedWalletId;
+    }
+
+    await loadCreatorWallets();
+
+    if (tokenLaunchState.selectedWalletId) {
+        return tokenLaunchState.selectedWalletId;
+    }
+
+    if (Array.isArray(tokenLaunchState.wallets) && tokenLaunchState.wallets.length > 0) {
+        const fallback = tokenLaunchState.wallets[0].id || tokenLaunchState.wallets[0].publicKey;
+        if (fallback) {
+            tokenLaunchState.selectedWalletId = fallback;
+            return fallback;
+        }
+    }
+
+    throw new Error('No creator wallet available. Add or select a wallet from the Create Token view.');
+}
+
+async function ensureApiClientReady() {
+    if (!window.apiClient) {
+        throw new Error('API client unavailable. Refresh the page.');
+    }
+    if (!window.apiClient.isConnected) {
+        const initialized = await window.apiClient.initialize();
+        if (!initialized) {
+            throw new Error('Unable to reach backend API. Check connectivity.');
+        }
+    }
+}
+
 const VANITY_STORAGE_KEY = 'chaosbot_vanity_keys';
+const VANITY_LAUNCH_STORAGE_KEY = 'chaosbot_vanity_launches';
+const VANITY_LAUNCH_STATS_TTL_MS = 5 * 60 * 1000;
+const VANITY_LAUNCH_STATS_ENDPOINT_BASE = 'https://frontend-api.pump.fun';
+const LAMPORTS_PER_SOL_FALLBACK = 1_000_000_000;
 
 function getApiBase() {
     if (window.location.hostname === 'localhost') {
@@ -3939,6 +4451,558 @@ function configureAutomationOptions(options = {}) {
         }
     }
 }
+
+let vanityLaunchStatsRefreshPromise = null;
+
+function persistVanityLaunchStore() {
+    try {
+        localStorage.setItem(VANITY_LAUNCH_STORAGE_KEY, JSON.stringify(vanityLaunchStore));
+    } catch (error) {
+        console.error('Error persisting vanity launches:', error);
+    }
+}
+
+function loadVanityLaunchesFromStorage() {
+    try {
+        const saved = localStorage.getItem(VANITY_LAUNCH_STORAGE_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            vanityLaunchStore = Array.isArray(parsed)
+                ? parsed
+                      .map((entry) => ({
+                          id: entry.id || `launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                          tokenMint: entry.tokenMint,
+                          name: entry.name || '',
+                          symbol: entry.symbol || '',
+                          platform: entry.platform || 'pumpfun',
+                          logo: resolveImageUrl(entry.logo) || null,
+                          metadataUri: entry.metadataUri || null,
+                          creatorWallet: entry.creatorWallet || entry.creatorWalletAddress || '',
+                          creatorWalletLabel: entry.creatorWalletLabel || entry.creatorWalletName || '',
+                          creatorWalletId: entry.creatorWalletId || '',
+                          launchedAt: normalizeTimestamp(entry.launchedAt) || null,
+                          initialBuyAmount: safeNumber(entry.initialBuyAmount),
+                          stats: entry.stats || null,
+                          lastStatsUpdated: normalizeTimestamp(entry.lastStatsUpdated) || null
+                      }))
+                      .filter((entry) => Boolean(entry.tokenMint))
+                : [];
+        } else {
+            vanityLaunchStore = [];
+        }
+    } catch (error) {
+        console.error('Error loading vanity launches:', error);
+        vanityLaunchStore = [];
+    }
+
+    renderVanityLaunchList();
+}
+
+function renderVanityLaunchList() {
+    const container = getElement('vanity-launches-container');
+    const countEl = getElement('vanity-launches-count');
+
+    if (countEl) {
+        const count = Array.isArray(vanityLaunchStore) ? vanityLaunchStore.length : 0;
+        countEl.textContent = `${count} launch${count === 1 ? '' : 'es'}`;
+    }
+
+    if (!container) {
+        return;
+    }
+
+    if (!Array.isArray(vanityLaunchStore) || vanityLaunchStore.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-sm text-gray-500">No token launches recorded yet</div>';
+        return;
+    }
+
+    const entries = [...vanityLaunchStore].sort((a, b) => (b.launchedAt || 0) - (a.launchedAt || 0));
+
+    const rows = entries
+        .map((entry) => {
+            const stats = entry.stats || {};
+            const logoUrl = resolveImageUrl(entry.logo || stats.image);
+            const symbol = entry.symbol || '';
+            const name = entry.name || symbol || 'Unnamed Token';
+            const creatorAddress = entry.creatorWallet || '';
+            const creatorLabel = entry.creatorWalletLabel || '';
+            const mintedAt = entry.launchedAt ? formatTimestamp(entry.launchedAt) : '—';
+            const lastUpdatedRelative = entry.lastStatsUpdated ? formatRelativeTime(entry.lastStatsUpdated) : null;
+
+            const performanceLines = [];
+            if (safeNumber(stats.priceUsd) !== null) {
+                performanceLines.push(`<span class="text-gray-400">Price</span> ${formatUSD(stats.priceUsd)}`);
+            }
+            if (safeNumber(stats.marketCapUsd) !== null) {
+                performanceLines.push(`<span class="text-gray-400">MC</span> ${formatUSD(stats.marketCapUsd)}`);
+            }
+            if (safeNumber(stats.volume24hUsd) !== null) {
+                performanceLines.push(`<span class="text-gray-400">24h Vol</span> ${formatUSD(stats.volume24hUsd)}`);
+            }
+            if (safeNumber(stats.virtualSolReserves) !== null) {
+                performanceLines.push(`<span class="text-gray-400">Virtual SOL</span> ${formatSol(stats.virtualSolReserves)}`);
+            }
+            if (!performanceLines.length) {
+                performanceLines.push('<span class="text-gray-500">Performance data unavailable</span>');
+            }
+
+            const performanceHtml = performanceLines.map((line) => `<div>${line}</div>`).join('');
+
+            const updatedHtml = lastUpdatedRelative
+                ? `<div class="text-xs text-gray-500 mt-2">Updated ${escapeHtml(lastUpdatedRelative)}</div>`
+                : '';
+
+            const statusBadge =
+                typeof stats.isComplete === 'boolean'
+                    ? `<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded ${
+                          stats.isComplete ? 'bg-emerald-900/60 text-emerald-200' : 'bg-blue-900/60 text-blue-200'
+                      }">${stats.isComplete ? 'Complete' : 'Bonding'}</span>`
+                    : '';
+
+            const initialBuyBadge =
+                safeNumber(entry.initialBuyAmount) !== null
+                    ? `<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-900/60 text-purple-200">Dev Buy ${formatSol(
+                          entry.initialBuyAmount
+                      )}</span>`
+                    : '';
+
+            const badges = [statusBadge, initialBuyBadge].filter(Boolean);
+            const badgesHtml = badges.length
+                ? `<div class="mt-1 flex flex-wrap gap-1">${badges.join('<span class="mx-1 text-neutral-700">•</span>')}</div>`
+                : '';
+
+            const relativeLaunch = entry.launchedAt ? formatRelativeTime(entry.launchedAt) : null;
+
+            return `
+                <tr class="border-b border-neutral-800 last:border-b-0 align-top">
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            ${
+                                logoUrl
+                                    ? `<img src="${logoUrl}" alt="${escapeHtml(symbol || name)}" class="w-10 h-10 rounded border border-neutral-700 object-cover" onerror="this.remove()" />`
+                                    : `<div class="w-10 h-10 rounded border border-neutral-700 bg-neutral-900 flex items-center justify-center text-xs text-gray-500">${escapeHtml(
+                                          (symbol || name).slice(0, 3).toUpperCase()
+                                      )}</div>`
+                            }
+                            <div>
+                                <div class="text-sm font-semibold text-white">${escapeHtml(name)}</div>
+                                <div class="text-xs text-gray-400">${escapeHtml(symbol)}</div>
+                                ${badgesHtml}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                            <code class="font-mono text-xs text-purple-200 break-all">${entry.tokenMint}</code>
+                            <button class="bg-neutral-900 hover:bg-neutral-800 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="copyLaunchMintAddress('${entry.tokenMint}')">Copy</button>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        ${
+                            creatorAddress
+                                ? `<div class="flex items-center gap-2">
+                                        <div>
+                                            <div class="text-sm text-white">${truncateAddress(creatorAddress)}</div>
+                                            ${creatorLabel ? `<div class="text-xs text-gray-400">${escapeHtml(creatorLabel)}</div>` : ''}
+                                        </div>
+                                        <button class="bg-neutral-900 hover:bg-neutral-800 text-xs text-gray-300 px-2 py-1 rounded transition" onclick="copyLaunchCreatorWallet('${creatorAddress}')">Copy</button>
+                                   </div>`
+                                : '<span class="text-xs text-gray-500">Not captured</span>'
+                        }
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm text-gray-200">${mintedAt}</div>
+                        ${relativeLaunch ? `<div class="text-xs text-gray-500">${escapeHtml(relativeLaunch)}</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="text-sm text-gray-200 space-y-1">
+                            ${performanceHtml}
+                        </div>
+                        ${updatedHtml}
+                    </td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    container.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-gray-200">
+                <thead class="bg-neutral-900 text-xs uppercase text-gray-400">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Token</th>
+                        <th class="px-4 py-2 text-left">Mint</th>
+                        <th class="px-4 py-2 text-left">Creator Wallet</th>
+                        <th class="px-4 py-2 text-left">Launched</th>
+                        <th class="px-4 py-2 text-left">Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function resolveImageUrl(value) {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+    if (value.startsWith('ipfs://')) {
+        return `https://ipfs.io/ipfs/${value.replace('ipfs://', '')}`;
+    }
+    return value;
+}
+
+function formatUSD(value) {
+    const number = safeNumber(value);
+    if (number === null) {
+        return '—';
+    }
+    try {
+        return new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: number >= 1 ? 2 : 6
+        }).format(number);
+    } catch (error) {
+        return `$${number.toFixed(number >= 1 ? 2 : 6)}`;
+    }
+}
+
+function formatSol(value) {
+    const number = safeNumber(value);
+    if (number === null) {
+        return '—';
+    }
+    const digits = number >= 1 ? 3 : 6;
+    return `${number.toLocaleString(undefined, { maximumFractionDigits: digits })} SOL`;
+}
+
+function formatRelativeTime(timestamp) {
+    const value = normalizeTimestamp(timestamp);
+    if (!value) {
+        return '—';
+    }
+    const diff = Date.now() - value;
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (Math.abs(diff) < minute) {
+        return 'just now';
+    }
+    if (Math.abs(diff) < hour) {
+        const mins = Math.round(diff / minute);
+        return `${Math.abs(mins)} min${Math.abs(mins) === 1 ? '' : 's'} ${mins >= 0 ? 'ago' : 'from now'}`;
+    }
+    if (Math.abs(diff) < day) {
+        const hours = Math.round(diff / hour);
+        return `${Math.abs(hours)} hour${Math.abs(hours) === 1 ? '' : 's'} ${hours >= 0 ? 'ago' : 'from now'}`;
+    }
+    const days = Math.round(diff / day);
+    return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ${days >= 0 ? 'ago' : 'from now'}`;
+}
+
+function safeNumber(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+function normalizeTimestamp(value) {
+    const number = safeNumber(value);
+    if (number === null) {
+        return null;
+    }
+    return number < 1e12 ? number * 1000 : number;
+}
+
+function resolveCreatorWalletDetails(identifier) {
+    if (!identifier) {
+        return null;
+    }
+
+    const sources = [];
+    if (Array.isArray(tokenLaunchState.wallets)) {
+        sources.push(...tokenLaunchState.wallets);
+    }
+    if (Array.isArray(window.solana?.wallets)) {
+        sources.push(...window.solana.wallets);
+    }
+    if (typeof window.walletOperations?.getWallets === 'function') {
+        try {
+            const operationsWallets = window.walletOperations.getWallets();
+            if (Array.isArray(operationsWallets)) {
+                sources.push(...operationsWallets);
+            }
+        } catch (error) {
+            console.warn('Unable to resolve wallet operations wallets:', error);
+        }
+    }
+
+    const target = String(identifier);
+    const match = sources.find((wallet) => {
+        if (!wallet) return false;
+        const candidates = [
+            wallet.id,
+            wallet.publicKey,
+            wallet.address,
+            wallet.pubkey,
+            wallet.walletAddress
+        ]
+            .filter(Boolean)
+            .map((value) => String(value));
+        return candidates.includes(target);
+    });
+
+    if (!match) {
+        return null;
+    }
+
+    return {
+        id: match.id || match.publicKey || match.address || match.pubkey || identifier,
+        address: match.publicKey || match.address || match.pubkey || match.walletAddress || identifier,
+        name: match.name || match.label || ''
+    };
+}
+
+function copyLaunchMintAddress(mint) {
+    if (!mint) return;
+    navigator.clipboard
+        .writeText(mint)
+        .then(() => notify('Mint address copied to clipboard.', 'success'))
+        .catch(() => notify('Unable to copy mint address.', 'error'));
+}
+
+function copyLaunchCreatorWallet(address) {
+    if (!address) return;
+    navigator.clipboard
+        .writeText(address)
+        .then(() => notify('Creator wallet copied to clipboard.', 'success'))
+        .catch(() => notify('Unable to copy creator wallet.', 'error'));
+}
+
+async function recordTokenLaunch(payload = {}) {
+    if (!payload || !payload.tokenMint) {
+        return;
+    }
+
+    const mint = payload.tokenMint.trim();
+    if (!mint) {
+        return;
+    }
+
+    const now = Date.now();
+    const existingIndex = vanityLaunchStore.findIndex((entry) => entry.tokenMint === mint);
+    const existingEntry = existingIndex >= 0 ? { ...vanityLaunchStore[existingIndex] } : null;
+
+    const walletDetails =
+        resolveCreatorWalletDetails(payload.creatorWalletId || payload.creatorWallet) || null;
+
+    const entry = {
+        id: existingEntry?.id || payload.id || `launch-${now}-${Math.random().toString(36).slice(2, 8)}`,
+        tokenMint: mint,
+        name: payload.name || existingEntry?.name || '',
+        symbol: payload.symbol || existingEntry?.symbol || '',
+        platform: payload.platform || existingEntry?.platform || 'pumpfun',
+        logo: resolveImageUrl(payload.logo) || existingEntry?.logo || null,
+        metadataUri: payload.metadataUri || existingEntry?.metadataUri || null,
+        creatorWalletId: payload.creatorWalletId || existingEntry?.creatorWalletId || walletDetails?.id || '',
+        creatorWallet: payload.creatorWallet || existingEntry?.creatorWallet || walletDetails?.address || '',
+        creatorWalletLabel: payload.creatorWalletLabel || existingEntry?.creatorWalletLabel || walletDetails?.name || '',
+        launchedAt: normalizeTimestamp(payload.launchedAt) || existingEntry?.launchedAt || now,
+        initialBuyAmount: safeNumber(payload.initialBuyAmount) ?? existingEntry?.initialBuyAmount ?? null,
+        stats: payload.stats || existingEntry?.stats || null,
+        lastStatsUpdated: payload.stats ? now : existingEntry?.lastStatsUpdated || null
+    };
+
+    if (!entry.logo && entry.stats && entry.stats.image) {
+        entry.logo = resolveImageUrl(entry.stats.image);
+    }
+
+    if (existingIndex >= 0) {
+        vanityLaunchStore[existingIndex] = entry;
+    } else {
+        vanityLaunchStore.push(entry);
+    }
+
+    persistVanityLaunchStore();
+    renderVanityLaunchList();
+
+    if (!payload.stats) {
+        await refreshVanityLaunchPerformance(true, [mint]);
+    }
+}
+
+async function refreshVanityLaunchPerformance(force = false, tokenMints = null) {
+    if (!Array.isArray(vanityLaunchStore) || vanityLaunchStore.length === 0) {
+        return;
+    }
+
+    if (vanityLaunchStatsRefreshPromise && !force && !tokenMints) {
+        return vanityLaunchStatsRefreshPromise;
+    }
+
+    const refreshButton = getElement('vanity-launches-refresh');
+
+    const now = Date.now();
+    const targets = vanityLaunchStore.filter((entry) => {
+        if (!entry?.tokenMint) return false;
+        if (tokenMints && !tokenMints.includes(entry.tokenMint)) {
+            return false;
+        }
+        if (force) {
+            return true;
+        }
+        if (!entry.lastStatsUpdated) {
+            return true;
+        }
+        return now - entry.lastStatsUpdated > VANITY_LAUNCH_STATS_TTL_MS;
+    });
+
+    if (!targets.length) {
+        return;
+    }
+
+    if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.classList.add('opacity-70', 'cursor-not-allowed');
+        refreshButton.textContent = 'Refreshing...';
+    }
+
+    const promise = (async () => {
+        for (const entry of targets) {
+            try {
+                const stats = await fetchTokenPerformance(entry.tokenMint);
+                entry.stats = stats;
+                entry.lastStatsUpdated = Date.now();
+                if (!entry.logo && stats.image) {
+                    entry.logo = resolveImageUrl(stats.image);
+                }
+                if ((!entry.launchedAt || entry.launchedAt <= 0) && stats.createdTimestamp) {
+                    entry.launchedAt = normalizeTimestamp(stats.createdTimestamp);
+                }
+            } catch (error) {
+                console.warn(`Failed to refresh performance for ${entry.tokenMint}:`, error.message || error);
+            }
+        }
+        persistVanityLaunchStore();
+        renderVanityLaunchList();
+    })();
+
+    vanityLaunchStatsRefreshPromise = promise;
+
+    try {
+        await promise;
+    } finally {
+        vanityLaunchStatsRefreshPromise = null;
+        if (refreshButton) {
+            refreshButton.disabled = false;
+            refreshButton.classList.remove('opacity-70', 'cursor-not-allowed');
+            refreshButton.textContent = 'Refresh Performance';
+        }
+    }
+}
+
+async function fetchTokenPerformance(tokenMint) {
+    if (!tokenMint) {
+        throw new Error('Missing token mint for performance fetch');
+    }
+
+    const stats = {
+        priceUsd: null,
+        marketCapUsd: null,
+        volume24hUsd: null,
+        liquidityUsd: null,
+        priceChange1hPct: null,
+        priceChange24hPct: null,
+        holders: null,
+        virtualSolReserves: null,
+        realSolReserves: null,
+        image: null,
+        createdTimestamp: null,
+        isComplete: null,
+        source: 'pumpfun'
+    };
+
+    try {
+        const response = await fetch(`${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${tokenMint}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Pump.fun coin API responded with status ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        stats.image = resolveImageUrl(data.image_uri || data.imageUri || (data.metadata && data.metadata.image));
+        stats.marketCapUsd = safeNumber(data.usd_market_cap);
+        stats.volume24hUsd = safeNumber(data.usd_volume_24h || data.volume_24h);
+        stats.liquidityUsd = safeNumber(data.usd_liquidity || data.liquidity_usd || data.liquidity);
+        stats.priceChange1hPct = safeNumber(data.price_change_1h_pct || data.price_change_1h);
+        stats.priceChange24hPct = safeNumber(data.price_change_24h_pct || data.price_change_24h);
+        stats.holders = safeNumber(data.holder_count);
+        stats.createdTimestamp = normalizeTimestamp(data.created_timestamp);
+        stats.isComplete = Boolean(data.complete);
+
+        const totalSupply = safeNumber(data.total_supply);
+        const decimals = safeNumber(data.decimals) ?? 9;
+        if (stats.marketCapUsd !== null && totalSupply) {
+            stats.priceUsd = stats.marketCapUsd / (totalSupply / Math.pow(10, decimals));
+        } else {
+            const fallbackPrice = safeNumber(data.usd_price || data.price_usd);
+            stats.priceUsd = fallbackPrice;
+        }
+    } catch (error) {
+        throw new Error(`Unable to fetch Pump.fun performance: ${error.message || error}`);
+    }
+
+    try {
+        const curveResponse = await fetch(`${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${tokenMint}/bonding-curve`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        if (curveResponse.ok) {
+            const curve = await curveResponse.json();
+            const denominator = window.solanaWeb3?.LAMPORTS_PER_SOL || LAMPORTS_PER_SOL_FALLBACK;
+            const convert = (value) => {
+                const lamports = safeNumber(value);
+                return lamports === null ? null : lamports / denominator;
+            };
+            stats.virtualSolReserves = convert(curve.virtual_sol_reserves);
+            stats.realSolReserves = convert(curve.real_sol_reserves);
+        }
+    } catch (error) {
+        console.warn(`Unable to fetch bonding curve data for ${tokenMint}:`, error.message || error);
+    }
+
+    return stats;
+}
+
+window.refreshVanityLaunchPerformance = refreshVanityLaunchPerformance;
+window.copyLaunchMintAddress = copyLaunchMintAddress;
+window.copyLaunchCreatorWallet = copyLaunchCreatorWallet;
 
 function persistVanityStore() {
     try {

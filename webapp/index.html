@@ -2321,7 +2321,7 @@
                         </p>
                     </div>
                     
-                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCopyToken()">
+                    <button id="copy-token-submit" class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeCopyToken()">
                         Copy
                     </button>
                     
@@ -2373,7 +2373,7 @@
                         </p>
                     </div>
                     
-                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeImportToken()">
+                    <button id="import-token-submit" class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeImportToken()">
                         Import
                     </button>
                 </div>
@@ -2396,13 +2396,13 @@
                             <h1 class="text-2xl font-semibold mb-1" id="selected-token-title">Token <span class="text-gray-500" id="selected-token-subtitle">Subtitle</span></h1>
                             <div class="flex items-center gap-2 text-sm">
                                 <span class="font-mono text-gray-400" id="selected-token-address">Address...</span>
-                                <i data-lucide="copy" class="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-300"></i>
+                                <i data-lucide="copy" id="selected-token-copy" class="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-300"></i>
                             </div>
                             <div class="flex items-center gap-3 mt-2 text-sm text-gray-400">
-                                <a href="#" class="hover:text-white">🌐</a>
-                                <a href="#" class="hover:text-white">𝕏</a>
-                                <a href="#" class="hover:text-white">📱</a>
-                                <a href="#" class="hover:text-white">📥</a>
+                                <a id="selected-token-website" href="#" target="_blank" rel="noopener" class="hover:text-white">🌐</a>
+                                <a id="selected-token-twitter" href="#" target="_blank" rel="noopener" class="hover:text-white">𝕏</a>
+                                <a id="selected-token-telegram" href="#" target="_blank" rel="noopener" class="hover:text-white">📱</a>
+                                <a id="selected-token-metadata" href="#" target="_blank" rel="noopener" class="hover:text-white">📥</a>
                             </div>
                         </div>
                     </div>
@@ -3587,6 +3587,29 @@
             </div>
 
             <div class="flex-1 p-6 space-y-6">
+                <div class="bg-neutral-800 rounded-lg border border-neutral-700" id="vanity-launches-card">
+                    <div class="p-4 border-b border-neutral-700 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-white">Token Launch History</h3>
+                            <p class="text-xs text-gray-400 mt-1 max-w-2xl">
+                                Every launch triggered from Chaos Bot lands here with live on-chain stats from Pump.fun.
+                                Use this to keep tabs on performance without leaving the dashboard.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400" id="vanity-launches-count"></span>
+                            <button class="bg-neutral-900 hover:bg-neutral-800 text-xs text-gray-300 px-3 py-2 rounded transition"
+                                id="vanity-launches-refresh"
+                                onclick="refreshVanityLaunchPerformance(true)">
+                                Refresh Performance
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4" id="vanity-launches-container">
+                        <div class="text-center py-8 text-sm text-gray-500">No token launches recorded yet</div>
+                    </div>
+                </div>
+
                 <div class="bg-neutral-800 rounded-lg border border-neutral-700" id="vanity-table-card">
                     <div class="p-4 border-b border-neutral-700 flex items-center justify-between">
                         <h3 class="text-lg font-semibold" id="vanity-list-title">Available Vanities</h3>

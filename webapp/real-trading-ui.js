@@ -1001,6 +1001,7 @@ const tokenLaunchState = {
     isLoadingGroups: false,
     automationControlsReady: false,
     pendingDraftId: null,
+    activeLaunchDraftId: null,
     automations: {
         smartSell: {
             mode: 'creator',
@@ -1025,6 +1026,7 @@ const tokenLaunchState = {
 
 function resetLaunchConfigState() {
     tokenLaunchState.launchConfig = createDefaultLaunchConfig();
+    refreshLaunchWalletDependencies();
 }
 
 const blueprintFormState = {
@@ -1206,6 +1208,7 @@ async function loadCreatorWallets() {
         if (wallets.length) {
             populateCreatorWalletSelect(walletSelect, wallets, { walletStatus });
             tokenLaunchState.wallets = wallets;
+            refreshLaunchWalletDependencies();
             return;
         }
 
@@ -1216,12 +1219,14 @@ async function loadCreatorWallets() {
                 walletStatus,
                 local: true
             });
-            tokenLaunchState.wallets = [];
+            tokenLaunchState.wallets = localWallets;
+            refreshLaunchWalletDependencies();
             return;
         }
 
         populateCreatorWalletSelect(walletSelect, [], { walletStatus });
         tokenLaunchState.wallets = [];
+        refreshLaunchWalletDependencies();
     } catch (error) {
         console.error('Failed to load creator wallets:', error);
         const operationsWallets =
@@ -1236,6 +1241,7 @@ async function loadCreatorWallets() {
                 error
             });
             tokenLaunchState.wallets = operationsWallets;
+            refreshLaunchWalletDependencies();
             return;
         }
 
@@ -1247,6 +1253,8 @@ async function loadCreatorWallets() {
                 local: true,
                 error
             });
+            tokenLaunchState.wallets = localWallets;
+            refreshLaunchWalletDependencies();
         } else {
             walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
             walletSelect.disabled = true;
@@ -1554,6 +1562,10 @@ function resetCreateTokenForm() {
         fileName: null
     };
     refreshTokenImageStatus();
+
+    resetLaunchConfigState();
+    tokenLaunchState.pendingDraftId = null;
+    tokenLaunchState.activeLaunchDraftId = null;
 }
 
 // Toggle automation config sections
@@ -1818,6 +1830,8 @@ function populateLaunchDevWalletSelect() {
         tokenLaunchState.selectedWalletId = selectedId;
     } else {
         placeholder.selected = true;
+        tokenLaunchState.launchConfig.devWalletId = '';
+        tokenLaunchState.selectedWalletId = '';
     }
 
     if (statusEl) {
@@ -1828,10 +1842,12 @@ function populateLaunchDevWalletSelect() {
 }
 
 function updateBlockZeroModeUI() {
-    const mode = tokenLaunchState.launchConfig.blockZero.mode || 'quick';
+    const state = tokenLaunchState.launchConfig.blockZero || {};
+    const enabled = Boolean(state.enabled);
+    const mode = state.mode || 'quick';
     const quickCard = getElement('block-zero-quick');
     if (quickCard) {
-        const isActive = mode === 'quick';
+        const isActive = enabled && mode === 'quick';
         quickCard.classList.toggle('border-purple-500', isActive);
         quickCard.classList.toggle('bg-purple-900/20', isActive);
         quickCard.classList.toggle('border-neutral-700', !isActive);
@@ -2026,6 +2042,30 @@ function updateBlockZeroSummary() {
 
 async function prepareLaunchTokenView(options = {}) {
     const { forceWalletReload = false } = options;
+    const pendingDraftId = tokenLaunchState.pendingDraftId || null;
+
+    if (pendingDraftId) {
+        if (tokenLaunchState.activeLaunchDraftId !== pendingDraftId) {
+            const draft = tokenRegistry.drafts.get(pendingDraftId);
+            const configSource =
+                draft?.launchConfig ||
+                {
+                    devWalletId: draft?.creatorWalletId || draft?.creatorWallet || '',
+                    devBuyAmount: draft?.initialBuyAmount,
+                    blockZero: draft?.blockZero || {}
+                };
+            tokenLaunchState.launchConfig = cloneLaunchConfig(configSource);
+            tokenLaunchState.activeLaunchDraftId = pendingDraftId;
+        }
+    } else if (tokenLaunchState.activeLaunchDraftId) {
+        tokenLaunchState.activeLaunchDraftId = null;
+        resetLaunchConfigState();
+    }
+
+    if (tokenLaunchState.launchConfig.devWalletId) {
+        tokenLaunchState.selectedWalletId = tokenLaunchState.launchConfig.devWalletId;
+    }
+
     if (forceWalletReload || getLaunchWallets().length === 0) {
         try {
             await loadCreatorWallets();
@@ -2033,8 +2073,6 @@ async function prepareLaunchTokenView(options = {}) {
             console.error('Failed to load creator wallets for launch view:', error);
         }
     }
-
-    populateLaunchDevWalletSelect();
 
     if (!tokenLaunchState.launchControlsReady) {
         const devWalletSelect = getElement('launch-dev-wallet');
@@ -2052,6 +2090,8 @@ async function prepareLaunchTokenView(options = {}) {
         tokenLaunchState.launchControlsReady = true;
     }
 
+    populateLaunchDevWalletSelect();
+
     const devBuyInput = getElement('dev-buy-amount');
     if (devBuyInput) {
         const value = safeNumber(tokenLaunchState.launchConfig.devBuyAmount);
@@ -2065,6 +2105,7 @@ async function prepareLaunchTokenView(options = {}) {
 
     updateBlockZeroModeUI();
     renderBlockZeroWalletList();
+    updateBlockZeroSummary();
 }
 
 function handleLaunchAutomationModeChange(type, mode) {
@@ -2474,6 +2515,14 @@ async function executeSaveTokenDraft() {
         const draftId = `draft-${now}-${Math.random().toString(36).slice(2, 8)}`;
         const walletDetails = resolveCreatorWalletDetails(creatorWalletId) || {};
 
+        const launchConfig = cloneLaunchConfig({
+            devWalletId: tokenLaunchState.launchConfig?.devWalletId || creatorWalletId || '',
+            devBuyAmount:
+                tokenLaunchState.launchConfig?.devBuyAmount ??
+                (Number.isFinite(initialBuyAmount) ? initialBuyAmount : null),
+            blockZero: tokenLaunchState.launchConfig?.blockZero || {}
+        });
+
         const draftRecord = {
             id: draftId,
             type: 'draft',
@@ -2503,7 +2552,8 @@ async function executeSaveTokenDraft() {
             initialBuyAmount: Number.isFinite(initialBuyAmount) ? initialBuyAmount : null,
             metadata,
             metadataUri: null,
-            notes: ''
+            notes: '',
+            launchConfig
         };
 
         registerTokenDraft(draftRecord);
@@ -3789,7 +3839,7 @@ console.log('✅ Real Trading UI JavaScript loaded');
 function createDefaultLaunchConfig() {
     return {
         devWalletId: '',
-        devBuyAmount: 0.2,
+        devBuyAmount: null,
         blockZero: {
             enabled: false,
             mode: 'quick',
@@ -3799,6 +3849,94 @@ function createDefaultLaunchConfig() {
 }
 
 const BLOCK_ZERO_MAX_SELECTIONS = 3;
+
+function cloneLaunchConfig(source = {}) {
+    const base = createDefaultLaunchConfig();
+    if (!source || typeof source !== 'object') {
+        return base;
+    }
+
+    const devWalletId =
+        source.devWalletId ||
+        source.creatorWalletId ||
+        source.creatorWallet ||
+        source.walletId ||
+        '';
+    if (devWalletId) {
+        base.devWalletId = String(devWalletId);
+    }
+
+    const devAmount = safeNumber(
+        source.devBuyAmount ?? source.devBuy ?? source.initialBuyAmount ?? source.initialBuy
+    );
+    if (devAmount !== null && devAmount >= 0) {
+        base.devBuyAmount = devAmount;
+    }
+
+    const blockZero = source.blockZero || {};
+    base.blockZero.enabled = Boolean(blockZero.enabled);
+    base.blockZero.mode = blockZero.mode === 'quick' ? 'quick' : 'quick';
+
+    const selections = {};
+    if (blockZero && typeof blockZero === 'object') {
+        const rawSelections = blockZero.selections || blockZero.wallets || blockZero.entries;
+        if (Array.isArray(rawSelections)) {
+            rawSelections.forEach((entry) => {
+                if (!entry) return;
+                const walletId =
+                    entry.walletId || entry.id || getWalletIdentifier(entry) || entry.publicKey || '';
+                if (!walletId) return;
+                const amount = safeNumber(entry.amount ?? entry.buyAmount ?? entry.value);
+                selections[walletId] = {
+                    amount: amount !== null && amount >= 0 ? amount : null
+                };
+            });
+        } else if (rawSelections && typeof rawSelections === 'object') {
+            Object.entries(rawSelections).forEach(([walletId, entry]) => {
+                if (!walletId) return;
+                const amount = safeNumber(
+                    (entry && typeof entry === 'object' ? entry.amount : entry) ?? null
+                );
+                selections[walletId] = {
+                    amount: amount !== null && amount >= 0 ? amount : null
+                };
+            });
+        }
+    }
+    base.blockZero.selections = selections;
+
+    return base;
+}
+
+function serializeLaunchConfig(config = {}) {
+    const clone = cloneLaunchConfig(config);
+    const serializedSelections = {};
+    Object.entries(clone.blockZero.selections || {}).forEach(([walletId, entry]) => {
+        if (!walletId) return;
+        serializedSelections[walletId] = {
+            amount: safeNumber(entry?.amount)
+        };
+    });
+    return {
+        devWalletId: clone.devWalletId || '',
+        devBuyAmount: safeNumber(clone.devBuyAmount),
+        blockZero: {
+            enabled: Boolean(clone.blockZero.enabled),
+            mode: clone.blockZero.mode || 'quick',
+            selections: serializedSelections
+        }
+    };
+}
+
+function refreshLaunchWalletDependencies() {
+    if (!tokenLaunchState.launchControlsReady) {
+        return;
+    }
+    populateLaunchDevWalletSelect();
+    updateBlockZeroModeUI();
+    renderBlockZeroWalletList();
+    updateBlockZeroSummary();
+}
 
 // ==================== UI HELPER REGISTRATION ====================
 
@@ -4150,7 +4288,15 @@ function viewTokenDetails(identifier, source = 'imported') {
     }
 
     populateTokenDetailView(record);
-    tokenLaunchState.pendingDraftId = record.type === 'draft' ? record.id : null;
+
+    if (record.type === 'draft') {
+        tokenLaunchState.pendingDraftId = record.id;
+    } else {
+        tokenLaunchState.pendingDraftId = null;
+        tokenLaunchState.activeLaunchDraftId = null;
+        resetLaunchConfigState();
+    }
+
     navigateToPage('token-detail');
 }
 
@@ -4159,18 +4305,49 @@ window.viewTokenDetails = viewTokenDetails;
 function hydrateLaunchConfiguratorFromDraft(draft) {
     if (!draft) return;
 
+    const isNewDraft = tokenLaunchState.activeLaunchDraftId !== draft.id;
+    if (isNewDraft) {
+        const configSource =
+            draft.launchConfig ||
+            {
+                devWalletId: draft.creatorWalletId || draft.creatorWallet || '',
+                devBuyAmount: draft.devBuyAmount ?? draft.initialBuyAmount,
+                blockZero: draft.blockZero || {}
+            };
+        tokenLaunchState.launchConfig = cloneLaunchConfig(configSource);
+        tokenLaunchState.activeLaunchDraftId = draft.id;
+    }
+
     const launchNameEl = getElement('launch-token-name');
     if (launchNameEl) {
         launchNameEl.textContent = draft.name || 'Token';
     }
 
-    const devBuyInput = getElement('dev-buy-amount');
-    if (devBuyInput && draft.initialBuyAmount !== undefined && draft.initialBuyAmount !== null) {
-        const normalized = safeNumber(draft.initialBuyAmount);
-        if (normalized !== null) {
-            devBuyInput.value = normalized.toString();
+    const launchViewTitle = getElement('launch-token-title');
+    const launchViewSubtitle = getElement('launch-token-subtitle');
+    if (launchViewTitle) {
+        launchViewTitle.textContent = draft.name || 'Token';
+        if (launchViewSubtitle) {
+            launchViewSubtitle.textContent = draft.symbol ? `(${draft.symbol})` : '';
         }
     }
+
+    populateLaunchDevWalletSelect();
+
+    const devBuyInput = getElement('dev-buy-amount');
+    if (devBuyInput) {
+        const normalized = safeNumber(tokenLaunchState.launchConfig.devBuyAmount);
+        devBuyInput.value = normalized !== null ? normalized : '';
+    }
+
+    const blockZeroToggle = getElement('enable-block-zero');
+    if (blockZeroToggle) {
+        blockZeroToggle.checked = Boolean(tokenLaunchState.launchConfig.blockZero.enabled);
+    }
+
+    updateBlockZeroModeUI();
+    renderBlockZeroWalletList();
+    updateBlockZeroSummary();
 }
 
 function prepareSavedTokenLaunch() {
@@ -4184,6 +4361,19 @@ function prepareSavedTokenLaunch() {
     }
 
     tokenLaunchState.pendingDraftId = current.id;
+    tokenLaunchState.activeLaunchDraftId = current.id;
+    tokenLaunchState.launchConfig = cloneLaunchConfig(
+        current.launchConfig ||
+            {
+                devWalletId: current.creatorWalletId || current.creatorWallet || '',
+                devBuyAmount: current.devBuyAmount ?? current.initialBuyAmount,
+                blockZero: current.blockZero || {}
+            }
+    );
+    if (tokenLaunchState.launchConfig.devWalletId) {
+        tokenLaunchState.selectedWalletId = tokenLaunchState.launchConfig.devWalletId;
+    }
+
     navigateToPage('launch-token');
     notify('Draft loaded. Configure launch details below.', 'info');
 }
@@ -5551,7 +5741,9 @@ function persistTokenDrafts() {
             type: 'draft',
             useVanity: Boolean(draft.useVanity),
             automations: draft.automations || {},
+            launchConfig: serializeLaunchConfig(draft.launchConfig),
             creatorWalletId: draft.creatorWalletId || '',
+            creatorWallet: draft.creatorWallet || '',
             creatorWalletLabel: draft.creatorWalletLabel || '',
             createdAt: draft.createdAt || Date.now(),
             updatedAt: draft.updatedAt || Date.now(),
@@ -5603,7 +5795,9 @@ function loadTokenDraftsFromStorage() {
                 platform: entry.platform || 'pumpfun',
                 useVanity: Boolean(entry.useVanity),
                 automations: entry.automations || {},
+                launchConfig: cloneLaunchConfig(entry.launchConfig || entry.launchOptions || null),
                 creatorWalletId: entry.creatorWalletId || '',
+                creatorWallet: entry.creatorWallet || '',
                 creatorWalletLabel: entry.creatorWalletLabel || '',
                 createdAt: entry.createdAt || Date.now(),
                 updatedAt: entry.updatedAt || entry.createdAt || Date.now(),
@@ -5636,6 +5830,7 @@ function registerTokenDraft(record = {}) {
         type: 'draft',
         status: record.status || 'PRE-LAUNCH',
         updatedAt: Date.now(),
+        launchConfig: cloneLaunchConfig(record.launchConfig || existing.launchConfig),
         createdAt: existing.createdAt || record.createdAt || Date.now()
     };
 

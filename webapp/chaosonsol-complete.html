@@ -4372,15 +4372,13 @@
         }
 
         function selectBlockZeroMode(mode) {
-            const safeMode = document.getElementById('block-zero-safe');
             const quickMode = document.getElementById('block-zero-quick');
+            if (!quickMode) return;
             
-            if (mode === 'safe') {
-                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-500 bg-neutral-800';
-                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
-            } else {
-                safeMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700';
+            if (mode === 'quick') {
                 quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20';
+            } else {
+                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700 hover:border-purple-500';
             }
             
             addConsoleLog(`Selected Block Zero mode: ${mode}`, 'info');

@@ -1,9 +1,11 @@
 /**
  * Netlify Serverless Function - Production API
  * Wraps the new production backend for Netlify deployment
+ *
+ * Note: Netlify functions run in a CommonJS context by default,
+ * so we keep the handler exported via module.exports and rely on
+ * dynamic import only for the ESM application modules.
  */
-
-import { handler as walletsHandler } from './wallets.js';
 
 let App = null;
 let appInstance = null;
@@ -23,7 +25,25 @@ async function getApp() {
   return appInstance;
 }
 
-export const handler = async (event, context) => {
+function resolveSiteUrl(event) {
+  if (process.env.URL) {
+    return process.env.URL;
+  }
+  if (process.env.DEPLOY_URL) {
+    return process.env.DEPLOY_URL;
+  }
+  const protocol =
+    (event.headers && (event.headers['x-forwarded-proto'] || event.headers['x-forwarded-protocol'])) ||
+    (event.headers && event.headers['x-forwarded-proto']) ||
+    'https';
+  const host = event.headers && (event.headers['x-forwarded-host'] || event.headers.host);
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+  return null;
+}
+
+exports.handler = async (event, context) => {
   // Set longer timeout for Netlify functions (up to 10s free tier, 26s pro)
   context.callbackWaitsForEmptyEventLoop = false;
   
@@ -65,24 +85,51 @@ export const handler = async (event, context) => {
 
     // Delegate wallet routes to dedicated Netlify function to reuse persistent storage layer
     if (method === 'GET' && path === '/wallets') {
-      const response = await walletsHandler(
-        {
-          httpMethod: 'GET',
-          path: '/.netlify/functions/wallets',
-          headers: event.headers || {}
-        },
-        context
-      );
+      const baseUrl = resolveSiteUrl(event);
+      const targetUrl = baseUrl
+        ? `${baseUrl.replace(/\/$/, '')}/.netlify/functions/wallets`
+        : '/.netlify/functions/wallets';
 
-      if (response.statusCode >= 400) {
+      const walletResponse = await fetch(targetUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(event.headers?.authorization ? { Authorization: event.headers.authorization } : {})
+        }
+      });
+
+      const responseText = await walletResponse.text();
+
+      if (!walletResponse.ok) {
         return {
-          statusCode: response.statusCode,
+          statusCode: walletResponse.status,
           headers: { ...headers, 'Content-Type': 'application/json' },
-          body: response.body
+          body: responseText || JSON.stringify({ success: false, error: 'Failed to load wallets' })
         };
       }
 
-      const wallets = JSON.parse(response.body);
+      let walletsPayload;
+      try {
+        walletsPayload = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse wallets payload:', parseError);
+        return {
+          statusCode: 502,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'INVALID_WALLET_RESPONSE',
+            message: 'Wallet service returned invalid data'
+          })
+        };
+      }
+
+      const wallets = Array.isArray(walletsPayload)
+        ? walletsPayload
+        : Array.isArray(walletsPayload.wallets)
+          ? walletsPayload.wallets
+          : [];
+
       return {
         statusCode: 200,
         headers: { ...headers, 'Content-Type': 'application/json' },

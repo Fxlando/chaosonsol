@@ -66,6 +66,34 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Delegate wallet routes to dedicated Netlify function to reuse persistent storage layer
+    if (method === 'GET' && path === '/wallets') {
+      const { handler: walletsHandler } = await import('./wallets.js');
+      const response = await walletsHandler(
+        {
+          httpMethod: 'GET',
+          path: '/.netlify/functions/wallets',
+          headers: event.headers || {}
+        },
+        context
+      );
+
+      if (response.statusCode >= 400) {
+        return {
+          statusCode: response.statusCode,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: response.body
+        };
+      }
+
+      const wallets = JSON.parse(response.body);
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, wallets })
+      };
+    }
+
     const app = await getApp();
 
     if (path === '/initialize' && method === 'POST') {

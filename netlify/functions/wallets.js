@@ -2,10 +2,11 @@
 import axios from 'axios';
 import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import bs58 from 'bs58';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import path from 'path';
 
 const PROJECT_ROOT = process.env.LAMBDA_TASK_ROOT || process.cwd();
+const MAIN_WALLET_FILE = 'wallets-main.json';
 
 function loadJson(relativePath) {
   try {
@@ -25,47 +26,126 @@ const pumpWallets = loadJson('pump-wallets-public.json');
 // In-memory wallet storage (in production, use a database)
 let walletStorage = new Map();
 
+ensureMainWalletFileExists();
+const mainWalletSeed = loadJson(MAIN_WALLET_FILE);
+
+function ensureMainWalletFileExists() {
+  try {
+    const absolutePath = path.resolve(PROJECT_ROOT, MAIN_WALLET_FILE);
+    if (!existsSync(absolutePath)) {
+      writeFileSync(absolutePath, JSON.stringify({ wallets: [] }, null, 2), 'utf-8');
+    }
+  } catch (error) {
+    console.error('Failed to ensure main wallet file exists:', error.message);
+  }
+}
+
+function normalizeWalletRecord(wallet, defaults = {}) {
+  const now = new Date().toISOString();
+  const address = wallet?.address || wallet?.publicKey || defaults.address || defaults.publicKey || '';
+  const publicKey = wallet?.publicKey || wallet?.address || defaults.publicKey || defaults.address || address;
+
+  return {
+    id: wallet?.id || defaults.id || publicKey || `wallet_${Date.now()}`,
+    name: wallet?.name || defaults.name || 'Wallet',
+    address,
+    publicKey,
+    privateKey: wallet?.privateKey || defaults.privateKey || null,
+    group: wallet?.group || defaults.group || 'default',
+    groupName: wallet?.groupName || defaults.groupName || wallet?.group || defaults.group || 'default',
+    status: wallet?.status || defaults.status || 'active',
+    tags: Array.isArray(wallet?.tags) ? wallet.tags : (Array.isArray(defaults.tags) ? defaults.tags : []),
+    balance: typeof wallet?.balance === 'number' ? wallet.balance : (typeof defaults.balance === 'number' ? defaults.balance : 0),
+    tokenHoldings: typeof wallet?.tokenHoldings === 'number' ? wallet.tokenHoldings : (typeof defaults.tokenHoldings === 'number' ? defaults.tokenHoldings : 0),
+    unclaimedRent: typeof wallet?.unclaimedRent === 'number' ? wallet.unclaimedRent : (typeof defaults.unclaimedRent === 'number' ? defaults.unclaimedRent : 0),
+    createdAt: wallet?.createdAt || defaults.createdAt || now,
+    updatedAt: wallet?.updatedAt || wallet?.createdAt || defaults.updatedAt || defaults.createdAt || now,
+    source: wallet?.source || defaults.source || 'main'
+  };
+}
+
+function persistMainWallets() {
+  try {
+    const payload = {
+      wallets: Array.from(walletStorage.values())
+        .filter((wallet) => wallet?.source === 'main')
+        .map((wallet) => ({
+          id: wallet.id,
+          name: wallet.name,
+          address: wallet.address,
+          publicKey: wallet.publicKey,
+          privateKey: wallet.privateKey,
+          group: wallet.group,
+          groupName: wallet.groupName,
+          status: wallet.status,
+          tags: wallet.tags,
+          balance: wallet.balance,
+          tokenHoldings: wallet.tokenHoldings,
+          unclaimedRent: wallet.unclaimedRent,
+          createdAt: wallet.createdAt,
+          updatedAt: wallet.updatedAt
+        }))
+    };
+
+    const absolutePath = path.resolve(PROJECT_ROOT, MAIN_WALLET_FILE);
+    writeFileSync(absolutePath, JSON.stringify(payload, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Failed to persist main wallets:', error.message);
+  }
+}
+
+function sanitizeWallet(wallet) {
+  if (!wallet || typeof wallet !== 'object') {
+    return null;
+  }
+  const sanitized = { ...wallet };
+  // Never expose private keys in API responses
+  if (sanitized.privateKey) {
+    delete sanitized.privateKey;
+  }
+  return sanitized;
+}
+
 // Initialize wallet storage from JSON files
 function initializeWalletStorage() {
   if (volumeWallets.wallets) {
     volumeWallets.wallets.forEach((wallet, index) => {
-      const walletId = `volume_${index}`;
-      walletStorage.set(walletId, {
-        id: walletId,
+      const record = normalizeWalletRecord(wallet, {
+        id: `volume_${index}`,
         name: wallet.name || `Volume_${index + 1}`,
-        address: wallet.publicKey,
-        publicKey: wallet.publicKey,
         group: 'Volume',
         groupName: 'Volume',
-        status: 'active',
-        tags: [],
-        balance: 0,
-        tokenHoldings: 0,
-        unclaimedRent: 0,
-        createdAt: new Date().toISOString()
+        source: 'volume'
       });
+      walletStorage.set(record.id, record);
     });
   }
   
   if (pumpWallets.wallets) {
     pumpWallets.wallets.forEach((wallet, index) => {
-      const walletId = `pump_${index}`;
-      walletStorage.set(walletId, {
-        id: walletId,
+      const record = normalizeWalletRecord(wallet, {
+        id: `pump_${index}`,
         name: wallet.name || `Pump_${index + 1}`,
-        address: wallet.publicKey,
-        publicKey: wallet.publicKey,
         group: 'VolumePump',
         groupName: 'VolumePump',
-        status: 'active',
-        tags: [],
-        balance: 0,
-        tokenHoldings: 0,
-        unclaimedRent: 0,
-        createdAt: new Date().toISOString()
+        source: 'pump'
       });
+      walletStorage.set(record.id, record);
     });
   }
+
+  const rootWallets = Array.isArray(mainWalletSeed.wallets) ? mainWalletSeed.wallets : [];
+  rootWallets.forEach((wallet, index) => {
+    const record = normalizeWalletRecord(wallet, {
+      id: wallet?.id || `wallet_${index}`,
+      group: wallet?.group || wallet?.groupName || 'default',
+      groupName: wallet?.groupName || wallet?.group || 'default',
+      source: 'main'
+    });
+    walletStorage.set(record.id, record);
+  });
+
+  persistMainWallets();
 }
 
 // Initialize on module load
@@ -163,6 +243,7 @@ async function generateWallet(name = null, tags = []) {
   try {
     const keypair = Keypair.generate();
     const walletId = `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timestamp = new Date().toISOString();
     
     const wallet = {
       id: walletId,
@@ -177,7 +258,9 @@ async function generateWallet(name = null, tags = []) {
       balance: 0,
       tokenHoldings: 0,
       unclaimedRent: 0,
-      createdAt: new Date().toISOString()
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      source: 'main'
     };
     
     walletStorage.set(walletId, wallet);
@@ -235,6 +318,7 @@ async function importWallet(privateKey, name = null, tags = []) {
       }
     }
     
+    const timestamp = new Date().toISOString();
     const wallet = {
       id: walletId,
       name: name || `Imported_${walletStorage.size + 1}`,
@@ -248,10 +332,13 @@ async function importWallet(privateKey, name = null, tags = []) {
       balance: 0,
       tokenHoldings: 0,
       unclaimedRent: 0,
-      createdAt: new Date().toISOString()
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      source: 'main'
     };
     
     walletStorage.set(walletId, wallet);
+    persistMainWallets();
     
     return {
       success: true,
@@ -329,6 +416,8 @@ export const handler = async (event, context) => {
           results.push(result.wallet);
         }
       }
+
+      persistMainWallets();
       
       return {
         statusCode: 200,
@@ -360,15 +449,24 @@ export const handler = async (event, context) => {
     if ((path === '/deactivate' || path === 'deactivate') && method === 'POST') {
       const walletIds = body.walletIds || [];
       let deactivated = 0;
+      let touchedMainWallet = false;
       
       walletIds.forEach(walletId => {
         const wallet = walletStorage.get(walletId);
         if (wallet) {
           wallet.status = 'inactive';
+          wallet.updatedAt = new Date().toISOString();
           walletStorage.set(walletId, wallet);
           deactivated++;
+          if (wallet.source === 'main') {
+            touchedMainWallet = true;
+          }
         }
       });
+      
+      if (touchedMainWallet) {
+        persistMainWallets();
+      }
       
       return {
         statusCode: 200,
@@ -384,15 +482,24 @@ export const handler = async (event, context) => {
     if ((path === '/activate' || path === 'activate') && method === 'POST') {
       const walletIds = body.walletIds || [];
       let activated = 0;
+      let touchedMainWallet = false;
       
       walletIds.forEach(walletId => {
         const wallet = walletStorage.get(walletId);
         if (wallet) {
           wallet.status = 'active';
+          wallet.updatedAt = new Date().toISOString();
           walletStorage.set(walletId, wallet);
           activated++;
+          if (wallet.source === 'main') {
+            touchedMainWallet = true;
+          }
         }
       });
+      
+      if (touchedMainWallet) {
+        persistMainWallets();
+      }
       
       return {
         statusCode: 200,
@@ -409,15 +516,24 @@ export const handler = async (event, context) => {
       const walletIds = body.walletIds || [];
       const tags = body.tags || [];
       let tagged = 0;
+      let touchedMainWallet = false;
       
       walletIds.forEach(walletId => {
         const wallet = walletStorage.get(walletId);
         if (wallet) {
           wallet.tags = [...new Set([...wallet.tags, ...tags])];
+          wallet.updatedAt = new Date().toISOString();
           walletStorage.set(walletId, wallet);
           tagged++;
+          if (wallet.source === 'main') {
+            touchedMainWallet = true;
+          }
         }
       });
+      
+      if (touchedMainWallet) {
+        persistMainWallets();
+      }
       
       return {
         statusCode: 200,
@@ -434,16 +550,25 @@ export const handler = async (event, context) => {
       const walletIds = body.walletIds || [];
       const groupName = body.groupName || 'default';
       let grouped = 0;
+      let touchedMainWallet = false;
       
       walletIds.forEach(walletId => {
         const wallet = walletStorage.get(walletId);
         if (wallet) {
           wallet.group = groupName;
           wallet.groupName = groupName;
+          wallet.updatedAt = new Date().toISOString();
           walletStorage.set(walletId, wallet);
           grouped++;
+          if (wallet.source === 'main') {
+            touchedMainWallet = true;
+          }
         }
       });
+      
+      if (touchedMainWallet) {
+        persistMainWallets();
+      }
       
       return {
         statusCode: 200,
@@ -451,6 +576,64 @@ export const handler = async (event, context) => {
         body: JSON.stringify({
           success: true,
           grouped
+        })
+      };
+    }
+
+    // POST /wallets/rename - Rename wallet
+    if ((path === '/rename' || path === 'rename') && method === 'POST') {
+      const walletId = (body.walletId || '').toString().trim();
+      const newName = (body.newName || body.name || '').toString().trim();
+
+      if (!walletId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'WALLET_ID_REQUIRED'
+          })
+        };
+      }
+
+      if (newName.length < 2 || newName.length > 64) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'INVALID_NAME_LENGTH',
+            message: 'Name must be between 2 and 64 characters.'
+          })
+        };
+      }
+
+      const wallet = walletStorage.get(walletId);
+      if (!wallet) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'WALLET_NOT_FOUND'
+          })
+        };
+      }
+
+      wallet.name = newName;
+      wallet.updatedAt = new Date().toISOString();
+      walletStorage.set(walletId, wallet);
+
+      if (wallet.source === 'main') {
+        persistMainWallets();
+      }
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          wallet: sanitizeWallet(wallet)
         })
       };
     }

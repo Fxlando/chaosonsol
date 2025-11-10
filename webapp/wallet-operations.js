@@ -14,6 +14,20 @@ let walletGroups = new Map();
 let groupingSearchTerm = '';
 let tagActiveWalletId = null;
 const TAG_PLATFORM_IDS = ['trojan', 'photon', 'axiom', 'gmgn', 'pepeboost', 'bullx'];
+const WALLET_NAME_MIN_LENGTH = 2;
+const WALLET_NAME_MAX_LENGTH = 64;
+let walletNameEditingId = null;
+function escapeHtml(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Initialize wallet operations
 document.addEventListener('DOMContentLoaded', () => {
@@ -370,6 +384,53 @@ function walletOperationsRenderTable() {
     const tokenHoldings = wallet.tokenHoldings || 0;
     const unclaimedRent = wallet.unclaimedRent || 0;
     const isSelected = selectedWallets.has(walletId);
+    const displayName = wallet.name && wallet.name.trim() ? wallet.name.trim() : 'Unnamed Wallet';
+
+    let nameCellContent = `
+      <div class="flex items-center gap-2">
+        <span class="font-medium">${escapeHtml(displayName)}</span>
+        <button
+          type="button"
+          class="text-gray-500 hover:text-purple-300 transition inline-flex items-center justify-center rounded"
+          aria-label="Rename wallet"
+          onclick="walletOperationsStartRename('${walletId}')"
+        >
+          <i data-lucide="pencil-line" class="w-4 h-4"></i>
+        </button>
+      </div>
+    `;
+
+    if (walletNameEditingId === walletId) {
+      const inputId = `wallet-name-input-${walletId}`;
+      nameCellContent = `
+        <form class="flex items-center gap-2" data-wallet-editing="${walletId}" onsubmit="walletOperationsSaveRename('${walletId}', event)">
+          <input
+            id="${inputId}"
+            type="text"
+            class="bg-black border border-purple-500/60 focus:border-purple-400 rounded px-2 py-1 text-sm text-gray-100 w-44"
+            value="${escapeHtml(displayName)}"
+            maxlength="${WALLET_NAME_MAX_LENGTH}"
+            placeholder="Wallet name"
+            aria-label="Wallet name"
+          />
+          <button
+            type="submit"
+            class="text-emerald-400 hover:text-emerald-300 transition inline-flex items-center justify-center rounded"
+            aria-label="Save wallet name"
+          >
+            <i data-lucide="check" class="w-4 h-4"></i>
+          </button>
+          <button
+            type="button"
+            class="text-gray-500 hover:text-gray-300 transition inline-flex items-center justify-center rounded"
+            aria-label="Cancel rename"
+            onclick="walletOperationsCancelRename()"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </form>
+      `;
+    }
     
     row.innerHTML = `
       <td class="p-4">
@@ -382,7 +443,7 @@ function walletOperationsRenderTable() {
         />
       </td>
       <td class="p-4">
-        <div class="font-medium">${wallet.name || 'Unnamed Wallet'}</div>
+        ${nameCellContent}
       </td>
       <td class="p-4">
         <div class="flex gap-1 flex-wrap">
@@ -413,6 +474,100 @@ function walletOperationsRenderTable() {
   });
   
   walletOperationsSyncSelectionUI({ skipBulkUpdate: true });
+
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+}
+
+function walletOperationsStartRename(walletId) {
+  if (!walletId) return;
+  if (walletNameEditingId === walletId) return;
+  walletNameEditingId = walletId;
+  walletOperationsRenderTable();
+  setTimeout(() => {
+    const input = document.getElementById(`wallet-name-input-${walletId}`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 0);
+}
+
+function walletOperationsCancelRename() {
+  walletNameEditingId = null;
+  walletOperationsRenderTable();
+}
+
+async function walletOperationsSaveRename(walletId, event) {
+  if (event && typeof event.preventDefault === 'function') {
+    event.preventDefault();
+  }
+
+  if (!walletId) {
+    return;
+  }
+
+  const input = document.getElementById(`wallet-name-input-${walletId}`);
+  if (!input) {
+    return;
+  }
+
+  const newName = input.value.trim();
+  if (newName.length < WALLET_NAME_MIN_LENGTH || newName.length > WALLET_NAME_MAX_LENGTH) {
+    showToast(`Wallet name must be between ${WALLET_NAME_MIN_LENGTH} and ${WALLET_NAME_MAX_LENGTH} characters`, 'error');
+    input.focus();
+    return;
+  }
+
+  const wallet = walletOperationsFindWallet(walletId);
+  if (!wallet) {
+    showToast('Wallet not found locally', 'error');
+    return;
+  }
+
+  if (wallet.name === newName) {
+    walletOperationsCancelRename();
+    return;
+  }
+
+  try {
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/rename`
+      : `${API_BASE}/api/wallets/rename`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletId,
+        newName
+      })
+    });
+
+    if (!response.ok) {
+      const errorResult = await response.json().catch(() => ({}));
+      const message = errorResult?.message || errorResult?.error || `API returned ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.message || result.error || 'Failed to rename wallet');
+    }
+
+    wallet.name = newName;
+    wallet.updatedAt = new Date().toISOString();
+    walletNameEditingId = null;
+
+    walletOperationsRenderTable();
+    walletOperationsRenderGroupingTable();
+    walletOperationsUpdateTagInfo();
+    showToast('Wallet name updated', 'success');
+  } catch (error) {
+    console.error('Failed to rename wallet:', error);
+    showToast(`Failed to rename wallet: ${error.message}`, 'error');
+  }
 }
 
 /**

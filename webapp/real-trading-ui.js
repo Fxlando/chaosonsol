@@ -145,6 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initializeSettings();
     initializeCollectFeesView();
+    loadTokenDraftsFromStorage();
     loadVanityLaunchesFromStorage();
     loadVanityKeysFromStorage();
     refreshVanityLaunchPerformance().catch(error => {
@@ -977,10 +978,11 @@ const tokenLaunchState = {
     wallets: [],
     selectedWalletId: '',
     isUploading: false,
-    isLaunching: false,
+    isSavingDraft: false,
     walletGroups: [],
     isLoadingGroups: false,
     automationControlsReady: false,
+    pendingDraftId: null,
     automations: {
         smartSell: {
             mode: 'creator',
@@ -1483,16 +1485,16 @@ async function ensureTokenImageUploaded() {
     }
 }
 
-function setCreateLaunchButtonLoading(isLoading, message) {
-    const button = document.querySelector('#create-token-page button[onclick="executeCreateAndLaunchToken()"]');
+function setSaveTokenButtonLoading(isLoading, message) {
+    const button = document.getElementById('save-token-btn');
     if (!button) return;
     button.disabled = isLoading;
     if (isLoading) {
         button.dataset.originalText = button.dataset.originalText || button.textContent;
-        button.textContent = message || 'Launching...';
+        button.textContent = message || 'Saving...';
         button.classList.add('opacity-70', 'cursor-not-allowed');
     } else {
-        button.textContent = button.dataset.originalText || '🚀 Create & Launch Token';
+        button.textContent = button.dataset.originalText || '💾 Save Token';
         delete button.dataset.originalText;
         button.classList.remove('opacity-70', 'cursor-not-allowed');
     }
@@ -1922,56 +1924,47 @@ function openLaunchLinks(tokenMint) {
     });
 }
 
-// Execute Token Creation & Launch with Automations
-async function executeCreateAndLaunchToken() {
+// Save Token Draft (Pre-Launch)
+async function executeSaveTokenDraft() {
+    if (tokenLaunchState.isSavingDraft) {
+        notify('Save already in progress...', 'warning');
+        return;
+    }
+
+    const name = document.getElementById('token-name')?.value?.trim();
+    const symbol = document.getElementById('token-symbol')?.value?.trim();
+    const description = document.getElementById('token-description')?.value?.trim();
+    const website = document.getElementById('token-website')?.value?.trim();
+    const twitter = document.getElementById('token-twitter')?.value?.trim();
+    const telegram = document.getElementById('token-telegram')?.value?.trim();
+    const useVanity = document.getElementById('use-vanity')?.checked || false;
+    const initialBuyAmount = safeNumber(document.getElementById('initial-buy-amount')?.value);
+
+    if (!name || !symbol) {
+        notify('Token name and symbol are required to save a draft.', 'error');
+        addConsoleLog('❌ Draft save aborted: missing name or symbol.', 'error');
+        return;
+    }
+
+    const platform = uiHelperState.tokenPlatform || 'pumpfun';
+    if (platform !== 'pumpfun') {
+        notify(`Platform ${platform} is not supported yet. Please choose Pump.fun.`, 'error');
+        addConsoleLog(`❌ Unsupported platform selected: ${platform}`, 'error');
+        if (typeof window.selectTokenPlatform === 'function') {
+            window.selectTokenPlatform('pumpfun');
+        }
+        return;
+    }
+
+    const creatorWalletId = tokenLaunchState.selectedWalletId || '';
+    if (!creatorWalletId) {
+        addConsoleLog('⚠️ No creator wallet selected. Draft will save, but assign a wallet before launch.', 'warning');
+    }
+
     try {
-        if (tokenLaunchState.isLaunching) {
-            notify('Launch already in progress...', 'warning');
-            return;
-        }
-
-        addConsoleLog('🚀 Starting token launch process...', 'info');
-
-        const name = document.getElementById('token-name')?.value?.trim();
-        const symbol = document.getElementById('token-symbol')?.value?.trim();
-        const description = document.getElementById('token-description')?.value?.trim();
-        const website = document.getElementById('token-website')?.value?.trim();
-        const twitter = document.getElementById('token-twitter')?.value?.trim();
-        const telegram = document.getElementById('token-telegram')?.value?.trim();
-        const useVanity = document.getElementById('use-vanity')?.checked || false;
-        const initialBuyAmount = parseFloat(document.getElementById('initial-buy-amount')?.value || '0');
-
-        if (!name || !symbol) {
-            notify('Token name and symbol are required.', 'error');
-            addConsoleLog('❌ Token name and symbol are required!', 'error');
-            return;
-        }
-
-        const creatorWalletId = tokenLaunchState.selectedWalletId;
-        if (!creatorWalletId) {
-            notify('Select a creator wallet before launching.', 'error');
-            addConsoleLog('❌ Creator wallet not selected.', 'error');
-            return;
-        }
-
-        const platform = uiHelperState.tokenPlatform || 'pumpfun';
-        if (platform !== 'pumpfun') {
-            notify(`Platform ${platform} is not supported yet. Please choose Pump.fun.`, 'error');
-            addConsoleLog(`❌ Unsupported platform selected: ${platform}`, 'error');
-            if (typeof window.selectTokenPlatform === 'function') {
-                window.selectTokenPlatform('pumpfun');
-            }
-            return;
-        }
-
-        if (!window.apiClient) {
-            notify('Backend API client unavailable. Refresh and try again.', 'error');
-            return;
-        }
-
-        if (!window.apiClient.isConnected) {
-            await window.apiClient.initialize();
-        }
+        tokenLaunchState.isSavingDraft = true;
+        setSaveTokenButtonLoading(true, 'Saving...');
+        addConsoleLog('💾 Saving token configuration as draft...', 'info');
 
         const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
         const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
@@ -1979,143 +1972,140 @@ async function executeCreateAndLaunchToken() {
         const smartSellSelection = resolveLaunchAutomationSelection('smartSell', creatorWalletId);
         const volumeSelection = resolveLaunchAutomationSelection('volumeBot', creatorWalletId);
 
+        let smartSellConfig = null;
         if (enableSmartSell) {
             const validation = validateAutomationSelection('Smart Sell', smartSellSelection);
             if (!validation.valid) {
-                notify(validation.message, 'error');
-                addConsoleLog(`❌ Smart Sell configuration invalid: ${validation.message}`, 'error');
-                return;
+                notify(`${validation.message} Draft saved without Smart Sell.`, 'warning');
+                addConsoleLog(`⚠️ Smart Sell disabled for draft: ${validation.message}`, 'warning');
+            } else {
+                smartSellConfig = (() => {
+                    const config = {
+                        enabled: true,
+                        walletSelector: smartSellSelection,
+                        walletMode: smartSellSelection.mode,
+                        walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
+                        walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
+                        walletGroupName:
+                            smartSellSelection.mode === 'group'
+                                ? getWalletGroupById(smartSellSelection.groupId)?.name || null
+                                : null,
+                        profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
+                        stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
+                        trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
+                        partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
+                        sellPercentages: [25, 25, 25, 25]
+                    };
+
+                    if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                        delete config.walletIds;
+                    }
+                    if (!config.walletGroupId) {
+                        delete config.walletGroupId;
+                    }
+                    if (!config.walletGroupName) {
+                        delete config.walletGroupName;
+                    }
+
+                    return config;
+                })();
             }
         }
 
+        let volumeBotConfig = null;
         if (enableVolumeBot) {
             const validation = validateAutomationSelection('Volume Bot', volumeSelection);
             if (!validation.valid) {
-                notify(validation.message, 'error');
-                addConsoleLog(`❌ Volume Bot configuration invalid: ${validation.message}`, 'error');
-                return;
+                notify(`${validation.message} Draft saved without Volume Bot.`, 'warning');
+                addConsoleLog(`⚠️ Volume Bot disabled for draft: ${validation.message}`, 'warning');
+            } else {
+                volumeBotConfig = (() => {
+                    const readNumber = (id) => {
+                        const value = parseFloat(document.getElementById(id)?.value ?? '');
+                        return Number.isFinite(value) ? value : null;
+                    };
+
+                    const config = {
+                        enabled: true,
+                        walletSelector: volumeSelection,
+                        walletMode: volumeSelection.mode,
+                        walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
+                        walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
+                        walletGroupName:
+                            volumeSelection.mode === 'group'
+                                ? getWalletGroupById(volumeSelection.groupId)?.name || null
+                                : null,
+                        buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
+                        sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
+                        cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
+                        randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
+                        randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
+                    };
+
+                    const minAmount = readNumber('volume-bot-min-amount');
+                    const maxAmount = readNumber('volume-bot-max-amount');
+                    if (minAmount !== null) config.minAmount = minAmount;
+                    if (maxAmount !== null) config.maxAmount = maxAmount;
+
+                    const buyInterval = readNumber('volume-bot-buy-interval');
+                    const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
+                    const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
+                    if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
+                    if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
+                    if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
+
+                    const sellInterval = readNumber('volume-bot-sell-interval');
+                    const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
+                    const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
+                    if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
+                    if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
+                    if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
+
+                    const sellPercentMin = readNumber('volume-bot-sell-percent-min');
+                    const sellPercentMax = readNumber('volume-bot-sell-percent-max');
+                    if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
+                    if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
+
+                    const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
+                    const guardrails = {
+                        enabled: guardrailsEnabled,
+                        realizedProfitTarget: readNumber('volume-bot-profit-target'),
+                        realizedLossLimit: readNumber('volume-bot-loss-limit')
+                    };
+
+                    if (guardrails.realizedProfitTarget === null) {
+                        delete guardrails.realizedProfitTarget;
+                    }
+                    if (guardrails.realizedLossLimit === null) {
+                        delete guardrails.realizedLossLimit;
+                    }
+
+                    config.guardrails = guardrails;
+
+                    if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                        delete config.walletIds;
+                    }
+                    if (!config.walletGroupId) {
+                        delete config.walletGroupId;
+                    }
+                    if (!config.walletGroupName) {
+                        delete config.walletGroupName;
+                    }
+
+                    return config;
+                })();
             }
         }
-
-        tokenLaunchState.isLaunching = true;
-        setCreateLaunchButtonLoading(true, 'Launching...');
-
-        const imageUri = await ensureTokenImageUploaded();
-
-        const smartSellConfig = enableSmartSell
-            ? (() => {
-                  const config = {
-                      enabled: true,
-                      walletSelector: smartSellSelection,
-                      walletMode: smartSellSelection.mode,
-                      walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
-                      walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
-                      walletGroupName:
-                          smartSellSelection.mode === 'group'
-                              ? getWalletGroupById(smartSellSelection.groupId)?.name || null
-                              : null,
-                      profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
-                      stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
-                      trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
-                      partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
-                      sellPercentages: [25, 25, 25, 25]
-                  };
-
-                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                      delete config.walletIds;
-                  }
-                  if (!config.walletGroupId) {
-                      delete config.walletGroupId;
-                  }
-                  if (!config.walletGroupName) {
-                      delete config.walletGroupName;
-                  }
-
-                  return config;
-              })()
-            : null;
-
-        const volumeBotConfig = enableVolumeBot
-            ? (() => {
-                  const readNumber = (id) => {
-                      const value = parseFloat(document.getElementById(id)?.value ?? '');
-                      return Number.isFinite(value) ? value : null;
-                  };
-
-                  const config = {
-                      enabled: true,
-                      walletSelector: volumeSelection,
-                      walletMode: volumeSelection.mode,
-                      walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
-                      walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
-                      walletGroupName:
-                          volumeSelection.mode === 'group'
-                              ? getWalletGroupById(volumeSelection.groupId)?.name || null
-                              : null,
-                      buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
-                      sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
-                      cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
-                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
-                      randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
-                  };
-
-                  const minAmount = readNumber('volume-bot-min-amount');
-                  const maxAmount = readNumber('volume-bot-max-amount');
-                  if (minAmount !== null) config.minAmount = minAmount;
-                  if (maxAmount !== null) config.maxAmount = maxAmount;
-
-                  const buyInterval = readNumber('volume-bot-buy-interval');
-                  const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
-                  const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
-                  if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
-                  if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
-                  if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
-
-                  const sellInterval = readNumber('volume-bot-sell-interval');
-                  const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
-                  const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
-                  if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
-                  if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
-                  if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
-
-                  const sellPercentMin = readNumber('volume-bot-sell-percent-min');
-                  const sellPercentMax = readNumber('volume-bot-sell-percent-max');
-                  if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
-                  if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
-
-                  const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
-                  const guardrails = {
-                      enabled: guardrailsEnabled,
-                      realizedProfitTarget: readNumber('volume-bot-profit-target'),
-                      realizedLossLimit: readNumber('volume-bot-loss-limit')
-                  };
-
-                  if (guardrails.realizedProfitTarget === null) {
-                      delete guardrails.realizedProfitTarget;
-                  }
-                  if (guardrails.realizedLossLimit === null) {
-                      delete guardrails.realizedLossLimit;
-                  }
-
-                  config.guardrails = guardrails;
-
-                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                      delete config.walletIds;
-                  }
-                  if (!config.walletGroupId) {
-                      delete config.walletGroupId;
-                  }
-                  if (!config.walletGroupName) {
-                      delete config.walletGroupName;
-                  }
-
-                  return config;
-              })()
-            : null;
 
         const automationsPayload = {};
         if (smartSellConfig) automationsPayload.smartSell = smartSellConfig;
         if (volumeBotConfig) automationsPayload.volumeBot = volumeBotConfig;
+
+        const imageUri = await ensureTokenImageUploaded();
+        const gatewayImage = tokenLaunchState.image.gatewayUrl || null;
+        const normalizedImage = gatewayImage || resolveImageUrl(imageUri) || null;
+        const embeddedImage =
+            normalizedImage || !tokenLaunchState.image.base64 ? null : tokenLaunchState.image.base64;
 
         const metadata = {
             name,
@@ -2127,89 +2117,59 @@ async function executeCreateAndLaunchToken() {
             website: website || undefined
         };
 
-        const launchOptions = {
+        const now = Date.now();
+        const draftId = `draft-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        const walletDetails = resolveCreatorWalletDetails(creatorWalletId) || {};
+
+        const draftRecord = {
+            id: draftId,
+            type: 'draft',
+            status: 'PRE-LAUNCH',
+            name,
+            symbol,
+            description,
+            website,
+            twitter,
+            telegram,
+            image: normalizedImage || embeddedImage,
+            imageUri: imageUri || tokenLaunchState.image.uri || null,
+            imageBase64: embeddedImage,
             platform,
+            launchpad: 'Pump.fun',
             useVanity,
-            automations: automationsPayload
+            automations: automationsPayload,
+            automationsEnabled: {
+                smartSell: Boolean(smartSellConfig),
+                volumeBot: Boolean(volumeBotConfig)
+            },
+            creatorWalletId: creatorWalletId || '',
+            creatorWallet: walletDetails.address || '',
+            creatorWalletLabel: walletDetails.name || '',
+            createdAt: now,
+            updatedAt: now,
+            initialBuyAmount: Number.isFinite(initialBuyAmount) ? initialBuyAmount : null,
+            metadata,
+            metadataUri: null,
+            notes: ''
         };
 
-        addConsoleLog('Sending launch request to backend...', 'info');
+        registerTokenDraft(draftRecord);
+        tokenLaunchState.pendingDraftId = draftId;
 
-        const result = await window.apiClient.launchToken(
-            creatorWalletId,
-            metadata,
-            Number.isFinite(initialBuyAmount) ? initialBuyAmount : 0,
-            launchOptions
-        );
+        notify('Token saved as pre-launch draft. Manage it from the Tokens dashboard.', 'success');
+        addConsoleLog('✅ Token draft saved to dashboard.', 'success');
 
-        if (result?.success) {
-            addConsoleLog('✅ Token launched successfully!', 'success');
-            if (result.tokenMint) {
-                addConsoleLog(`🪙 Token Mint: ${result.tokenMint}`, 'success');
-                notify(`Token launched! Mint: ${result.tokenMint}`, 'success');
-            } else {
-                notify('Token launched successfully.', 'success');
-            }
-
-            if (result.metadataUri) {
-                addConsoleLog(`📄 Metadata URI: ${result.metadataUri}`, 'info');
-            }
-
-            if (result.automations) {
-                Object.entries(result.automations).forEach(([key, value]) => {
-                    if (value?.success) {
-                        addConsoleLog(`🤖 ${key} automation enabled`, 'success');
-                    } else if (value) {
-                        addConsoleLog(`⚠️ ${key} automation failed: ${value.error || 'Unknown error'}`, 'warning');
-                    }
-                });
-            }
-
-            if (result.tokenMint) {
-                openLaunchLinks(result.tokenMint);
-            }
-
-            if (result.tokenMint) {
-                try {
-                    const walletDetails = resolveCreatorWalletDetails(creatorWalletId) || {};
-                    await recordTokenLaunch({
-                        tokenMint: result.tokenMint,
-                        name,
-                        symbol,
-                        platform,
-                        logo: imageUri || tokenLaunchState.image.gatewayUrl || null,
-                        metadataUri: result.metadataUri || null,
-                        creatorWalletId,
-                        creatorWallet: walletDetails.address || creatorWalletId,
-                        creatorWalletLabel: walletDetails.name || '',
-                        launchedAt: result.createdTimestamp || Date.now(),
-                        initialBuyAmount: Number.isFinite(initialBuyAmount) ? initialBuyAmount : null
-                    });
-                } catch (recordError) {
-                    console.warn('Failed to record token launch:', recordError);
-                }
-            }
-
-            resetCreateTokenForm();
-            await loadCreatorWallets();
-
-            setTimeout(() => {
-                switchView('tokens');
-            }, 1500);
-        } else {
-            const errorMessage = result?.error || 'Launch failed. See console for details.';
-            addConsoleLog(`❌ Launch failed: ${errorMessage}`, 'error');
-            notify(errorMessage, 'error');
-        }
-
+        resetCreateTokenForm();
+        setTimeout(() => {
+            switchView('tokens');
+        }, 600);
     } catch (error) {
-        addConsoleLog(`❌ Error: ${error.message}`, 'error');
-        console.error('Token launch error:', error);
-        notify(`Launch error: ${error.message}`, 'error');
-    }
-    finally {
-        tokenLaunchState.isLaunching = false;
-        setCreateLaunchButtonLoading(false);
+        console.error('Token draft save failed:', error);
+        notify(`Save failed: ${error.message}`, 'error');
+        addConsoleLog(`❌ Draft save failed: ${error.message}`, 'error');
+    } finally {
+        tokenLaunchState.isSavingDraft = false;
+        setSaveTokenButtonLoading(false);
     }
 }
 
@@ -3305,7 +3265,8 @@ window.toggleSmartSellConfig = toggleSmartSellConfig;
 window.toggleVolumeBotConfig = toggleVolumeBotConfig;
 window.toggleVolumeGuardrails = toggleVolumeGuardrails;
 window.toggleBlueprintVolumeGuardrails = toggleBlueprintVolumeGuardrails;
-window.executeCreateAndLaunchToken = executeCreateAndLaunchToken;
+window.executeSaveTokenDraft = executeSaveTokenDraft;
+window.executeCreateAndLaunchToken = executeSaveTokenDraft;
 window.viewActiveAutomations = viewActiveAutomations;
 window.stopAutomation = stopAutomation;
 window.createBlueprint = createBlueprint;
@@ -3488,7 +3449,9 @@ const uiHelperState = {
 
 const tokenRegistry = {
     imported: new Map(),
-    current: null
+    drafts: new Map(),
+    current: null,
+    currentSource: null
 };
 
 function truncateText(value, maxLength = 80) {
@@ -3571,10 +3534,17 @@ function registerImportedToken(record = {}) {
     const merged = {
         ...existing,
         ...record,
+        id: normalizedMint,
         mint: normalizedMint,
+        type: record.type || existing.type || 'imported',
+        status: record.status || existing.status || (record.type === 'copy' ? 'Copied' : existing.status || 'Imported'),
         addedAt: existing.addedAt || Date.now(),
         updatedAt: Date.now()
     };
+
+    if (merged.image) {
+        merged.image = resolveImageUrl(merged.image);
+    }
 
     tokenRegistry.imported.set(normalizedMint, merged);
     renderTokensTable();
@@ -3586,7 +3556,9 @@ function renderTokensTable() {
         return;
     }
 
-    const records = Array.from(tokenRegistry.imported.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const draftRecords = Array.from(tokenRegistry.drafts.values());
+    const importedRecords = Array.from(tokenRegistry.imported.values());
+    const records = [...draftRecords, ...importedRecords].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
     if (records.length === 0) {
         tbody.innerHTML = `
@@ -3615,18 +3587,43 @@ function renderTokensTable() {
 }
 
 function buildTokenRow(record) {
-    const balanceLabel = record.balance !== undefined && record.balance !== null
-        ? `${record.balance.toFixed ? record.balance.toFixed(4) : record.balance} SOL`
-        : '—';
-    const realizedProfitLabel = record.realizedProfit !== undefined && record.realizedProfit !== null
-        ? `${formatUsd(record.realizedProfit)}`
-        : '—';
-    const statusClass = record.type === 'copy' ? 'bg-purple-900/40 text-purple-200' : 'bg-blue-900/40 text-blue-200';
-    const statusLabel = record.status || (record.type === 'copy' ? 'Copied' : 'Imported');
+    const isDraft = record.type === 'draft';
+    const balanceLabel =
+        !isDraft && record.balance !== undefined && record.balance !== null
+            ? `${record.balance.toFixed ? record.balance.toFixed(4) : record.balance} SOL`
+            : '—';
+    const realizedProfitLabel =
+        !isDraft && record.realizedProfit !== undefined && record.realizedProfit !== null
+            ? `${formatUsd(record.realizedProfit)}`
+            : '—';
+
+    let statusClass = 'bg-blue-900/40 text-blue-200';
+    if (isDraft) {
+        statusClass = 'bg-yellow-900/40 text-yellow-200';
+    } else if (record.type === 'copy') {
+        statusClass = 'bg-purple-900/40 text-purple-200';
+    }
+
+    const statusLabel = (() => {
+        if (record.status) {
+            return record.status;
+        }
+        if (isDraft) {
+            return 'Pre-Launch';
+        }
+        return record.type === 'copy' ? 'Copied' : 'Imported';
+    })();
+
     const description = record.description ? truncateText(record.description, 90) : 'No description available.';
+    const addressCell = isDraft
+        ? '<span class="italic text-gray-500">Not launched yet</span>'
+        : `<span class="font-mono text-sm text-gray-300">${escapeHtml(record.mint)}</span>`;
+    const launchpadLabel = record.launchpad || (record.platform ? record.platform : isDraft ? 'Pump.fun' : 'Pump.fun');
+    const rowSource = isDraft ? 'draft' : 'imported';
+    const identifier = isDraft ? record.id : record.mint;
 
     return `
-        <tr data-token-mint="${escapeHtml(record.mint)}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition cursor-pointer">
+        <tr data-token-id="${escapeHtml(identifier)}" data-token-source="${rowSource}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition cursor-pointer">
             <td class="p-4">
                 <div class="flex items-center gap-3">
                     ${tokenAvatar(record)}
@@ -3639,11 +3636,11 @@ function buildTokenRow(record) {
                     </div>
                 </div>
             </td>
-            <td class="p-4 font-mono text-sm text-gray-300">${escapeHtml(record.mint)}</td>
+            <td class="p-4 font-mono text-sm text-gray-300">${addressCell}</td>
             <td class="p-4 text-gray-300">${balanceLabel}</td>
             <td class="p-4 text-gray-300">${realizedProfitLabel}</td>
             <td class="p-4 text-gray-300">
-                <span class="px-2 py-1 rounded-full text-xs bg-purple-900/40 text-purple-200">${escapeHtml(record.launchpad || 'Pump.fun')}</span>
+                <span class="px-2 py-1 rounded-full text-xs bg-purple-900/40 text-purple-200">${escapeHtml(launchpadLabel)}</span>
             </td>
             <td class="p-4">
                 <span class="px-2 py-1 rounded-full text-xs ${statusClass}">${escapeHtml(statusLabel)}</span>
@@ -3655,10 +3652,11 @@ function buildTokenRow(record) {
 function attachTokenRowHandlers() {
     const tbody = document.getElementById('tokens-table-body');
     if (!tbody) return;
-    tbody.querySelectorAll('tr[data-token-mint]').forEach(row => {
+    tbody.querySelectorAll('tr[data-token-id]').forEach((row) => {
         row.addEventListener('click', () => {
-            const mint = row.getAttribute('data-token-mint');
-            viewTokenDetails(mint);
+            const identifier = row.getAttribute('data-token-id');
+            const source = row.getAttribute('data-token-source') || 'imported';
+            viewTokenDetails(identifier, source);
         });
     });
 }
@@ -3689,6 +3687,7 @@ function updateTokenDetailLinks(record = {}) {
 function populateTokenDetailView(record) {
     if (!record) return;
     tokenRegistry.current = record;
+    tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
 
     const nameEl = document.getElementById('selected-token-name');
     const titleEl = document.getElementById('selected-token-title');
@@ -3697,6 +3696,9 @@ function populateTokenDetailView(record) {
     const iconEl = document.getElementById('selected-token-icon');
     const statusEl = document.getElementById('token-status');
     const copyIcon = document.getElementById('selected-token-copy');
+    const prepareButton = document.getElementById('prepare-launch-btn');
+
+    const isDraft = record.type === 'draft';
 
     if (nameEl) {
         nameEl.textContent = record.name || 'Token';
@@ -3710,7 +3712,7 @@ function populateTokenDetailView(record) {
     }
 
     if (addressEl) {
-        addressEl.textContent = record.mint;
+        addressEl.textContent = isDraft ? 'Not launched yet' : record.mint;
     }
 
     if (iconEl) {
@@ -3722,18 +3724,33 @@ function populateTokenDetailView(record) {
     }
 
     if (statusEl) {
-        statusEl.textContent = record.status || record.type?.toUpperCase() || 'ACTIVE';
+        const statusLabel = record.status || (isDraft ? 'PRE-LAUNCH' : record.type?.toUpperCase() || 'ACTIVE');
+        statusEl.textContent = statusLabel;
     }
 
     if (copyIcon) {
-        copyIcon.onclick = async () => {
-            try {
-                await navigator.clipboard.writeText(record.mint);
-                notify('Token mint copied to clipboard.', 'success');
-            } catch (error) {
-                notify('Unable to copy mint address.', 'error');
-            }
-        };
+        if (isDraft) {
+            copyIcon.classList.add('opacity-40', 'pointer-events-none');
+            copyIcon.onclick = null;
+        } else {
+            copyIcon.classList.remove('opacity-40', 'pointer-events-none');
+            copyIcon.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(record.mint);
+                    notify('Token mint copied to clipboard.', 'success');
+                } catch (error) {
+                    notify('Unable to copy mint address.', 'error');
+                }
+            };
+        }
+    }
+
+    if (prepareButton) {
+        if (isDraft) {
+            prepareButton.classList.remove('hidden');
+        } else {
+            prepareButton.classList.add('hidden');
+        }
     }
 
     updateTokenDetailLinks(record);
@@ -3750,19 +3767,62 @@ function populateTokenDetailView(record) {
     }
 }
 
-function viewTokenDetails(mint) {
-    if (!mint) return;
-    const record = tokenRegistry.imported.get(mint);
+function viewTokenDetails(identifier, source = 'imported') {
+    if (!identifier) return;
+
+    let record = null;
+    if (source === 'draft') {
+        record = tokenRegistry.drafts.get(identifier) || null;
+    } else {
+        record = tokenRegistry.imported.get(identifier) || tokenRegistry.drafts.get(identifier) || null;
+    }
+
     if (!record) {
         notify('Token not found in registry.', 'warning');
         return;
     }
 
     populateTokenDetailView(record);
+    tokenLaunchState.pendingDraftId = record.type === 'draft' ? record.id : null;
     navigateToPage('token-detail');
 }
 
 window.viewTokenDetails = viewTokenDetails;
+
+function hydrateLaunchConfiguratorFromDraft(draft) {
+    if (!draft) return;
+
+    const launchNameEl = getElement('launch-token-name');
+    if (launchNameEl) {
+        launchNameEl.textContent = draft.name || 'Token';
+    }
+
+    const devBuyInput = getElement('dev-buy-amount');
+    if (devBuyInput && draft.initialBuyAmount !== undefined && draft.initialBuyAmount !== null) {
+        const normalized = safeNumber(draft.initialBuyAmount);
+        if (normalized !== null) {
+            devBuyInput.value = normalized.toString();
+        }
+    }
+}
+
+function prepareSavedTokenLaunch() {
+    const current = tokenRegistry.current && tokenRegistry.current.type === 'draft'
+        ? tokenRegistry.current
+        : tokenRegistry.drafts.get(tokenLaunchState.pendingDraftId || '') || null;
+
+    if (!current || current.type !== 'draft') {
+        notify('Select a saved token draft before preparing launch.', 'warning');
+        return;
+    }
+
+    tokenLaunchState.pendingDraftId = current.id;
+    hydrateLaunchConfiguratorFromDraft(current);
+    navigateToPage('launch-token');
+    notify('Draft loaded. Configure launch details below.', 'info');
+}
+
+window.prepareSavedTokenLaunch = prepareSavedTokenLaunch;
 
 function validateMintAddress(value) {
     if (!value || typeof value !== 'string') {
@@ -3807,6 +3867,7 @@ async function ensureApiClientReady() {
     }
 }
 
+const TOKEN_DRAFT_STORAGE_KEY = 'chaosbot_token_drafts_v1';
 const VANITY_STORAGE_KEY = 'chaosbot_vanity_keys';
 const VANITY_LAUNCH_STORAGE_KEY = 'chaosbot_vanity_launches';
 const VANITY_LAUNCH_STATS_TTL_MS = 5 * 60 * 1000;
@@ -5106,6 +5167,120 @@ function configureAutomationOptions(options = {}) {
 }
 
 let vanityLaunchStatsRefreshPromise = null;
+
+function persistTokenDrafts() {
+    try {
+        const drafts = Array.from(tokenRegistry.drafts.values()).map((draft) => ({
+            id: draft.id,
+            name: draft.name || '',
+            symbol: draft.symbol || '',
+            description: draft.description || '',
+            website: draft.website || '',
+            twitter: draft.twitter || '',
+            telegram: draft.telegram || '',
+            image: draft.image || null,
+            imageUri: draft.imageUri || null,
+            platform: draft.platform || 'pumpfun',
+            status: draft.status || 'PRE-LAUNCH',
+            type: 'draft',
+            useVanity: Boolean(draft.useVanity),
+            automations: draft.automations || {},
+            creatorWalletId: draft.creatorWalletId || '',
+            creatorWalletLabel: draft.creatorWalletLabel || '',
+            createdAt: draft.createdAt || Date.now(),
+            updatedAt: draft.updatedAt || Date.now(),
+            initialBuyAmount: draft.initialBuyAmount ?? null,
+            metadata: draft.metadata || null,
+            metadataUri: draft.metadataUri || null,
+            notes: draft.notes || ''
+        }));
+
+        localStorage.setItem(TOKEN_DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+    } catch (error) {
+        console.error('Error persisting token drafts:', error);
+    }
+}
+
+function loadTokenDraftsFromStorage() {
+    tokenRegistry.drafts.clear();
+
+    try {
+        const raw = localStorage.getItem(TOKEN_DRAFT_STORAGE_KEY);
+        if (!raw) {
+            renderTokensTable();
+            return;
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            renderTokensTable();
+            return;
+        }
+
+        parsed.forEach((entry) => {
+            if (!entry) return;
+            const id = entry.id || entry.draftId;
+            if (!id) return;
+
+            const record = {
+                id,
+                type: 'draft',
+                status: entry.status || 'PRE-LAUNCH',
+                name: entry.name || '',
+                symbol: entry.symbol || '',
+                description: entry.description || '',
+                website: entry.website || '',
+                twitter: entry.twitter || '',
+                telegram: entry.telegram || '',
+                image: resolveImageUrl(entry.image) || resolveImageUrl(entry.imageUri) || null,
+                imageUri: entry.imageUri || null,
+                platform: entry.platform || 'pumpfun',
+                useVanity: Boolean(entry.useVanity),
+                automations: entry.automations || {},
+                creatorWalletId: entry.creatorWalletId || '',
+                creatorWalletLabel: entry.creatorWalletLabel || '',
+                createdAt: entry.createdAt || Date.now(),
+                updatedAt: entry.updatedAt || entry.createdAt || Date.now(),
+                initialBuyAmount: safeNumber(entry.initialBuyAmount),
+                metadata: entry.metadata || null,
+                metadataUri: entry.metadataUri || null,
+                notes: entry.notes || ''
+            };
+
+            tokenRegistry.drafts.set(record.id, record);
+        });
+    } catch (error) {
+        console.error('Error loading token drafts:', error);
+        tokenRegistry.drafts.clear();
+    }
+
+    renderTokensTable();
+}
+
+function registerTokenDraft(record = {}) {
+    if (!record || !record.id) {
+        return;
+    }
+
+    const existing = tokenRegistry.drafts.get(record.id) || {};
+    const merged = {
+        ...existing,
+        ...record,
+        id: record.id,
+        type: 'draft',
+        status: record.status || 'PRE-LAUNCH',
+        updatedAt: Date.now(),
+        createdAt: existing.createdAt || record.createdAt || Date.now()
+    };
+
+    if (merged.imageUri && !merged.image) {
+        merged.image = resolveImageUrl(merged.imageUri);
+    }
+
+    tokenRegistry.drafts.set(merged.id, merged);
+    persistTokenDrafts();
+    renderTokensTable();
+}
 
 function persistVanityLaunchStore() {
     try {

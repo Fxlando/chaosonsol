@@ -427,6 +427,319 @@ export class App {
   }
 
   /**
+   * Warm wallets by executing randomized buy/sell swaps with delays
+   */
+  async warmWallets(options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    const {
+      walletIds = [],
+      minSwaps = 1,
+      maxSwaps = 3,
+      minAmount = 0.001,
+      maxAmount = 0.002,
+      minDelay = 10,
+      maxDelay = 20,
+      mintCandidates = [],
+      executor = 'rpc',
+      slippage = 2.5,
+      priorityFee = 7500,
+      mintMode = 'auto'
+    } = options;
+
+    if (!Array.isArray(walletIds) || walletIds.length === 0) {
+      return {
+        success: false,
+        error: 'No wallet IDs provided for warming',
+        results: []
+      };
+    }
+
+    if (!Number.isFinite(minSwaps) || !Number.isFinite(maxSwaps) || minSwaps <= 0 || maxSwaps <= 0) {
+      return {
+        success: false,
+        error: 'Swap counts must be greater than zero',
+        results: []
+      };
+    }
+
+    if (maxSwaps < minSwaps) {
+      return {
+        success: false,
+        error: 'Max swaps must be greater than or equal to min swaps',
+        results: []
+      };
+    }
+
+    if (!Number.isFinite(minAmount) || !Number.isFinite(maxAmount) || minAmount <= 0 || maxAmount <= 0) {
+      return {
+        success: false,
+        error: 'Swap amounts must be greater than zero',
+        results: []
+      };
+    }
+
+    if (maxAmount < minAmount) {
+      return {
+        success: false,
+        error: 'Max amount must be greater than or equal to min amount',
+        results: []
+      };
+    }
+
+    if (!Number.isFinite(minDelay) || !Number.isFinite(maxDelay) || minDelay < 0 || maxDelay < 0) {
+      return {
+        success: false,
+        error: 'Delays must be zero or greater',
+        results: []
+      };
+    }
+
+    if (maxDelay < minDelay) {
+      return {
+        success: false,
+        error: 'Max delay must be greater than or equal to min delay',
+        results: []
+      };
+    }
+
+    const candidatePool = (mintCandidates || [])
+      .map((candidate) => {
+        if (candidate && typeof candidate === 'object') {
+          return {
+            mint: candidate.mint || candidate.address || '',
+            symbol: candidate.symbol || null,
+            decimals: candidate.decimals,
+            source: candidate.source || null
+          };
+        }
+        return {
+          mint: String(candidate || '').trim(),
+          symbol: null,
+          decimals: undefined,
+          source: null
+        };
+      })
+      .filter((entry) => entry.mint);
+
+    if (candidatePool.length === 0) {
+      return {
+        success: false,
+        error: 'Mint candidate list is empty after sanitization',
+        results: []
+      };
+    }
+
+    const randomIntInclusive = (min, max) => {
+      const floorMin = Math.floor(min);
+      const floorMax = Math.floor(max);
+      if (floorMax <= floorMin) {
+        return floorMin;
+      }
+      return Math.floor(Math.random() * (floorMax - floorMin + 1)) + floorMin;
+    };
+
+    const randomAmount = () => {
+      if (maxAmount <= minAmount) {
+        return Number(minAmount.toFixed(6));
+      }
+      const amount = minAmount + Math.random() * (maxAmount - minAmount);
+      return Number(amount.toFixed(6));
+    };
+
+    const resolveDelaySeconds = () => {
+      if (maxDelay <= minDelay) {
+        return Math.max(0, Math.floor(minDelay));
+      }
+      return randomIntInclusive(Math.max(0, Math.floor(minDelay)), Math.max(0, Math.floor(maxDelay)));
+    };
+
+    const priorityFeeLamports = Number.isFinite(priorityFee) && priorityFee > 0
+      ? Math.floor(priorityFee)
+      : 7500;
+
+    const results = [];
+
+    for (const walletId of walletIds) {
+      const wallet = this.walletManager.getWallet(walletId);
+      if (!wallet) {
+        results.push({
+          walletId,
+          success: false,
+          error: 'Wallet not found'
+        });
+        continue;
+      }
+
+      const plannedSwaps = randomIntInclusive(minSwaps, maxSwaps);
+      logger.info(`Warming wallet ${walletId} with ${plannedSwaps} swap(s) (mode: ${mintMode})`);
+
+      for (let swapIndex = 0; swapIndex < plannedSwaps; swapIndex++) {
+        const solAmount = randomAmount();
+        const candidateIndex = Math.floor(Math.random() * candidatePool.length);
+        const { mint, symbol, decimals, source } = candidatePool[candidateIndex];
+
+        if (!mint) {
+          results.push({
+            walletId,
+            swapIndex,
+            success: false,
+            error: 'Invalid mint candidate'
+          });
+          break;
+        }
+
+        logger.info(
+          `Warm swap #${swapIndex + 1}/${plannedSwaps} for wallet ${walletId}: ${solAmount} SOL on mint ${mint} (${symbol || 'unknown'})`
+        );
+
+        try {
+          const sharedOptions = {
+            slippage,
+            executor,
+            source: 'warm',
+            priorityFee: priorityFeeLamports,
+            prioritizationFeeLamports: priorityFeeLamports,
+            computeUnitPriceMicroLamports: priorityFeeLamports * 1000,
+            mintMode
+          };
+
+          const buyResult = await this.tradingEngine.buyToken(
+            walletId,
+            mint,
+            solAmount,
+            sharedOptions
+          );
+
+          if (!buyResult?.success) {
+            results.push({
+              walletId,
+              swapIndex,
+              mint,
+              solAmount,
+              success: false,
+              stage: 'buy',
+              error: buyResult?.error || 'Buy transaction failed'
+            });
+            logger.warn(`Warm buy failed for wallet ${walletId}: ${buyResult?.error || 'unknown error'}`);
+            break;
+          }
+
+          let tokenAmount = null;
+
+          if (buyResult.tokenAmount) {
+            tokenAmount = typeof buyResult.tokenAmount === 'string'
+              ? parseInt(buyResult.tokenAmount, 10)
+              : Math.floor(buyResult.tokenAmount);
+          } else if (buyResult.outputAmount) {
+            tokenAmount = typeof buyResult.outputAmount === 'string'
+              ? parseInt(buyResult.outputAmount, 10)
+              : Math.floor(buyResult.outputAmount);
+          }
+
+          if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
+            const uiBalance = await this.solanaCore.getTokenBalance(wallet.publicKey, mint);
+            if (uiBalance && decimals !== undefined) {
+              tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
+            } else if (uiBalance) {
+              tokenAmount = Math.floor(Number(uiBalance));
+            }
+          }
+
+          if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
+            results.push({
+              walletId,
+              swapIndex,
+              mint,
+              solAmount,
+              success: false,
+              stage: 'prepare-sell',
+              error: 'Unable to determine token amount for sell'
+            });
+            logger.warn(`Unable to determine token amount for warm sell on wallet ${walletId}`);
+            break;
+          }
+
+          const delayBeforeSell = resolveDelaySeconds();
+          if (delayBeforeSell > 0) {
+            logger.info(`Waiting ${delayBeforeSell}s before selling for wallet ${walletId}`);
+            await sleep(delayBeforeSell * 1000);
+          }
+
+          const sellResult = await this.tradingEngine.sellToken(
+            walletId,
+            mint,
+            tokenAmount,
+            sharedOptions
+          );
+
+          if (!sellResult?.success) {
+            results.push({
+              walletId,
+              swapIndex,
+              mint,
+              solAmount,
+              tokenAmount,
+              success: false,
+              stage: 'sell',
+              buy: buyResult,
+              error: sellResult?.error || 'Sell transaction failed'
+            });
+            logger.warn(`Warm sell failed for wallet ${walletId}: ${sellResult?.error || 'unknown error'}`);
+            break;
+          }
+
+          results.push({
+            walletId,
+            swapIndex,
+            mint,
+            symbol,
+            source,
+            solAmount,
+            tokenAmount,
+            delayBeforeSell,
+            success: true,
+            buy: buyResult,
+            sell: sellResult
+          });
+
+          if (swapIndex < plannedSwaps - 1) {
+            const interSwapDelay = resolveDelaySeconds();
+            if (interSwapDelay > 0) {
+              logger.info(`Waiting ${interSwapDelay}s before next warm swap for wallet ${walletId}`);
+              await sleep(interSwapDelay * 1000);
+            }
+          }
+        } catch (error) {
+          logger.error(`Warm workflow failed for wallet ${walletId}:`, error);
+          results.push({
+            walletId,
+            swapIndex,
+            mint,
+            solAmount,
+            success: false,
+            error: error.message
+          });
+          break;
+        }
+      }
+    }
+
+    const successCount = results.filter((result) => result.success).length;
+    const failureCount = results.length - successCount;
+
+    return {
+      success: failureCount === 0,
+      successCount,
+      failureCount,
+      totalWallets: walletIds.length,
+      results
+    };
+  }
+
+  /**
    * Add position to Smart Sell monitoring
    */
   async addSmartSellPosition(walletId, tokenMint, entryPrice, amount, options = {}) {

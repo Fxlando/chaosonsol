@@ -558,6 +558,11 @@ register('post', '/tagging/run', async (req) => {
   return backend.tagWallets(req.body || {});
 });
 
+register('post', '/warm/run', async (req) => {
+  const backend = await loadBackend();
+  return backend.warmWallets(req.body || {});
+});
+
 register('post', '/smartsell/add', async (req, res) => {
   const backend = await loadBackend();
   const { walletId, tokenMint, entryPrice, amount, options } = req.body || {};

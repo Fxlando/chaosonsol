@@ -217,6 +217,14 @@ class APIClient {
     });
   }
 
+  async warmWallets(payload) {
+    return await this.request('/warm/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }
+
   async getQuote(inputMint, outputMint, amount, options = {}) {
     const params = new URLSearchParams({
       inputMint,

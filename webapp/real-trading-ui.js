@@ -147,6 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initializeSettings();
     initializeCollectFeesView();
+    loadArchivedImportedTokens();
     loadTokenDraftsFromStorage();
     loadVanityLaunchesFromStorage();
     loadVanityKeysFromStorage();
@@ -3954,7 +3955,8 @@ const uiHelperState = {
     copyPlatform: 'pumpfun',
     blockZeroMode: 'quick',
     tagFilters: new Set(),
-    vanityFilter: 'available'
+    vanityFilter: 'available',
+    tokenFilter: 'active'
 };
 
 const tokenRegistry = {
@@ -3967,8 +3969,59 @@ const tokenRegistry = {
 const tokenDetailViewState = {
     currentKey: null,
     loading: false,
-    lastRuntime: null
+    lastRuntime: null,
+    holdingsSource: 'jito'
 };
+
+const IMPORTED_TOKEN_ARCHIVE_STORAGE_KEY = 'chaosbot_imported_archives_v1';
+let archivedImportedTokens = new Set();
+
+function loadArchivedImportedTokens() {
+    try {
+        const raw = localStorage.getItem(IMPORTED_TOKEN_ARCHIVE_STORAGE_KEY);
+        if (!raw) {
+            archivedImportedTokens = new Set();
+            return;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            archivedImportedTokens = new Set(
+                parsed
+                    .map((value) => (typeof value === 'string' ? value.toLowerCase() : ''))
+                    .filter((value) => Boolean(value))
+            );
+        } else {
+            archivedImportedTokens = new Set();
+        }
+    } catch (error) {
+        console.warn('Failed to load archived imported tokens:', error);
+        archivedImportedTokens = new Set();
+    }
+}
+
+function persistArchivedImportedTokens() {
+    try {
+        localStorage.setItem(
+            IMPORTED_TOKEN_ARCHIVE_STORAGE_KEY,
+            JSON.stringify(Array.from(archivedImportedTokens))
+        );
+    } catch (error) {
+        console.error('Failed to persist archived imported tokens:', error);
+    }
+}
+
+function setImportedTokenArchivedState(mint, archived) {
+    if (!mint) {
+        return;
+    }
+    const key = mint.toLowerCase();
+    if (archived) {
+        archivedImportedTokens.add(key);
+    } else {
+        archivedImportedTokens.delete(key);
+    }
+    persistArchivedImportedTokens();
+}
 
 const runtimeTaskRegistry = new Map();
 
@@ -4219,8 +4272,8 @@ function resetHoldingsTable({ message = 'Holdings will populate once the token i
         <tr>
             <td colspan="5" class="py-10 px-4 text-center text-sm text-gray-500 bg-black/30">
                 <div class="flex items-center justify-center gap-2">
-                    ${loadingIcon}
-                    <span>${escapeHtml(message)}</span>
+                ${loadingIcon}
+                <span>${escapeHtml(message)}</span>
                 </div>
             </td>
         </tr>
@@ -4389,7 +4442,7 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                             <button class="px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-900 text-gray-300 border border-neutral-800 hover:bg-neutral-800 transition"
                                 onclick="handleQuickBuy('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${amount})">
                                 ${amount}
-                            </button>`
+                    </button>`
                     )
                     .join('');
 
@@ -4400,8 +4453,8 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                                   (percentage) => `
                                 <button class="px-2 py-1 rounded-md text-[11px] bg-neutral-900 text-gray-400 border border-neutral-800 hover:bg-neutral-800 transition"
                                     onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${percentage}, ${holding.tokenBalance})">
-                                    ${percentage}%
-                                </button>`
+                                ${percentage}%
+                            </button>`
                               )
                               .join('')
                         : '';
@@ -4730,12 +4783,14 @@ async function fetchSolBalanceViaConnection(connection, walletAddress) {
     }
 }
 
-async function fetchWalletHoldingsForMint(mint, { priceSol = null } = {}) {
+async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jito' } = {}) {
     const connection = getSolanaConnection();
     const wallets = getKnownWallets();
     if (!connection || wallets.length === 0) {
         return { holdings: [], summary: { totalTokenBalance: 0, totalHoldingsSol: 0 } };
     }
+
+    const useRpcOnly = source === 'rpc';
 
     const results = await Promise.all(
         wallets.map(async (wallet, index) => {
@@ -4745,7 +4800,7 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null } = {}) {
             }
 
             let tokenBalance = null;
-            if (solana?.getTokenBalance) {
+            if (!useRpcOnly && solana?.getTokenBalance) {
                 try {
                     tokenBalance = await solana.getTokenBalance(address, mint);
                 } catch (error) {
@@ -4757,7 +4812,7 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null } = {}) {
             }
 
             let solBalance = typeof wallet.balance === 'number' ? wallet.balance : null;
-            if (solBalance === null && solana?.getBalance) {
+            if (solBalance === null && !useRpcOnly && solana?.getBalance) {
                 try {
                     solBalance = await solana.getBalance(address);
                 } catch (error) {
@@ -4985,12 +5040,13 @@ async function loadLiveTokenDetail(record) {
 
     try {
         const solPrice = await (solana?.getSolPrice?.() || Promise.resolve(null));
+        const holdingsSource = tokenDetailViewState.holdingsSource || 'jito';
 
         const [pumpFunInfo, priceDetails, runtimeAutomations, holdingsResult, activity] = await Promise.all([
             fetchPumpFunTokenDetails(record.mint),
             fetchTokenPriceDetails(record.mint, { solPrice }),
             fetchRuntimeAutomationsForMint(record.mint),
-            fetchWalletHoldingsForMint(record.mint, {}),
+            fetchWalletHoldingsForMint(record.mint, { source: holdingsSource }),
             fetchPumpFunTradeFeed(record.mint, 20)
         ]);
 
@@ -5159,6 +5215,12 @@ function resyncTokenHoldings() {
         return;
     }
 
+    if (current.type === 'draft') {
+        notify('Launch the token before syncing holdings.', 'info');
+        resetHoldingsTable({ message: 'Holdings will populate once the token is launched.' });
+        return;
+    }
+
     resetHoldingsTable({ message: 'Syncing wallet balances…', isLoading: true });
     loadLiveTokenDetail(current).catch((error) => {
         console.error('Unable to re-sync holdings:', error);
@@ -5316,11 +5378,22 @@ function registerImportedToken(record = {}) {
         type: record.type || existing.type || 'imported',
         status: record.status || existing.status || (record.type === 'copy' ? 'Copied' : existing.status || 'Imported'),
         addedAt: existing.addedAt || Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        archived: Boolean(
+            record.archived ??
+            existing.archived ??
+            archivedImportedTokens.has(normalizedMint.toLowerCase())
+        )
     };
 
     if (merged.image) {
         merged.image = resolveImageUrl(merged.image);
+    }
+
+    if (record.archived === true) {
+        setImportedTokenArchivedState(normalizedMint, true);
+    } else if (record.archived === false) {
+        setImportedTokenArchivedState(normalizedMint, false);
     }
 
     tokenRegistry.imported.set(normalizedMint, merged);
@@ -5336,15 +5409,32 @@ function renderTokensTable() {
     const draftRecords = Array.from(tokenRegistry.drafts.values());
     const importedRecords = Array.from(tokenRegistry.imported.values());
     const records = [...draftRecords, ...importedRecords].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const filter = uiHelperState.tokenFilter || 'active';
+    const filteredRecords = records.filter((record) => {
+        const isArchived = Boolean(record.archived);
+        if (filter === 'archived') {
+            return isArchived;
+        }
+        if (filter === 'all') {
+            return true;
+        }
+        return !isArchived;
+    });
 
-    if (records.length === 0) {
+    if (filteredRecords.length === 0) {
+        const emptyMessage =
+            filter === 'archived'
+                ? 'No archived tokens yet. Archive a draft to track it here.'
+                : 'No tokens tracked yet. Copy or import a Pump.fun token to populate this table.';
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" class="p-12 text-center text-gray-500">
                     <div class="flex flex-col items-center gap-2">
                         <i data-lucide="inbox" class="w-10 h-10"></i>
-                        <p class="text-base font-medium">No tokens tracked yet</p>
-                        <p class="text-sm text-gray-500">Copy or import a Pump.fun token to populate this table.</p>
+                        <p class="text-base font-medium">${escapeHtml(
+                            filter === 'archived' ? 'No archived tokens' : 'No tokens tracked yet'
+                        )}</p>
+                        <p class="text-sm text-gray-500">${escapeHtml(emptyMessage)}</p>
                     </div>
                 </td>
             </tr>
@@ -5355,7 +5445,7 @@ function renderTokensTable() {
         return;
     }
 
-    tbody.innerHTML = records.map(buildTokenRow).join('');
+    tbody.innerHTML = filteredRecords.map(buildTokenRow).join('');
     attachTokenRowHandlers();
 
     if (typeof lucide !== 'undefined') {
@@ -5461,6 +5551,333 @@ function updateTokenDetailLinks(record = {}) {
     setLink(metadataLink, record.metadataUri ? resolveMetadataUri(record.metadataUri) : null);
 }
 
+function deriveAutomationState(config) {
+    if (!config) {
+        return { mode: 'creator', walletIds: [], groupId: '' };
+    }
+
+    const selector = config.walletSelector || {};
+    const rawWalletIds =
+        (Array.isArray(selector.walletIds) && selector.walletIds.length && selector.walletIds) ||
+        (Array.isArray(config.walletIds) && config.walletIds.length && config.walletIds) ||
+        (Array.isArray(config.wallets) &&
+            config.wallets
+                .map((wallet) =>
+                    typeof wallet === 'string'
+                        ? wallet
+                        : wallet?.walletId || wallet?.id || wallet?.address || wallet?.publicKey || ''
+                )
+                .filter(Boolean)) ||
+        [];
+
+    const modeCandidate =
+        config.walletMode ||
+        selector.mode ||
+        config.mode ||
+        (selector.groupId || config.walletGroupId || config.groupId ? 'group' : rawWalletIds.length ? 'custom' : 'creator');
+
+    return {
+        mode: modeCandidate || 'creator',
+        walletIds: rawWalletIds.map((value) => (typeof value === 'string' ? value : String(value))).filter(Boolean),
+        groupId:
+            selector.groupId ||
+            config.walletGroupId ||
+            config.groupId ||
+            (typeof selector.group === 'string' ? selector.group : '') ||
+            ''
+    };
+}
+
+function hydrateCreateTokenFormFromDraft(record) {
+    if (!record) {
+        return;
+    }
+
+    const applyValue = (id, value = '') => {
+        const el = getElement(id);
+        if (!el) return;
+        el.value = value ?? '';
+    };
+
+    const creatorWalletId =
+        tokenLaunchState.selectedWalletId ||
+        record.creatorWalletId ||
+        record.creatorWallet ||
+        tokenLaunchState.launchConfig?.devWalletId ||
+        '';
+
+    applyValue('token-name', record.name || '');
+    applyValue('token-symbol', record.symbol || '');
+    applyValue('token-description', record.description || '');
+    applyValue('token-website', record.website || '');
+    applyValue('token-twitter', record.twitter || '');
+    applyValue('token-telegram', record.telegram || '');
+    applyValue('initial-buy-amount', record.initialBuyAmount ?? '');
+
+    const useVanity = getElement('use-vanity');
+    if (useVanity) {
+        useVanity.checked = Boolean(record.useVanity);
+    }
+
+    uiHelperState.tokenPlatform = record.platform || uiHelperState.tokenPlatform || 'pumpfun';
+    if (typeof window.selectTokenPlatform === 'function') {
+        window.selectTokenPlatform(uiHelperState.tokenPlatform, { silent: true });
+    }
+
+    const assignCreatorWallet = () => {
+        if (!creatorWalletId) {
+            return;
+        }
+        const selectEl = getElement('token-creator-wallet');
+        if (!selectEl) {
+            return;
+        }
+        const option = Array.from(selectEl.options).find((opt) => opt.value === creatorWalletId);
+        if (option) {
+            selectEl.value = option.value;
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
+
+    assignCreatorWallet();
+    setTimeout(assignCreatorWallet, 300);
+
+    tokenLaunchState.image = {
+        base64: record.image || record.imageUri || tokenLaunchState.image.base64 || null,
+        uri: record.imageUri || null,
+        gatewayUrl: record.image || record.imageUri || null,
+        contentType: null,
+        fileName: null,
+        size: 0
+    };
+    refreshTokenImageStatus();
+
+    const automations = record.automations || {};
+    const automationsEnabled = record.automationsEnabled || {};
+    const smartSellConfig = automations.smartSell || (automationsEnabled.smartSell ? { enabled: true } : null);
+    const volumeConfig = automations.volumeBot || (automationsEnabled.volumeBot ? { enabled: true } : null);
+
+    tokenLaunchState.automations.smartSell = deriveAutomationState(smartSellConfig);
+    tokenLaunchState.automations.volumeBot = deriveAutomationState(volumeConfig);
+
+    const smartSellToggle = getElement('enable-smart-sell');
+    if (smartSellToggle) {
+        smartSellToggle.checked = Boolean(smartSellConfig?.enabled);
+        toggleSmartSellConfig();
+        if (smartSellConfig) {
+            applyValue('smart-sell-profit', smartSellConfig.profitTarget ?? smartSellConfig.profit ?? '');
+            applyValue('smart-sell-stoploss', smartSellConfig.stopLoss ?? '');
+            applyValue('smart-sell-trailing', smartSellConfig.trailingStop ?? '');
+            const partialToggle = getElement('smart-sell-partial');
+            if (partialToggle) {
+                partialToggle.checked =
+                    smartSellConfig.partialSells !== undefined ? Boolean(smartSellConfig.partialSells) : partialToggle.checked;
+            }
+        }
+    }
+
+    const volumeToggle = getElement('enable-volume-bot');
+    if (volumeToggle) {
+        volumeToggle.checked = Boolean(volumeConfig?.enabled);
+        toggleVolumeBotConfig();
+        if (volumeConfig) {
+            const assignNumber = (id, value) => {
+                if (value === undefined || value === null || value === '') return;
+                applyValue(id, value);
+            };
+            assignNumber('volume-bot-amount', volumeConfig.buyAmount);
+            assignNumber('volume-bot-min-amount', volumeConfig.minAmount);
+            assignNumber('volume-bot-max-amount', volumeConfig.maxAmount);
+            assignNumber('volume-bot-delay', volumeConfig.sellDelay);
+            assignNumber('volume-bot-cycles', volumeConfig.cycles);
+            assignNumber('volume-bot-buy-interval', volumeConfig.buyIntervalSeconds);
+            assignNumber('volume-bot-buy-interval-min', volumeConfig.buyIntervalMinSeconds);
+            assignNumber('volume-bot-buy-interval-max', volumeConfig.buyIntervalMaxSeconds);
+            assignNumber('volume-bot-sell-interval', volumeConfig.sellIntervalSeconds);
+            assignNumber('volume-bot-sell-interval-min', volumeConfig.sellIntervalMinSeconds);
+            assignNumber('volume-bot-sell-interval-max', volumeConfig.sellIntervalMaxSeconds);
+            assignNumber('volume-bot-sell-percent-min', volumeConfig.sellPercentageMin);
+            assignNumber('volume-bot-sell-percent-max', volumeConfig.sellPercentageMax);
+
+            const randomizeAmounts = getElement('volume-bot-randomize');
+            if (randomizeAmounts) {
+                randomizeAmounts.checked = volumeConfig.randomizeAmounts !== undefined ? Boolean(volumeConfig.randomizeAmounts) : randomizeAmounts.checked;
+            }
+            const randomizeDelay = getElement('volume-bot-randomize-delay');
+            if (randomizeDelay) {
+                randomizeDelay.checked = volumeConfig.randomizeDelay !== undefined ? Boolean(volumeConfig.randomizeDelay) : randomizeDelay.checked;
+            }
+
+            const guardrailToggle = getElement('volume-bot-guardrails-enabled');
+            if (guardrailToggle) {
+                guardrailToggle.checked = Boolean(volumeConfig.guardrails?.enabled);
+                toggleVolumeGuardrails();
+                if (volumeConfig.guardrails) {
+                    assignNumber('volume-bot-profit-target', volumeConfig.guardrails.realizedProfitTarget);
+                    assignNumber('volume-bot-loss-limit', volumeConfig.guardrails.realizedLossLimit);
+                }
+            }
+        }
+    }
+
+    setupLaunchAutomationWalletControls();
+    setTimeout(() => {
+        populateLaunchAutomationWalletOptions();
+        populateLaunchAutomationGroupOptions();
+        reflectLaunchAutomationState('smartSell');
+        reflectLaunchAutomationState('volumeBot');
+    }, 0);
+}
+
+function setTokenHoldingsSource(source, { silent = false, skipReload = false } = {}) {
+    const normalized = source === 'rpc' ? 'rpc' : 'jito';
+    tokenDetailViewState.holdingsSource = normalized;
+
+    const activeClasses = ['bg-purple-600', 'text-white', 'shadow-lg', 'shadow-purple-500/30'];
+    const inactiveClasses = ['bg-neutral-900', 'text-gray-400'];
+
+    const applyState = (button, active) => {
+        if (!button) return;
+        button.classList.remove(
+            ...activeClasses,
+            ...inactiveClasses,
+            'shadow-lg',
+            'shadow-purple-500/30'
+        );
+        if (active) {
+            button.classList.add(...activeClasses);
+        } else {
+            button.classList.add(...inactiveClasses);
+        }
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    };
+
+    applyState(getElement('token-holdings-source-jito'), normalized === 'jito');
+    applyState(getElement('token-holdings-source-rpc'), normalized === 'rpc');
+
+    if (!silent) {
+        notify(`Holdings source switched to ${normalized.toUpperCase()}.`, 'info');
+    }
+
+    const current = tokenRegistry.current;
+    if (!skipReload && current && current.type !== 'draft') {
+        tokenDetailViewState.loading = false;
+        loadLiveTokenDetail(current).catch((error) => {
+            console.error('Failed to refresh holdings after source change:', error);
+        });
+    }
+}
+
+function handleTokenEdit() {
+    const current = tokenRegistry.current;
+    if (!current) {
+        notify('Select a token before editing.', 'warning');
+        return;
+    }
+    if (current.type !== 'draft') {
+        notify('Editing is available for saved drafts only.', 'warning');
+        return;
+    }
+
+    tokenLaunchState.pendingDraftId = current.id;
+    tokenLaunchState.activeLaunchDraftId = current.id;
+    tokenLaunchState.launchConfig = cloneLaunchConfig(
+        current.launchConfig || {
+            devWalletId: current.creatorWalletId || current.creatorWallet || '',
+            devBuyAmount: current.devBuyAmount ?? current.initialBuyAmount,
+            blockZero: current.blockZero || {}
+        }
+    );
+    tokenLaunchState.selectedWalletId =
+        tokenLaunchState.launchConfig.devWalletId ||
+        current.creatorWalletId ||
+        current.creatorWallet ||
+        tokenLaunchState.selectedWalletId ||
+        '';
+
+    const automations = current.automations || {};
+    const automationsEnabled = current.automationsEnabled || {};
+    tokenLaunchState.automations.smartSell = deriveAutomationState(
+        automations.smartSell || (automationsEnabled.smartSell ? { enabled: true } : null)
+    );
+    tokenLaunchState.automations.volumeBot = deriveAutomationState(
+        automations.volumeBot || (automationsEnabled.volumeBot ? { enabled: true } : null)
+    );
+
+    tokenLaunchState.image = {
+        base64: current.image || current.imageUri || tokenLaunchState.image.base64 || null,
+        uri: current.imageUri || null,
+        gatewayUrl: current.image || current.imageUri || null,
+        contentType: null,
+        fileName: null,
+        size: 0
+    };
+
+    navigateToPage('create-token');
+    setTimeout(() => {
+        hydrateCreateTokenFormFromDraft(current);
+        notify('Draft loaded into Create Token view.', 'info');
+        if (typeof addConsoleLog === 'function') {
+            addConsoleLog(
+                `✏️ Editing draft ${current.name || current.symbol || current.id}`,
+                'info'
+            );
+        }
+    }, 240);
+}
+
+function handleTokenArchive() {
+    const current = tokenRegistry.current;
+    if (!current) {
+        notify('Select a token before archiving.', 'warning');
+        return;
+    }
+
+    const nextState = !current.archived;
+    let updatedRecord = current;
+
+    if (current.type === 'draft') {
+        registerTokenDraft({ ...current, archived: nextState });
+        const refreshed = tokenRegistry.drafts.get(current.id);
+        if (refreshed) {
+            updatedRecord = refreshed;
+        }
+    } else {
+        const mint = current.mint;
+        if (!mint) {
+            notify('Unable to archive token without a mint address.', 'error');
+            return;
+        }
+        updatedRecord = {
+            ...current,
+            archived: nextState,
+            updatedAt: Date.now()
+        };
+        tokenRegistry.imported.set(mint, updatedRecord);
+        setImportedTokenArchivedState(mint, nextState);
+    }
+
+    tokenRegistry.current = updatedRecord;
+    populateTokenDetailView(updatedRecord);
+    renderTokensTable();
+
+    if (typeof addConsoleLog === 'function') {
+        addConsoleLog(
+            nextState
+                ? `📦 Archived token ${updatedRecord.name || updatedRecord.mint || updatedRecord.id}`
+                : `♻️ Restored token ${updatedRecord.name || updatedRecord.mint || updatedRecord.id}`,
+            nextState ? 'info' : 'success'
+        );
+    }
+
+    notify(
+        nextState
+            ? 'Token archived. View it under Archived tokens.'
+            : 'Token restored to Active tokens.',
+        nextState ? 'info' : 'success'
+    );
+}
+
 function populateTokenDetailView(record) {
     if (!record) return;
     tokenRegistry.current = record;
@@ -5545,6 +5962,36 @@ function populateTokenDetailView(record) {
             platformEl.classList.add('hidden');
         }
     }
+
+    const editButton = getElement('token-edit-btn');
+    if (editButton) {
+        const isEditableDraft = record.type === 'draft';
+        const editLabel = editButton.querySelector('span');
+        editButton.disabled = !isEditableDraft;
+        editButton.classList.toggle('opacity-60', !isEditableDraft);
+        editButton.classList.toggle('pointer-events-none', !isEditableDraft);
+        editButton.setAttribute('aria-disabled', isEditableDraft ? 'false' : 'true');
+        editButton.title = isEditableDraft ? 'Edit draft configuration' : 'Editing is available for saved drafts';
+        if (editLabel) {
+            editLabel.textContent = 'Edit';
+        }
+    }
+
+    const archiveButton = getElement('token-archive-btn');
+    if (archiveButton) {
+        const archiveLabel = archiveButton.querySelector('span');
+        const isArchived = Boolean(record.archived);
+        if (archiveLabel) {
+            archiveLabel.textContent = isArchived ? 'Unarchive' : 'Archive';
+        }
+        archiveButton.setAttribute('aria-pressed', isArchived ? 'true' : 'false');
+        archiveButton.title = isArchived ? 'Restore token to Active' : 'Archive token';
+    }
+
+    setTokenHoldingsSource(tokenDetailViewState.holdingsSource || 'jito', {
+        silent: true,
+        skipReload: true
+    });
 
     if (copyIcon) {
         copyIcon.setAttribute('type', 'button');
@@ -6033,6 +6480,9 @@ registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bum
 registerGlobalHandler('showSellBuybackTask', () => openTokenAutomationConfigurator('sellBuyback'));
 registerGlobalHandler('handleQuickBuy', handleQuickBuy);
 registerGlobalHandler('resyncTokenHoldings', resyncTokenHoldings);
+registerGlobalHandler('handleTokenEdit', handleTokenEdit);
+registerGlobalHandler('handleTokenArchive', handleTokenArchive);
+registerGlobalHandler('setTokenHoldingsSource', setTokenHoldingsSource);
 
 function viewTokenDetails(identifier, source = 'imported') {
     if (!identifier) return;
@@ -7386,6 +7836,8 @@ registerGlobalHandler('switchTokenTab', (tab) => {
     activeBtn?.classList.toggle('text-white', showActive);
     archivedBtn?.classList.toggle('bg-neutral-700', !showActive);
     archivedBtn?.classList.toggle('text-white', !showActive);
+    uiHelperState.tokenFilter = showActive ? 'active' : 'archived';
+    renderTokensTable();
     notify(`Switched to ${tab} tokens`, 'info');
 });
 
@@ -7513,7 +7965,8 @@ function persistTokenDrafts() {
             initialBuyAmount: draft.initialBuyAmount ?? null,
             metadata: draft.metadata || null,
             metadataUri: draft.metadataUri || null,
-            notes: draft.notes || ''
+            notes: draft.notes || '',
+            archived: Boolean(draft.archived)
         }));
 
         localStorage.setItem(TOKEN_DRAFT_STORAGE_KEY, JSON.stringify(drafts));
@@ -7568,7 +8021,8 @@ function loadTokenDraftsFromStorage() {
                 initialBuyAmount: safeNumber(entry.initialBuyAmount),
                 metadata: entry.metadata || null,
                 metadataUri: entry.metadataUri || null,
-                notes: entry.notes || ''
+            notes: entry.notes || '',
+            archived: Boolean(entry.archived)
             };
 
             tokenRegistry.drafts.set(record.id, record);
@@ -7595,7 +8049,8 @@ function registerTokenDraft(record = {}) {
         status: record.status || 'PRE-LAUNCH',
         updatedAt: Date.now(),
         launchConfig: cloneLaunchConfig(record.launchConfig || existing.launchConfig),
-        createdAt: existing.createdAt || record.createdAt || Date.now()
+        createdAt: existing.createdAt || record.createdAt || Date.now(),
+        archived: Boolean(record.archived ?? existing.archived)
     };
 
     if (merged.imageUri && !merged.image) {

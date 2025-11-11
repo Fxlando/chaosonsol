@@ -4494,21 +4494,13 @@ function renderTokenTaskList(record) {
         return;
     }
 
-    const buildDetailLines = (details) =>
-        details
-            .filter((detail) => detail && detail.label && detail.value)
-            .map(
-                (detail) => `
-                    <div class="text-xs text-gray-400">
-                        <span class="text-gray-500">${escapeHtml(detail.label)}:</span>
-                        <span class="ml-1 text-gray-300">${escapeHtml(String(detail.value))}</span>
-                    </div>
-                `
-            )
-            .join('');
-
-    const taskCards = tasks
+    const rowsHtml = tasks
         .map((task) => {
+            const description = task.details
+                .filter((detail) => detail && detail.label && detail.value)
+                .map((detail) => `${detail.label}: ${detail.value}`)
+                .join(' • ');
+
             const actions = [];
 
             if (canEdit) {
@@ -4524,7 +4516,7 @@ function renderTokenTaskList(record) {
                 .map(
                     (action) => `
                         <button
-                            class="text-gray-400 hover:text-white transition"
+                            class="inline-flex items-center justify-center text-gray-400 hover:text-white transition p-1"
                             title="${escapeHtml(action.label)}"
                             onclick="handleTokenTaskAction('${action.type}', '${task.key}')"
                         >
@@ -4534,32 +4526,56 @@ function renderTokenTaskList(record) {
                 )
                 .join('');
 
-            const detailHtml = buildDetailLines(task.details);
-
             return `
-                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700 reveal-ready is-visible">
-                    <div class="flex items-center justify-between mb-2">
+                <tr class="border-b border-neutral-800 last:border-b-0">
+                    <td class="py-3">
                         <div class="flex items-center gap-3">
                             <div class="w-8 h-8 ${task.iconBackground} rounded-lg flex items-center justify-center">
                                 <i data-lucide="${task.icon}" class="w-4 h-4 text-white"></i>
                             </div>
                             <div>
-                                <h4 class="font-semibold text-sm text-white">${escapeHtml(task.title)}</h4>
-                                ${task.subtitle ? `<p class="text-xs text-gray-400">${escapeHtml(task.subtitle)}</p>` : ''}
+                                <div class="text-sm font-semibold text-white">${escapeHtml(task.title)}</div>
+                                ${
+                                    description
+                                        ? `<div class="text-xs text-gray-400">${escapeHtml(description)}</div>`
+                                        : ''
+                                }
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs px-2 py-1 rounded ${task.statusClass}">${escapeHtml(task.statusLabel)}</span>
-                            ${actionsHtml}
-                        </div>
-                    </div>
-                    ${detailHtml}
-                </div>
+                    </td>
+                    <td class="py-3 align-middle">
+                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${task.statusClass}">
+                            ${escapeHtml(task.statusLabel)}
+                        </span>
+                    </td>
+                    <td class="py-3 text-right align-middle">
+                        ${
+                            actionsHtml
+                                ? `<div class="inline-flex items-center gap-1">${actionsHtml}</div>`
+                                : '<span class="text-xs text-gray-500">Read-only</span>'
+                        }
+                    </td>
+                </tr>
             `;
         })
         .join('');
 
-    list.innerHTML = taskCards;
+    list.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-gray-300">
+                <thead>
+                    <tr class="border-b border-neutral-800 text-xs uppercase tracking-wide text-gray-500">
+                        <th class="text-left py-2 font-medium">Task</th>
+                        <th class="text-left py-2 font-medium">Status</th>
+                        <th class="text-right py-2 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        </div>
+    `;
 
     if (emptyState) {
         emptyState.classList.add('hidden');

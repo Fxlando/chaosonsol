@@ -37,6 +37,15 @@ npm run precommit
 3. **ALWAYS** use real on-chain data (no mocks)
 4. **ALWAYS** verify deployment
 
+## 🌍 GitHub Pages Backup Deployment
+
+When Netlify is unavailable, the repository can deploy the static `webapp/` directory to GitHub Pages:
+
+1. Enable **Settings → Pages → Source → GitHub Actions** in the repository.
+2. Push to `main` to trigger `.github/workflows/deploy-pages.yml`, which uploads `webapp/` to Pages.
+3. (Optional) Add a `webapp/CNAME` file before deployment if you plan to point a custom domain at GitHub Pages.
+4. Update DNS records to target GitHub Pages when you are ready to cut over from Netlify.
+
 ## 📁 Files Created
 
 - `.cursorrules` - AI instructions for deployment

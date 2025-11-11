@@ -65,6 +65,48 @@ class ProductionWalletManager {
         }
     }
 
+    normalizeGroupSettings(settings = {}) {
+        const toNumber = (value, fallback) =>
+            typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+        const normalized = {
+            maxWallets: toNumber(settings.maxWallets, 100),
+            slippage: toNumber(settings.slippage, 1.0),
+            priorityFee: toNumber(settings.priorityFee, 1000),
+            reserveBalance: toNumber(settings.reserveBalance, 0),
+            allocation: toNumber(settings.allocation, 0.1),
+            maxPerTrade: toNumber(settings.maxPerTrade, 0.5),
+            minTrade: toNumber(settings.minTrade, 0.02),
+            targetProfit: toNumber(settings.targetProfit, 0.25),
+            stopLoss: toNumber(settings.stopLoss, 0.15),
+            minBalance: toNumber(settings.minBalance, 0.05)
+        };
+
+        const rawAutoTrade = settings.autoTrade;
+        let autoTrade;
+
+        if (rawAutoTrade && typeof rawAutoTrade === 'object') {
+            autoTrade = {
+                enabled: rawAutoTrade.enabled !== false,
+                minBalance: toNumber(rawAutoTrade.minBalance, normalized.minBalance),
+                allocation: toNumber(rawAutoTrade.allocation, normalized.allocation),
+                maxPerTrade: toNumber(rawAutoTrade.maxPerTrade, normalized.maxPerTrade),
+                minTrade: toNumber(rawAutoTrade.minTrade, normalized.minTrade),
+                targetProfit: toNumber(rawAutoTrade.targetProfit, normalized.targetProfit),
+                stopLoss: toNumber(rawAutoTrade.stopLoss, normalized.stopLoss),
+                reserveBalance: toNumber(rawAutoTrade.reserveBalance, normalized.reserveBalance),
+                cooldownMs: toNumber(rawAutoTrade.cooldownMs, undefined)
+            };
+        } else {
+            autoTrade = {
+                enabled: Boolean(rawAutoTrade)
+            };
+        }
+
+        normalized.autoTrade = autoTrade;
+        return normalized;
+    }
+
     async loadGroups() {
         try {
             if (fs.existsSync(this.config.groupsFile)) {
@@ -76,7 +118,7 @@ class ProductionWalletManager {
                         name: group.name,
                         description: group.description || '',
                         wallets: group.wallets || [],
-                        settings: group.settings || {},
+                        settings: this.normalizeGroupSettings(group.settings || {}),
                         created: group.created || Date.now(),
                         isActive: group.isActive !== false
                     });
@@ -124,7 +166,10 @@ class ProductionWalletManager {
 
     async saveGroups() {
         try {
-            const groupsArray = Array.from(this.groups.values());
+            const groupsArray = Array.from(this.groups.values()).map(group => ({
+                ...group,
+                settings: this.normalizeGroupSettings(group.settings || {})
+            }));
             const data = {
                 groups: groupsArray,
                 lastUpdated: Date.now(),
@@ -294,13 +339,7 @@ class ProductionWalletManager {
             name: name,
             description: description,
             wallets: [],
-            settings: {
-                maxWallets: 100,
-                autoTrade: false,
-                slippage: 1.0,
-                priorityFee: 1000,
-                ...settings
-            },
+            settings: this.normalizeGroupSettings(settings),
             created: Date.now(),
             isActive: true
         };

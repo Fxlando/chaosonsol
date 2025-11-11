@@ -133,7 +133,6 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
-            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,
@@ -159,7 +158,6 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
-            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,
@@ -223,6 +221,7 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
+            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,
@@ -248,6 +247,7 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
+            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,

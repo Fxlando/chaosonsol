@@ -4,6 +4,7 @@
  */
 
 const { Keypair, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+const bs58 = require('bs58');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');

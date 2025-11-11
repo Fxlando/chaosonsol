@@ -4,6 +4,7 @@
  */
 
 const { Keypair, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
+const bs58 = require('bs58');
 const { ProductionSolanaCore } = require('./production-solana-core');
 const { ProductionPumpFunIntegration } = require('./production-pumpfun-integration');
 const { ProductionRaydiumIntegration } = require('./production-raydium-integration');
@@ -17,6 +18,14 @@ class ProductionTradingEngine {
             defaultSlippage: config.defaultSlippage || 1.0,
             priorityFee: config.priorityFee || 1000,
             maxRetries: config.maxRetries || 3,
+            autoTradeCheckInterval: config.autoTradeCheckInterval || 15000,
+            autoTradeMinBalance: config.autoTradeMinBalance || 0.05,
+            autoTradeMinTrade: config.autoTradeMinTrade || 0.02,
+            autoTradeAllocation: config.autoTradeAllocation || 0.1,
+            autoTradeMaxPerTrade: config.autoTradeMaxPerTrade || 0.5,
+            autoTradeProfitTarget: config.autoTradeProfitTarget || 0.25,
+            autoTradeStopLoss: config.autoTradeStopLoss || 0.15,
+            autoTradeCooldownMs: config.autoTradeCooldownMs || 5 * 60 * 1000,
             ...config
         };
         
@@ -29,6 +38,8 @@ class ProductionTradingEngine {
         this.isTrading = false;
         this.activeTrades = new Map();
         this.tradeHistory = [];
+        this.recentOpportunities = new Map();
+        this.autoTradeLoop = null;
         this.stats = {
             totalTrades: 0,
             successfulTrades: 0,
@@ -122,6 +133,7 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
+            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,
@@ -147,6 +159,7 @@ class ProductionTradingEngine {
             };
             
             this.recordTrade(tradeData);
+            this.clearActivePosition(walletAddress, tokenMint);
             
             return {
                 tradeId: tradeId,
@@ -608,30 +621,421 @@ class ProductionTradingEngine {
         if (this.isTrading) {
             return;
         }
-        
+
+        if (!this.isInitialized) {
+            throw new Error('Trading engine not initialized');
+        }
+
         this.isTrading = true;
         console.log('🤖 Auto-trading started');
-        
-        // Auto-trading logic would go here
-        // This is a placeholder for the actual implementation
-        
-        while (this.isTrading) {
+
+        if (!this.autoTradeLoop) {
+            this.autoTradeLoop = this.runAutoTradeLoop().catch((error) => {
+                console.error('Auto-trading loop terminated unexpectedly:', error);
+            });
+        }
+    }
+
+    async stopAutoTrading() {
+        if (!this.isTrading && !this.autoTradeLoop) {
+            return;
+        }
+
+        this.isTrading = false;
+        console.log('🛑 Auto-trading stopping...');
+
+        if (this.autoTradeLoop) {
             try {
-                // Check for trading opportunities
-                // Execute trades based on strategy
-                // Update balances
-                
-                await this.delay(5000); // Check every 5 seconds
+                await this.autoTradeLoop;
             } catch (error) {
-                console.error('Auto-trading error:', error.message);
-                await this.delay(10000); // Wait 10 seconds on error
+                console.error('Auto-trading loop exited with error:', error.message);
+            } finally {
+                this.autoTradeLoop = null;
+            }
+        }
+
+        console.log('🛑 Auto-trading stopped');
+    }
+
+    async runAutoTradeLoop() {
+        while (this.isTrading) {
+            const iterationStart = Date.now();
+
+            try {
+                this.pruneOpportunityCache();
+
+                await this.walletManager.updateAllWalletBalances();
+                await this.evaluateOpenPositions();
+
+                if (this.isTrading && this.getOpenTradeCount() < this.config.maxConcurrentTrades) {
+                    await this.findAndExecuteNewTrades();
+                }
+            } catch (error) {
+                console.error('Auto-trading loop error:', error.message);
+            }
+
+            if (!this.isTrading) {
+                break;
+            }
+
+            const elapsed = Date.now() - iterationStart;
+            const waitTime = Math.max(this.config.autoTradeCheckInterval - elapsed, 1000);
+            await this.delay(waitTime);
+        }
+    }
+
+    pruneOpportunityCache() {
+        const cutoff = Date.now() - this.config.autoTradeCooldownMs;
+        for (const [mint, timestamp] of this.recentOpportunities.entries()) {
+            if (timestamp < cutoff) {
+                this.recentOpportunities.delete(mint);
             }
         }
     }
 
-    stopAutoTrading() {
-        this.isTrading = false;
-        console.log('🛑 Auto-trading stopped');
+    getOpenTradeCount() {
+        let count = 0;
+        for (const position of this.activeTrades.values()) {
+            if (position && (position.status === 'open' || position.status === 'pending')) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    getAutoTradeGroups() {
+        if (!this.walletManager) {
+            return [];
+        }
+
+        return this.walletManager
+            .getAllGroups()
+            .filter((group) => {
+                if (group.isActive === false) {
+                    return false;
+                }
+                const settings = group.settings || {};
+                const autoTradeSetting = settings.autoTrade;
+
+                if (typeof autoTradeSetting === 'object') {
+                    return autoTradeSetting.enabled !== false;
+                }
+
+                return Boolean(autoTradeSetting);
+            });
+    }
+
+    resolveGroupSetting(settings = {}, key, fallback) {
+        if (!settings) {
+            return fallback;
+        }
+
+        const autoTradeSettings =
+            typeof settings.autoTrade === 'object' ? settings.autoTrade : undefined;
+
+        if (autoTradeSettings && autoTradeSettings[key] !== undefined) {
+            return autoTradeSettings[key];
+        }
+
+        if (settings[key] !== undefined) {
+            return settings[key];
+        }
+
+        return fallback;
+    }
+
+    calculateTradeAllocation(wallet, settings = {}) {
+        const availableBalance = wallet.balance || 0;
+        const minBalance = this.resolveGroupSetting(
+            settings,
+            'minBalance',
+            this.config.autoTradeMinBalance
+        );
+
+        if (availableBalance < minBalance) {
+            return null;
+        }
+
+        const reserveBalance = this.resolveGroupSetting(settings, 'reserveBalance', 0);
+        const spendable = Math.max(availableBalance - reserveBalance, 0);
+        if (spendable <= 0) {
+            return null;
+        }
+
+        const allocationPct = this.resolveGroupSetting(
+            settings,
+            'allocation',
+            this.config.autoTradeAllocation
+        );
+        const maxPerTrade = this.resolveGroupSetting(
+            settings,
+            'maxPerTrade',
+            this.config.autoTradeMaxPerTrade
+        );
+        const minTrade = this.resolveGroupSetting(
+            settings,
+            'minTrade',
+            this.config.autoTradeMinTrade
+        );
+
+        const tradeAmount = Math.min(spendable * allocationPct, maxPerTrade);
+        if (tradeAmount < minTrade) {
+            return null;
+        }
+
+        return Number(tradeAmount.toFixed(6));
+    }
+
+    shouldSkipToken(tokenMint, wallet) {
+        const positionKey = this.getPositionKey(wallet.address, tokenMint);
+
+        if (this.activeTrades.has(positionKey)) {
+            return true;
+        }
+
+        const recentTimestamp = this.recentOpportunities.get(tokenMint);
+        if (recentTimestamp && Date.now() - recentTimestamp < this.config.autoTradeCooldownMs) {
+            return true;
+        }
+
+        const tokenBalances = wallet.tokenBalances || {};
+        const holding = tokenBalances[tokenMint];
+        if (holding && (holding.uiAmount || holding.amount || 0) > 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    registerRecentOpportunity(tokenMint) {
+        this.recentOpportunities.set(tokenMint, Date.now());
+    }
+
+    async findAndExecuteNewTrades() {
+        const groups = this.getAutoTradeGroups();
+
+        if (groups.length === 0) {
+            return;
+        }
+
+        const trending = await this.pumpFun.getTrendingTokens(20);
+
+        if (!trending.success || !Array.isArray(trending.tokens) || trending.tokens.length === 0) {
+            return;
+        }
+
+        for (const group of groups) {
+            if (!this.isTrading) {
+                break;
+            }
+
+            const groupWallets = this.walletManager
+                .getWalletsByGroup(group.id)
+                .filter((wallet) => wallet && wallet.isActive !== false);
+
+            for (const wallet of groupWallets) {
+                if (!this.isTrading || this.getOpenTradeCount() >= this.config.maxConcurrentTrades) {
+                    return;
+                }
+
+                const refreshedWallet = this.walletManager.getWallet(wallet.address) || wallet;
+                const allocation = this.calculateTradeAllocation(refreshedWallet, group.settings || {});
+
+                if (allocation === null) {
+                    continue;
+                }
+
+                for (const token of trending.tokens) {
+                    if (!this.isTrading || this.getOpenTradeCount() >= this.config.maxConcurrentTrades) {
+                        return;
+                    }
+
+                    if (this.shouldSkipToken(token.mint, refreshedWallet)) {
+                        continue;
+                    }
+
+                    const executed = await this.executeAutoTrade(refreshedWallet, token, allocation, group);
+                    if (executed) {
+                        break;
+                    }
+
+                    await this.delay(250);
+                }
+            }
+        }
+    }
+
+    getPositionKey(walletAddress, tokenMint) {
+        return `${walletAddress}:${tokenMint}`;
+    }
+
+    async executeAutoTrade(wallet, token, allocation, group) {
+        const positionKey = this.getPositionKey(wallet.address, token.mint);
+
+        if (this.activeTrades.has(positionKey)) {
+            return false;
+        }
+
+        this.activeTrades.set(positionKey, {
+            status: 'pending',
+            walletAddress: wallet.address,
+            tokenMint: token.mint,
+            groupId: group.id,
+            createdAt: Date.now()
+        });
+
+        try {
+            const priceInfo =
+                token.price && token.price > 0
+                    ? { price: token.price, success: true }
+                    : await this.getTokenPrice(token.mint);
+
+            if (!priceInfo.success || priceInfo.price <= 0) {
+                throw new Error('Unable to determine token price');
+            }
+
+            const slippage = this.resolveGroupSetting(
+                group.settings || {},
+                'slippage',
+                this.config.defaultSlippage
+            );
+
+            const buyResult = await this.buyToken(wallet.address, token.mint, allocation, {
+                slippage,
+                priorityFee: this.config.priorityFee
+            });
+
+            if (!buyResult.success) {
+                throw new Error(buyResult.error || 'Auto-buy failed');
+            }
+
+            const tokenAmount = buyResult.amount || 0;
+            if (tokenAmount <= 0) {
+                throw new Error('Invalid token amount received from buy');
+            }
+
+            const position = {
+                status: 'open',
+                walletAddress: wallet.address,
+                tokenMint: token.mint,
+                tokenAmount,
+                solSpent: allocation,
+                entryPrice: priceInfo.price,
+                targetProfit: this.resolveGroupSetting(
+                    group.settings || {},
+                    'targetProfit',
+                    this.config.autoTradeProfitTarget
+                ),
+                stopLoss: this.resolveGroupSetting(
+                    group.settings || {},
+                    'stopLoss',
+                    this.config.autoTradeStopLoss
+                ),
+                slippage,
+                lastEvaluated: 0,
+                createdAt: Date.now(),
+                groupId: group.id
+            };
+
+            this.activeTrades.set(positionKey, position);
+            this.registerRecentOpportunity(token.mint);
+
+            console.log(
+                `🤖 Auto-trade opened for ${token.symbol || token.mint} using ${
+                    wallet.name || wallet.address
+                } - spent ${allocation} SOL @ ${priceInfo.price} USD`
+            );
+
+            return true;
+        } catch (error) {
+            console.warn(
+                `Auto trade skipped for ${token.symbol || token.mint}:`,
+                error.message
+            );
+            this.activeTrades.delete(positionKey);
+            return false;
+        }
+    }
+
+    async evaluateOpenPositions() {
+        const entries = Array.from(this.activeTrades.entries());
+
+        for (const [key, position] of entries) {
+            if (!this.isTrading) {
+                break;
+            }
+
+            if (!position || position.status !== 'open') {
+                continue;
+            }
+
+            const now = Date.now();
+            if (position.lastEvaluated && now - position.lastEvaluated < 5000) {
+                continue;
+            }
+
+            try {
+                const priceInfo = await this.getTokenPrice(position.tokenMint);
+                if (!priceInfo.success || priceInfo.price <= 0) {
+                    position.lastEvaluated = now;
+                    this.activeTrades.set(key, position);
+                    continue;
+                }
+
+                const change = (priceInfo.price - position.entryPrice) / position.entryPrice;
+                const takeProfit = change >= position.targetProfit;
+                const hitStopLoss = change <= -position.stopLoss;
+
+                if (takeProfit || hitStopLoss) {
+                    const exitSnapshot = { ...position };
+                    const sellResult = await this.sellToken(
+                        position.walletAddress,
+                        position.tokenMint,
+                        position.tokenAmount,
+                        {
+                            slippage: position.slippage,
+                            priorityFee: this.config.priorityFee
+                        }
+                    );
+
+                    if (sellResult.success) {
+                        const outcome =
+                            sellResult.amount !== undefined
+                                ? sellResult.amount - exitSnapshot.solSpent
+                                : null;
+
+                        console.log(
+                            `🤖 Auto-trade closed (${takeProfit ? 'target' : 'stop'}) for ${
+                                exitSnapshot.tokenMint
+                            } using ${exitSnapshot.walletAddress}. PnL: ${
+                                outcome !== null ? outcome.toFixed(4) : 'n/a'
+                            } SOL`
+                        );
+                    } else {
+                        console.warn(
+                            `Auto-trade exit failed for ${exitSnapshot.tokenMint}:`,
+                            sellResult.error
+                        );
+                    }
+                } else {
+                    position.lastEvaluated = now;
+                    this.activeTrades.set(key, position);
+                }
+            } catch (error) {
+                console.error(`Auto position evaluation error (${key}):`, error.message);
+            }
+
+            await this.delay(250);
+        }
+    }
+
+    clearActivePosition(walletAddress, tokenMint) {
+        const key = this.getPositionKey(walletAddress, tokenMint);
+        const position = this.activeTrades.get(key);
+        if (position) {
+            this.activeTrades.delete(key);
+        }
+        return position || null;
     }
 
     getStats() {

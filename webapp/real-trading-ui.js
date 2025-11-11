@@ -4270,7 +4270,440 @@ function populateTokenDetailView(record) {
             </tr>
         `;
     }
+
+    renderTokenTaskList(record);
 }
+
+function buildAutomationTaskEntries(record = {}) {
+    const tasks = [];
+    const automations = record.automations || {};
+    const enabledMap = record.automationsEnabled || {};
+
+    const createEntry = (key, config, defaults = {}) => {
+        if (!config || typeof config !== 'object') {
+            return null;
+        }
+        const normalizedConfig = { ...config };
+        const enabled =
+            (enabledMap && Object.prototype.hasOwnProperty.call(enabledMap, key)
+                ? Boolean(enabledMap[key])
+                : normalizedConfig.enabled !== false);
+
+        const selectorDescription = describeAutomationSelector(normalizedConfig);
+
+        const entry = {
+            key,
+            enabled,
+            selectorDescription,
+            details: [],
+            statusLabel: enabled ? 'Active' : 'Paused',
+            statusClass: enabled ? 'bg-emerald-900/60 text-emerald-200' : 'bg-yellow-900/60 text-yellow-200',
+            icon: defaults.icon || 'settings',
+            iconBackground: defaults.iconBackground || 'bg-neutral-800',
+            title: defaults.title || key,
+            subtitle: defaults.subtitle || '',
+            config: normalizedConfig
+        };
+
+        if (key === 'smartSell') {
+            entry.icon = 'shield';
+            entry.iconBackground = 'bg-purple-900/60';
+            entry.title = 'Smart Sell';
+            entry.subtitle = 'Automation';
+
+            const profitTarget = safeNumber(normalizedConfig.profitTarget);
+            const stopLoss = safeNumber(normalizedConfig.stopLoss);
+            const trailingStop = safeNumber(normalizedConfig.trailingStop);
+
+            entry.details = [
+                { label: 'Wallets', value: selectorDescription },
+                {
+                    label: 'Profit target',
+                    value: profitTarget !== null ? `${profitTarget}%` : 'Auto'
+                },
+                {
+                    label: 'Stop loss',
+                    value: stopLoss !== null ? `${stopLoss}%` : 'Unset'
+                },
+                {
+                    label: 'Trailing stop',
+                    value: trailingStop !== null ? `${trailingStop}%` : 'Disabled'
+                },
+                {
+                    label: 'Partial sells',
+                    value: normalizedConfig.partialSells ? 'Enabled (25% bands)' : 'Disabled'
+                }
+            ];
+        } else if (key === 'volumeBot') {
+            entry.icon = 'activity';
+            entry.iconBackground = 'bg-blue-900/60';
+            entry.title = 'Volume Bot';
+            entry.subtitle = 'Automation';
+
+            const minAmount = safeNumber(normalizedConfig.minAmount);
+            const maxAmount = safeNumber(normalizedConfig.maxAmount);
+            const buyAmount = safeNumber(normalizedConfig.buyAmount);
+
+            const buyLabel = (() => {
+                if (minAmount !== null && maxAmount !== null) {
+                    if (minAmount === maxAmount) {
+                        return formatSol(minAmount);
+                    }
+                    return `${formatSol(minAmount)} - ${formatSol(maxAmount)}`;
+                }
+                if (minAmount !== null) {
+                    return `≥ ${formatSol(minAmount)}`;
+                }
+                if (maxAmount !== null) {
+                    return `≤ ${formatSol(maxAmount)}`;
+                }
+                if (buyAmount !== null) {
+                    return formatSol(buyAmount);
+                }
+                return 'Adaptive';
+            })();
+
+            const cycles = safeNumber(normalizedConfig.cycles);
+            const sellDelay = safeNumber(normalizedConfig.sellDelay);
+
+            const buyInterval = safeNumber(normalizedConfig.buyIntervalSeconds);
+            const buyIntervalMin = safeNumber(normalizedConfig.buyIntervalMinSeconds);
+            const buyIntervalMax = safeNumber(normalizedConfig.buyIntervalMaxSeconds);
+
+            const sellInterval = safeNumber(normalizedConfig.sellIntervalSeconds);
+            const sellIntervalMin = safeNumber(normalizedConfig.sellIntervalMinSeconds);
+            const sellIntervalMax = safeNumber(normalizedConfig.sellIntervalMaxSeconds);
+
+            const sellPercentMin = safeNumber(normalizedConfig.sellPercentageMin);
+            const sellPercentMax = safeNumber(normalizedConfig.sellPercentageMax);
+
+            const guardrails = normalizedConfig.guardrails || {};
+
+            const formatRange = (single, min, max, unit = 's') => {
+                const formatUnit = (value) => `${value}${unit}`;
+                if (min !== null && max !== null) {
+                    if (min === max) {
+                        return formatUnit(min);
+                    }
+                    return `${formatUnit(min)} - ${formatUnit(max)}`;
+                }
+                if (single !== null) {
+                    return formatUnit(single);
+                }
+                if (min !== null) {
+                    return `≥ ${formatUnit(min)}`;
+                }
+                if (max !== null) {
+                    return `≤ ${formatUnit(max)}`;
+                }
+                return 'Adaptive';
+            };
+
+            const percentRange = (min, max) => {
+                if (min !== null && max !== null) {
+                    if (min === max) {
+                        return `${min}%`;
+                    }
+                    return `${min}% - ${max}%`;
+                }
+                if (min !== null) {
+                    return `≥ ${min}%`;
+                }
+                if (max !== null) {
+                    return `≤ ${max}%`;
+                }
+                return 'Adaptive';
+            };
+
+            entry.details = [
+                { label: 'Wallets', value: selectorDescription },
+                { label: 'Buy size', value: buyLabel },
+                {
+                    label: 'Buy delay',
+                    value: formatRange(buyInterval, buyIntervalMin, buyIntervalMax)
+                },
+                {
+                    label: 'Sell delay',
+                    value: formatRange(sellInterval, sellIntervalMin, sellIntervalMax)
+                },
+                {
+                    label: 'Sell percent',
+                    value: percentRange(sellPercentMin, sellPercentMax)
+                },
+                {
+                    label: 'Cycles',
+                    value: cycles !== null ? `${cycles}` : 'Continuous'
+                },
+                {
+                    label: 'Cooldown',
+                    value: sellDelay !== null ? `${sellDelay}s between moves` : 'Auto manage'
+                },
+                {
+                    label: 'Guardrails',
+                    value:
+                        guardrails.enabled === false
+                            ? 'Disabled'
+                            : [
+                                  guardrails.realizedProfitTarget !== undefined && guardrails.realizedProfitTarget !== null
+                                      ? `TP ${guardrails.realizedProfitTarget}%`
+                                      : null,
+                                  guardrails.realizedLossLimit !== undefined && guardrails.realizedLossLimit !== null
+                                      ? `SL ${guardrails.realizedLossLimit}%`
+                                      : null
+                              ]
+                                  .filter(Boolean)
+                                  .join(' • ') || 'Enabled'
+                }
+            ];
+        } else {
+            entry.details = [{ label: 'Wallets', value: selectorDescription }];
+        }
+
+        return entry;
+    };
+
+    const smartSellEntry = createEntry('smartSell', automations.smartSell);
+    if (smartSellEntry) {
+        tasks.push(smartSellEntry);
+    }
+
+    const volumeEntry = createEntry('volumeBot', automations.volumeBot);
+    if (volumeEntry) {
+        tasks.push(volumeEntry);
+    }
+
+    return tasks;
+}
+
+function renderTokenTaskList(record) {
+    const list = getElement('active-tasks-list');
+    const emptyState = getElement('no-tasks-state');
+
+    if (!list) {
+        return;
+    }
+
+    const tasks = buildAutomationTaskEntries(record);
+    const canEdit = record?.type === 'draft';
+
+    if (!tasks.length) {
+        list.innerHTML = '';
+        if (emptyState) {
+            emptyState.classList.remove('hidden');
+        }
+        return;
+    }
+
+    const buildDetailLines = (details) =>
+        details
+            .filter((detail) => detail && detail.label && detail.value)
+            .map(
+                (detail) => `
+                    <div class="text-xs text-gray-400">
+                        <span class="text-gray-500">${escapeHtml(detail.label)}:</span>
+                        <span class="ml-1 text-gray-300">${escapeHtml(String(detail.value))}</span>
+                    </div>
+                `
+            )
+            .join('');
+
+    const taskCards = tasks
+        .map((task) => {
+            const actions = [];
+
+            if (canEdit) {
+                actions.push(
+                    task.enabled
+                        ? { type: 'pause', icon: 'square', label: 'Pause' }
+                        : { type: 'resume', icon: 'play', label: 'Resume' }
+                );
+                actions.push({ type: 'remove', icon: 'trash-2', label: 'Remove' });
+            }
+
+            const actionsHtml = actions
+                .map(
+                    (action) => `
+                        <button
+                            class="text-gray-400 hover:text-white transition"
+                            title="${escapeHtml(action.label)}"
+                            onclick="handleTokenTaskAction('${action.type}', '${task.key}')"
+                        >
+                            <i data-lucide="${action.icon}" class="w-4 h-4"></i>
+                        </button>
+                    `
+                )
+                .join('');
+
+            const detailHtml = buildDetailLines(task.details);
+
+            return `
+                <div class="bg-neutral-800 rounded-lg p-4 border border-neutral-700 reveal-ready is-visible">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 ${task.iconBackground} rounded-lg flex items-center justify-center">
+                                <i data-lucide="${task.icon}" class="w-4 h-4 text-white"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm text-white">${escapeHtml(task.title)}</h4>
+                                ${task.subtitle ? `<p class="text-xs text-gray-400">${escapeHtml(task.subtitle)}</p>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs px-2 py-1 rounded ${task.statusClass}">${escapeHtml(task.statusLabel)}</span>
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                    ${detailHtml}
+                </div>
+            `;
+        })
+        .join('');
+
+    list.innerHTML = taskCards;
+
+    if (emptyState) {
+        emptyState.classList.add('hidden');
+    }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function handleTokenTaskAction(action, taskKey) {
+    if (!taskKey) {
+        notify('Select a task to manage.', 'warning');
+        return;
+    }
+
+    const current = tokenRegistry.current;
+    if (!current) {
+        notify('Select a token before managing tasks.', 'warning');
+        return;
+    }
+
+    if (current.type !== 'draft') {
+        notify('Task controls are available for saved drafts. Open the draft to edit automations.', 'warning');
+        return;
+    }
+
+    const draft = tokenRegistry.drafts.get(current.id);
+    if (!draft) {
+        notify('Draft not found in registry.', 'error');
+        return;
+    }
+
+    const automations = { ...(draft.automations || {}) };
+    const enabledMap = { ...(draft.automationsEnabled || {}) };
+
+    if (!automations[taskKey]) {
+        notify('Automation not configured yet.', 'warning');
+        return;
+    }
+
+    if (action === 'remove') {
+        delete automations[taskKey];
+        delete enabledMap[taskKey];
+        notify('Automation removed from draft.', 'success');
+        addConsoleLog(`🗑️ Removed ${taskKey} automation from draft ${draft.name || draft.id}.`, 'info');
+    } else if (action === 'pause') {
+        const config = { ...automations[taskKey], enabled: false };
+        automations[taskKey] = config;
+        enabledMap[taskKey] = false;
+        notify('Automation paused. It will be saved as disabled.', 'info');
+        addConsoleLog(`⏸️ Paused ${taskKey} automation for draft ${draft.name || draft.id}.`, 'info');
+    } else if (action === 'resume') {
+        const config = { ...automations[taskKey], enabled: true };
+        automations[taskKey] = config;
+        enabledMap[taskKey] = true;
+        notify('Automation re-enabled for this draft.', 'success');
+        addConsoleLog(`▶️ Resumed ${taskKey} automation for draft ${draft.name || draft.id}.`, 'info');
+    } else {
+        notify('Unknown task action.', 'error');
+        return;
+    }
+
+    const updatedDraft = {
+        ...draft,
+        automations,
+        automationsEnabled: enabledMap,
+        updatedAt: Date.now()
+    };
+
+    registerTokenDraft(updatedDraft);
+    tokenRegistry.current = updatedDraft;
+    renderTokenTaskList(updatedDraft);
+}
+
+function openTokenAutomationConfigurator(taskKey) {
+    const current = tokenRegistry.current;
+    const options = {};
+    let label = 'Automation';
+
+    switch (taskKey) {
+        case 'volumeBot':
+            options.volumeBot = true;
+            label = 'Volume automation';
+            break;
+        case 'smartSell':
+            options.smartSell = true;
+            label = 'Smart Sell automation';
+            break;
+        case 'sellBuyback':
+            options.smartSell = true;
+            options.volumeBot = true;
+            label = 'Sell/Buyback automations';
+            break;
+        case 'bump':
+        default:
+            label = 'Automation tools';
+            break;
+    }
+
+    if (current && current.type === 'draft') {
+        tokenLaunchState.pendingDraftId = current.id;
+        tokenLaunchState.activeLaunchDraftId = current.id;
+        tokenLaunchState.launchConfig = cloneLaunchConfig(
+            current.launchConfig || {
+                devWalletId: current.creatorWalletId || current.creatorWallet || '',
+                devBuyAmount: current.devBuyAmount ?? current.initialBuyAmount,
+                blockZero: current.blockZero || {}
+            }
+        );
+
+        if (tokenLaunchState.launchConfig.devWalletId) {
+            tokenLaunchState.selectedWalletId = tokenLaunchState.launchConfig.devWalletId;
+        }
+
+        navigateToPage('launch-token');
+        notify(`${label} ready in launch configurator.`, 'info');
+        addConsoleLog(`⚙️ Opening ${taskKey || 'automation'} configuration for draft ${current.name || current.id}.`, 'info');
+
+        setTimeout(() => {
+            const draft = tokenRegistry.drafts.get(current.id);
+            if (draft) {
+                hydrateLaunchConfiguratorFromDraft(draft);
+            }
+            configureAutomationOptions(options);
+            focusAutomationSection();
+        }, 280);
+    } else {
+        navigateToPage('create-token');
+        notify(`${label} ready in create token view.`, 'info');
+        addConsoleLog(`⚙️ Opening ${taskKey || 'automation'} configuration in create token view.`, 'info');
+        setTimeout(() => {
+            configureAutomationOptions(options);
+            focusAutomationSection();
+        }, 220);
+    }
+}
+
+registerGlobalHandler('handleTokenTaskAction', handleTokenTaskAction);
+registerGlobalHandler('openTokenAutomationConfigurator', openTokenAutomationConfigurator);
+registerGlobalHandler('showAddVolumeTask', () => openTokenAutomationConfigurator('volumeBot'));
+registerGlobalHandler('showBulkSellTask', () => openTokenAutomationConfigurator('smartSell'));
+registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bump'));
+registerGlobalHandler('showSellBuybackTask', () => openTokenAutomationConfigurator('sellBuyback'));
 
 function viewTokenDetails(identifier, source = 'imported') {
     if (!identifier) return;
@@ -5741,6 +6174,7 @@ function persistTokenDrafts() {
             type: 'draft',
             useVanity: Boolean(draft.useVanity),
             automations: draft.automations || {},
+            automationsEnabled: draft.automationsEnabled || {},
             launchConfig: serializeLaunchConfig(draft.launchConfig),
             creatorWalletId: draft.creatorWalletId || '',
             creatorWallet: draft.creatorWallet || '',
@@ -5795,6 +6229,7 @@ function loadTokenDraftsFromStorage() {
                 platform: entry.platform || 'pumpfun',
                 useVanity: Boolean(entry.useVanity),
                 automations: entry.automations || {},
+                automationsEnabled: entry.automationsEnabled || {},
                 launchConfig: cloneLaunchConfig(entry.launchConfig || entry.launchOptions || null),
                 creatorWalletId: entry.creatorWalletId || '',
                 creatorWallet: entry.creatorWallet || '',

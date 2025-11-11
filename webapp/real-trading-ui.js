@@ -1373,7 +1373,8 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         importOption.value = '__import_creator__';
         importOption.textContent = '➕ Import Creator Key';
         importOption.dataset.action = 'import';
-        selectEl.appendChild(importOption);
+        const insertPosition = selectEl.children[1] || null;
+        selectEl.insertBefore(importOption, insertPosition);
     }
 
     if (wallets.length > 0) {

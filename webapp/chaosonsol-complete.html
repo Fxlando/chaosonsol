@@ -294,6 +294,29 @@
                 <span class="text-gray-300" id="sol-price">$0.00</span>
             </div>
         </div>
+
+        <!-- Launch Blueprint Selector -->
+        <div class="modal fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden" id="launch-blueprint-modal">
+            <div class="modal-dialog max-w-xl mx-auto mt-20 bg-neutral-900 border border-neutral-700 rounded-xl shadow-lg overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Apply Blueprint</h3>
+                        <p class="text-xs text-gray-500">Load a saved blueprint into the launch configurator.</p>
+                    </div>
+                    <button class="text-gray-400 hover:text-white transition" onclick="closeModal('launch-blueprint-modal')">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4 max-h-[420px] overflow-y-auto" id="launch-blueprint-list"></div>
+                <div class="px-6 py-8 text-center text-sm text-gray-500 border-t border-neutral-800 hidden" id="launch-blueprint-empty">
+                    <div class="text-3xl mb-3">📋</div>
+                    <p>No blueprints available yet. Create one from the Blueprint view.</p>
+                    <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="navigateToPage('blueprint'); closeModal('launch-blueprint-modal')">
+                        Manage Blueprints
+                    </button>
+                </div>
+            </div>
+        </div>
         
         <div class="p-3 border-t border-neutral-800 flex items-center justify-between text-xs">
             <span>ChaosOnSolana v3.13.0</span>
@@ -1210,6 +1233,9 @@
                                 <span class="font-mono text-gray-400" id="selected-token-address">Address...</span>
                                 <i data-lucide="copy" class="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-300"></i>
                             </div>
+                            <div class="mt-2">
+                                <span id="token-status" class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-neutral-800 text-gray-300">STATUS</span>
+                            </div>
                             <div class="flex items-center gap-3 mt-2 text-sm text-gray-400">
                                 <a href="#" class="hover:text-white">🌐</a>
                                 <a href="#" class="hover:text-white">𝕏</a>
@@ -1237,66 +1263,9 @@
             </div>
             
             <div class="flex-1 overflow-auto p-6">
-                <div class="grid grid-cols-3 gap-6">
-                    <div class="col-span-1">
-                        <div class="bg-neutral-900 rounded-lg overflow-hidden mb-6">
-                            <table class="w-full text-sm">
-                                <thead class="bg-neutral-800">
-                                    <tr>
-                                        <th class="text-left p-3 text-gray-400">Wallet</th>
-                                        <th class="text-left p-3 text-gray-400">Balance</th>
-                                        <th class="text-left p-3 text-gray-400">Buy Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="token-wallets-table"></tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
-                            <h3 class="text-lg font-semibold mb-4">Tasks</h3>
-                            <div class="space-y-2 text-sm text-gray-400">
-                                <div class="flex items-center justify-between">
-                                    <span>Type</span>
-                                    <span class="text-white">--</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span>Status</span>
-                                    <span class="text-white" id="token-status">PRE-LAUNCH</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span>Value of Holdings</span>
-                                    <span class="text-white">--</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span>Amount Sold</span>
-                                    <span class="text-white">--</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-neutral-900 rounded-lg p-6">
-                            <h3 class="text-lg font-semibold mb-4">Activity</h3>
-                            <div id="token-activity-empty" class="text-sm text-gray-500 text-center py-6">
-                                No live trades captured yet.
-                            </div>
-                            <div id="token-activity-table" class="overflow-x-auto hidden">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-neutral-800 text-gray-400">
-                                            <th class="text-left py-2">Age</th>
-                                            <th class="text-left py-2">Wallet</th>
-                                            <th class="text-left py-2">Type</th>
-                                            <th class="text-right py-2">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="token-activity-body"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-span-2">
-                        <!-- Task Management Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-3">
+                        <!-- Metrics Grid -->
                         <div id="token-metrics-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                             <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
                                 <div class="text-xs uppercase tracking-wide text-gray-400">Total Profit/Loss</div>
@@ -1341,6 +1310,27 @@
                                 <div class="text-xs uppercase tracking-wide text-gray-400">Market Cap</div>
                                 <div id="metric-market-cap" class="mt-2 text-2xl font-semibold text-white">--</div>
                                 <div id="metric-market-cap-detail" class="text-xs text-gray-500 mt-1"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Activity Section -->
+                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
+                            <h3 class="text-lg font-semibold mb-4">Activity</h3>
+                            <div id="token-activity-empty" class="text-sm text-gray-500 text-center py-6">
+                                No live trades captured yet.
+                            </div>
+                            <div id="token-activity-table" class="overflow-x-auto hidden">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-neutral-800 text-gray-400">
+                                            <th class="text-left py-2">Age</th>
+                                            <th class="text-left py-2">Wallet</th>
+                                            <th class="text-left py-2">Type</th>
+                                            <th class="text-right py-2">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="token-activity-body"></tbody>
+                                </table>
                             </div>
                         </div>
                         
@@ -1389,9 +1379,7 @@
                             </div>
                         </div>
                         
-                        <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
-                            Launch
-                        </button>
+                        
                     </div>
                 </div>
             </div>
@@ -1412,7 +1400,7 @@
                         <span class="text-3xl">🚀</span>
                         <h1 class="text-2xl font-semibold">Launch Token</h1>
                     </div>
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition">
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition" onclick="openLaunchBlueprintModal()">
                         Apply Blueprint
                     </button>
                 </div>

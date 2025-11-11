@@ -3682,6 +3682,8 @@ window.submitBlueprintForm = submitBlueprintForm;
 window.applyBlueprint = applyBlueprint;
 window.deleteBlueprint = deleteBlueprint;
 window.renderBlueprintList = renderBlueprintList;
+window.openLaunchBlueprintModal = openLaunchBlueprintModal;
+window.applyBlueprintToLaunchFromSelector = applyBlueprintToLaunchFromSelector;
 window.collectAllFees = collectAllFees;
 window.collectTradingFees = collectTradingFees;
 window.collectRentFees = collectRentFees;
@@ -4194,127 +4196,7 @@ function updateTokenMetrics({
     }
 }
 
-function renderLaunchPlanTable(record) {
-    const table = getElement('token-wallets-table');
-    if (!table) {
-        return;
-    }
-
-    if (!record) {
-        table.innerHTML = `
-            <tr>
-                <td colspan="3" class="p-4 text-center text-gray-500 text-sm">
-                    Select a token to view launch configuration.
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    if (record.type !== 'draft') {
-        const creatorWallet = record.creatorWallet || record.creatorWalletId || 'Unknown';
-        const creatorLabel = record.creatorWalletLabel || '';
-        const launchpad = record.launchpad || record.platform || 'Pump.fun';
-        const launchedAt = record.launchedAt ? formatRelativeTime(record.launchedAt) : null;
-
-        table.innerHTML = `
-            <tr class="border-t border-neutral-800">
-                <td class="p-3">
-                    <div class="flex flex-col">
-                        <span class="text-sm text-gray-300 font-medium">Creator Wallet</span>
-                        <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(creatorWallet))}</code>
-                        ${creatorLabel ? `<span class="text-xs text-gray-500">${escapeHtml(creatorLabel)}</span>` : ''}
-                    </div>
-                </td>
-                <td class="p-3">
-                    <span class="px-2 py-1 rounded-full bg-purple-900/40 text-purple-200 text-xs">${escapeHtml(launchpad)}</span>
-                </td>
-                <td class="p-3 text-sm text-gray-400">
-                    ${launchedAt ? `Launched ${escapeHtml(launchedAt)}` : 'Launch date unavailable'}
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    const launchConfig = record.launchConfig || createDefaultLaunchConfig();
-    const rows = [];
-
-    const creatorDetails =
-        resolveCreatorWalletDetails(launchConfig.devWalletId || record.creatorWalletId || record.creatorWallet) || null;
-
-    rows.push(`
-        <tr class="border-t border-neutral-800">
-            <td class="p-3">
-                <div class="flex flex-col">
-                    <span class="text-sm text-gray-300 font-medium">Creator Wallet</span>
-                    <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(creatorDetails?.address || 'Not set'))}</code>
-                    ${
-                        creatorDetails?.name
-                            ? `<span class="text-xs text-gray-500">${escapeHtml(creatorDetails.name)}</span>`
-                            : ''
-                    }
-                </div>
-            </td>
-            <td class="p-3">
-                <span class="text-sm text-gray-200">${launchConfig.devBuyAmount !== null ? formatSol(launchConfig.devBuyAmount) : '—'}</span>
-            </td>
-            <td class="p-3 text-xs text-gray-500">
-                Creator buy amount to seed liquidity
-            </td>
-        </tr>
-    `);
-
-    if (launchConfig.blockZero?.enabled && launchConfig.blockZero.selections) {
-        const selections = Object.entries(launchConfig.blockZero.selections).slice(0, 10);
-        if (selections.length) {
-            selections.forEach(([walletId, config]) => {
-                const walletDetails = resolveCreatorWalletDetails(walletId) || { address: walletId };
-                rows.push(`
-                    <tr class="border-t border-neutral-800">
-                        <td class="p-3">
-                            <div class="flex flex-col">
-                                <span class="text-sm text-gray-300 font-medium">Block Zero Wallet</span>
-                                <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(walletDetails.address))}</code>
-                                ${
-                                    walletDetails.name
-                                        ? `<span class="text-xs text-gray-500">${escapeHtml(walletDetails.name)}</span>`
-                                        : ''
-                                }
-                            </div>
-                        </td>
-                        <td class="p-3">
-                            <span class="text-sm text-gray-200">${config.amount !== null ? formatSol(config.amount) : '—'}</span>
-                        </td>
-                        <td class="p-3 text-xs text-gray-500">
-                            Scheduled Block Zero buy (${escapeHtml(launchConfig.blockZero.mode || 'quick').toUpperCase()})
-                        </td>
-                    </tr>
-                `);
-            });
-        } else {
-            rows.push(`
-                <tr class="border-t border-neutral-800">
-                    <td class="p-3 text-sm text-gray-300">Block Zero</td>
-                    <td class="p-3 text-sm text-gray-400">Enabled</td>
-                    <td class="p-3 text-xs text-gray-500">Select wallets to finalize Block Zero snipes.</td>
-                </tr>
-            `);
-        }
-    } else {
-        rows.push(`
-            <tr class="border-t border-neutral-800">
-                <td class="p-3 text-sm text-gray-300">Block Zero</td>
-                <td class="p-3 text-sm text-gray-400">Disabled</td>
-                <td class="p-3 text-xs text-gray-500">Enable in launch configurator to prepare snipes.</td>
-            </tr>
-        `);
-    }
-
-    table.innerHTML = rows.join('');
-}
-
-function resetHoldingsTable({ message = 'No wallet balances available yet.', isLoading = false } = {}) {
+function resetHoldingsTable({ message = 'Holdings will populate once the token is launched.', isLoading = false } = {}) {
     const body = getElement('token-holdings-body');
     if (!body) return;
     const loadingIcon = isLoading ? '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>' : '';
@@ -4329,6 +4211,110 @@ function resetHoldingsTable({ message = 'No wallet balances available yet.', isL
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+}
+
+function renderLaunchBlueprintList() {
+    const listEl = getElement('launch-blueprint-list');
+    const emptyEl = getElement('launch-blueprint-empty');
+    if (!listEl || !emptyEl) {
+        return;
+    }
+
+    const ready = ensureMultiWalletReady();
+    const blueprints = ready ? multiWalletManager.getBlueprints() || [] : [];
+
+    if (!ready || blueprints.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        listEl.classList.add('hidden');
+        return;
+    }
+
+    emptyEl.classList.add('hidden');
+    listEl.classList.remove('hidden');
+
+    const cards = blueprints
+        .slice()
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        .map((blueprint) => {
+            const launch = blueprint.settings?.launch || {};
+            const automations = blueprint.settings?.automations || {};
+            const launchDetails = [];
+
+            if (launch.devBuyAmount !== undefined) {
+                launchDetails.push(`Dev buy ${formatSol(launch.devBuyAmount)}`);
+            }
+            if (launch.initialBuyAmount !== undefined) {
+                launchDetails.push(`Initial buy ${formatSol(launch.initialBuyAmount)}`);
+            }
+            if (automations.smartSell?.enabled) {
+                launchDetails.push('Smart Sell enabled');
+            }
+            if (automations.volumeBot?.enabled) {
+                launchDetails.push('Volume Bot enabled');
+            }
+
+            const detailText = launchDetails.length
+                ? launchDetails.join(' • ')
+                : 'No launch notes provided';
+
+            return `
+                <div class="bg-neutral-800 border border-neutral-700 rounded-lg px-5 py-4">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <div class="text-sm font-semibold text-white">${escapeHtml(blueprint.name || 'Untitled Blueprint')}</div>
+                            <div class="text-xs text-gray-500 mt-1">${escapeHtml(blueprint.description || 'No description')}</div>
+                        </div>
+                        <span class="text-[11px] text-gray-500">${formatRelativeTime(blueprint.updatedAt || blueprint.createdAt || Date.now())}</span>
+                    </div>
+                    <div class="mt-3 text-xs text-gray-400">${escapeHtml(detailText)}</div>
+                    <div class="mt-4 flex items-center justify-end gap-2">
+                        <button class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded transition"
+                            onclick="applyBlueprintToLaunchFromSelector('${blueprint.id}')">
+                            Apply
+                        </button>
+                        <button class="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-gray-200 text-xs rounded transition"
+                            onclick="navigateToPage('blueprint'); closeModal('launch-blueprint-modal')">
+                            Manage
+                        </button>
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    listEl.innerHTML = cards;
+}
+
+function openLaunchBlueprintModal() {
+    if (!ensureMultiWalletReady()) {
+        notify('Load wallets before applying a blueprint.', 'warning');
+    }
+    renderLaunchBlueprintList();
+    window.openModal('launch-blueprint-modal');
+}
+
+async function applyBlueprintToLaunchFromSelector(blueprintId) {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    if (!blueprint) {
+        notify('Blueprint not found.', 'error');
+        return;
+    }
+
+    applyBlueprintToLaunch(blueprint);
+    closeModal('launch-blueprint-modal');
+
+    try {
+        await prepareLaunchTokenView();
+    } catch (error) {
+        console.warn('Unable to refresh launch view after blueprint apply:', error);
+    }
+
+    navigateToPage('launch-token');
 }
 
 function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = null } = {}) {
@@ -5302,7 +5288,6 @@ function populateTokenDetailView(record) {
 
     updateTokenDetailLinks(record);
 
-    renderLaunchPlanTable(record);
     resetTokenMetrics();
     resetHoldingsTable({
         message: isDraft

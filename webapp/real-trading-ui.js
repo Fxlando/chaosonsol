@@ -2,6 +2,8 @@
 // 100% Solana Blockchain Integration
 
 let solana;
+let fallbackSolanaConnection = null;
+let cachedTokenProgramId = null;
 let rtSelectedWallets = new Set();
 let rtCurrentView = 'wallets';
 let vanityKeyStore = [];
@@ -953,7 +955,7 @@ function switchView(viewName) {
             .catch((error) => {
                 console.error('Failed to prepare launch token view:', error);
                 notify(`Unable to prepare launch token view: ${error.message}`, 'error');
-            });
+        });
     }
 
     if (viewName === 'blueprint') {
@@ -2322,33 +2324,33 @@ function openLaunchLinks(tokenMint) {
 async function executeSaveTokenDraft() {
     if (tokenLaunchState.isSavingDraft) {
         notify('Save already in progress...', 'warning');
-        return;
-    }
+            return;
+        }
 
-    const name = document.getElementById('token-name')?.value?.trim();
-    const symbol = document.getElementById('token-symbol')?.value?.trim();
-    const description = document.getElementById('token-description')?.value?.trim();
-    const website = document.getElementById('token-website')?.value?.trim();
-    const twitter = document.getElementById('token-twitter')?.value?.trim();
-    const telegram = document.getElementById('token-telegram')?.value?.trim();
-    const useVanity = document.getElementById('use-vanity')?.checked || false;
+        const name = document.getElementById('token-name')?.value?.trim();
+        const symbol = document.getElementById('token-symbol')?.value?.trim();
+        const description = document.getElementById('token-description')?.value?.trim();
+        const website = document.getElementById('token-website')?.value?.trim();
+        const twitter = document.getElementById('token-twitter')?.value?.trim();
+        const telegram = document.getElementById('token-telegram')?.value?.trim();
+        const useVanity = document.getElementById('use-vanity')?.checked || false;
     const initialBuyAmount = safeNumber(document.getElementById('initial-buy-amount')?.value);
 
-    if (!name || !symbol) {
+        if (!name || !symbol) {
         notify('Token name and symbol are required to save a draft.', 'error');
         addConsoleLog('❌ Draft save aborted: missing name or symbol.', 'error');
-        return;
-    }
-
-    const platform = uiHelperState.tokenPlatform || 'pumpfun';
-    if (platform !== 'pumpfun') {
-        notify(`Platform ${platform} is not supported yet. Please choose Pump.fun.`, 'error');
-        addConsoleLog(`❌ Unsupported platform selected: ${platform}`, 'error');
-        if (typeof window.selectTokenPlatform === 'function') {
-            window.selectTokenPlatform('pumpfun');
+            return;
         }
-        return;
-    }
+
+        const platform = uiHelperState.tokenPlatform || 'pumpfun';
+        if (platform !== 'pumpfun') {
+            notify(`Platform ${platform} is not supported yet. Please choose Pump.fun.`, 'error');
+            addConsoleLog(`❌ Unsupported platform selected: ${platform}`, 'error');
+            if (typeof window.selectTokenPlatform === 'function') {
+                window.selectTokenPlatform('pumpfun');
+            }
+            return;
+        }
 
     const creatorWalletId = tokenLaunchState.selectedWalletId || '';
     if (!creatorWalletId) {
@@ -2374,34 +2376,34 @@ async function executeSaveTokenDraft() {
                 addConsoleLog(`⚠️ Smart Sell disabled for draft: ${validation.message}`, 'warning');
             } else {
                 smartSellConfig = (() => {
-                    const config = {
-                        enabled: true,
-                        walletSelector: smartSellSelection,
-                        walletMode: smartSellSelection.mode,
-                        walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
-                        walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
-                        walletGroupName:
-                            smartSellSelection.mode === 'group'
-                                ? getWalletGroupById(smartSellSelection.groupId)?.name || null
-                                : null,
-                        profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
-                        stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
-                        trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
-                        partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
-                        sellPercentages: [25, 25, 25, 25]
-                    };
+                  const config = {
+                      enabled: true,
+                      walletSelector: smartSellSelection,
+                      walletMode: smartSellSelection.mode,
+                      walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
+                      walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
+                      walletGroupName:
+                          smartSellSelection.mode === 'group'
+                              ? getWalletGroupById(smartSellSelection.groupId)?.name || null
+                              : null,
+                      profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
+                      stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
+                      trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
+                      partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
+                      sellPercentages: [25, 25, 25, 25]
+                  };
 
-                    if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                        delete config.walletIds;
-                    }
-                    if (!config.walletGroupId) {
-                        delete config.walletGroupId;
-                    }
-                    if (!config.walletGroupName) {
-                        delete config.walletGroupName;
-                    }
+                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                      delete config.walletIds;
+                  }
+                  if (!config.walletGroupId) {
+                      delete config.walletGroupId;
+                  }
+                  if (!config.walletGroupName) {
+                      delete config.walletGroupName;
+                  }
 
-                    return config;
+                  return config;
                 })();
             }
         }
@@ -2414,79 +2416,79 @@ async function executeSaveTokenDraft() {
                 addConsoleLog(`⚠️ Volume Bot disabled for draft: ${validation.message}`, 'warning');
             } else {
                 volumeBotConfig = (() => {
-                    const readNumber = (id) => {
-                        const value = parseFloat(document.getElementById(id)?.value ?? '');
-                        return Number.isFinite(value) ? value : null;
-                    };
+                  const readNumber = (id) => {
+                      const value = parseFloat(document.getElementById(id)?.value ?? '');
+                      return Number.isFinite(value) ? value : null;
+                  };
 
-                    const config = {
-                        enabled: true,
-                        walletSelector: volumeSelection,
-                        walletMode: volumeSelection.mode,
-                        walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
-                        walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
-                        walletGroupName:
-                            volumeSelection.mode === 'group'
-                                ? getWalletGroupById(volumeSelection.groupId)?.name || null
-                                : null,
-                        buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
-                        sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
-                        cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
-                        randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
-                        randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
-                    };
+                  const config = {
+                      enabled: true,
+                      walletSelector: volumeSelection,
+                      walletMode: volumeSelection.mode,
+                      walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
+                      walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
+                      walletGroupName:
+                          volumeSelection.mode === 'group'
+                              ? getWalletGroupById(volumeSelection.groupId)?.name || null
+                              : null,
+                      buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
+                      sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
+                      cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
+                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
+                      randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
+                  };
 
-                    const minAmount = readNumber('volume-bot-min-amount');
-                    const maxAmount = readNumber('volume-bot-max-amount');
-                    if (minAmount !== null) config.minAmount = minAmount;
-                    if (maxAmount !== null) config.maxAmount = maxAmount;
+                  const minAmount = readNumber('volume-bot-min-amount');
+                  const maxAmount = readNumber('volume-bot-max-amount');
+                  if (minAmount !== null) config.minAmount = minAmount;
+                  if (maxAmount !== null) config.maxAmount = maxAmount;
 
-                    const buyInterval = readNumber('volume-bot-buy-interval');
-                    const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
-                    const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
-                    if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
-                    if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
-                    if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
+                  const buyInterval = readNumber('volume-bot-buy-interval');
+                  const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
+                  const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
+                  if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
+                  if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
+                  if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
 
-                    const sellInterval = readNumber('volume-bot-sell-interval');
-                    const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
-                    const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
-                    if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
-                    if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
-                    if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
+                  const sellInterval = readNumber('volume-bot-sell-interval');
+                  const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
+                  const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
+                  if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
+                  if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
+                  if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
 
-                    const sellPercentMin = readNumber('volume-bot-sell-percent-min');
-                    const sellPercentMax = readNumber('volume-bot-sell-percent-max');
-                    if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
-                    if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
+                  const sellPercentMin = readNumber('volume-bot-sell-percent-min');
+                  const sellPercentMax = readNumber('volume-bot-sell-percent-max');
+                  if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
+                  if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
 
-                    const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
-                    const guardrails = {
-                        enabled: guardrailsEnabled,
-                        realizedProfitTarget: readNumber('volume-bot-profit-target'),
-                        realizedLossLimit: readNumber('volume-bot-loss-limit')
-                    };
+                  const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
+                  const guardrails = {
+                      enabled: guardrailsEnabled,
+                      realizedProfitTarget: readNumber('volume-bot-profit-target'),
+                      realizedLossLimit: readNumber('volume-bot-loss-limit')
+                  };
 
-                    if (guardrails.realizedProfitTarget === null) {
-                        delete guardrails.realizedProfitTarget;
-                    }
-                    if (guardrails.realizedLossLimit === null) {
-                        delete guardrails.realizedLossLimit;
-                    }
+                  if (guardrails.realizedProfitTarget === null) {
+                      delete guardrails.realizedProfitTarget;
+                  }
+                  if (guardrails.realizedLossLimit === null) {
+                      delete guardrails.realizedLossLimit;
+                  }
 
-                    config.guardrails = guardrails;
+                  config.guardrails = guardrails;
 
-                    if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                        delete config.walletIds;
-                    }
-                    if (!config.walletGroupId) {
-                        delete config.walletGroupId;
-                    }
-                    if (!config.walletGroupName) {
-                        delete config.walletGroupName;
-                    }
+                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                      delete config.walletIds;
+                  }
+                  if (!config.walletGroupId) {
+                      delete config.walletGroupId;
+                  }
+                  if (!config.walletGroupName) {
+                      delete config.walletGroupName;
+                  }
 
-                    return config;
+                  return config;
                 })();
             }
         }
@@ -2527,8 +2529,8 @@ async function executeSaveTokenDraft() {
             id: draftId,
             type: 'draft',
             status: 'PRE-LAUNCH',
-            name,
-            symbol,
+                        name,
+                        symbol,
             description,
             website,
             twitter,
@@ -2536,7 +2538,7 @@ async function executeSaveTokenDraft() {
             image: normalizedImage || embeddedImage,
             imageUri: imageUri || tokenLaunchState.image.uri || null,
             imageBase64: embeddedImage,
-            platform,
+                        platform,
             launchpad: 'Pump.fun',
             useVanity,
             automations: automationsPayload,
@@ -2546,7 +2548,7 @@ async function executeSaveTokenDraft() {
             },
             creatorWalletId: creatorWalletId || '',
             creatorWallet: walletDetails.address || '',
-            creatorWalletLabel: walletDetails.name || '',
+                        creatorWalletLabel: walletDetails.name || '',
             createdAt: now,
             updatedAt: now,
             initialBuyAmount: Number.isFinite(initialBuyAmount) ? initialBuyAmount : null,
@@ -2562,9 +2564,9 @@ async function executeSaveTokenDraft() {
         notify('Token saved as pre-launch draft. Manage it from the Tokens dashboard.', 'success');
         addConsoleLog('✅ Token draft saved to dashboard.', 'success');
 
-        resetCreateTokenForm();
-        setTimeout(() => {
-            switchView('tokens');
+            resetCreateTokenForm();
+            setTimeout(() => {
+                switchView('tokens');
         }, 600);
     } catch (error) {
         console.error('Token draft save failed:', error);
@@ -3959,6 +3961,1044 @@ const tokenRegistry = {
     currentSource: null
 };
 
+const tokenDetailViewState = {
+    currentKey: null,
+    loading: false,
+    lastRuntime: null
+};
+
+const FALLBACK_RPC_ENDPOINT =
+    'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
+const FALLBACK_LAMPORTS_PER_SOL = 1_000_000_000;
+
+function getSolanaConnection() {
+    if (solana?.connection) {
+        return solana.connection;
+    }
+
+    if (!fallbackSolanaConnection && window.solanaWeb3?.Connection) {
+        fallbackSolanaConnection = new window.solanaWeb3.Connection(
+            solana?.rpcEndpoint || FALLBACK_RPC_ENDPOINT,
+            'confirmed'
+        );
+    }
+
+    return fallbackSolanaConnection || null;
+}
+
+function getKnownWallets() {
+    const collection = [];
+    const pushUnique = (wallet, sourceIndex) => {
+        if (!wallet) return;
+        const address = wallet.publicKey || wallet.address || wallet.pubkey || wallet.walletAddress;
+        if (!address) return;
+        const key = address.trim();
+        if (!key) return;
+        if (collection.some((entry) => entry.address === key)) {
+            return;
+        }
+        collection.push({
+            id:
+                wallet.id ||
+                wallet.walletId ||
+                wallet.publicKey ||
+                wallet.address ||
+                wallet.pubkey ||
+                key,
+            address: key,
+            name: wallet.name || wallet.label || wallet.alias || wallet.displayName || '',
+            emoji: wallet.emoji || getWalletEmoji(sourceIndex || collection.length),
+            balance: typeof wallet.balance === 'number' ? wallet.balance : null,
+            tags: Array.isArray(wallet.tags) ? wallet.tags : []
+        });
+    };
+
+    if (Array.isArray(tokenLaunchState.wallets)) {
+        tokenLaunchState.wallets.forEach((wallet, index) => pushUnique(wallet, index));
+    }
+
+    if (Array.isArray(window.solana?.wallets)) {
+        window.solana.wallets.forEach((wallet, index) => pushUnique(wallet, index));
+    }
+
+    if (typeof window.walletOperations?.getWallets === 'function') {
+        try {
+            const opsWallets = window.walletOperations.getWallets();
+            if (Array.isArray(opsWallets)) {
+                opsWallets.forEach((wallet, index) => pushUnique(wallet, index));
+            }
+        } catch (error) {
+            console.warn('Unable to include wallet-operations wallets:', error);
+        }
+    }
+
+    return collection;
+}
+
+function truncateMiddle(value, prefix = 4, suffix = 4) {
+    if (!value || typeof value !== 'string') {
+        return '';
+    }
+    if (value.length <= prefix + suffix + 3) {
+        return value;
+    }
+    return `${value.slice(0, prefix)}...${value.slice(-suffix)}`;
+}
+
+function resetTokenMetrics() {
+    const metricIds = [
+        'metric-profit-loss',
+        'metric-profit-loss-detail',
+        'metric-amount-invested',
+        'metric-amount-invested-detail',
+        'metric-token-holdings',
+        'metric-token-holdings-detail',
+        'metric-holdings-value',
+        'metric-holdings-value-detail',
+        'metric-amount-sold',
+        'metric-amount-sold-detail',
+        'metric-price-per-token',
+        'metric-price-per-token-detail',
+        'metric-market-cap',
+        'metric-market-cap-detail',
+        'metric-bonding-percent'
+    ];
+
+    metricIds.forEach((id) => {
+        const el = getElement(id);
+        if (!el) return;
+        if (id.endsWith('-detail')) {
+            el.textContent = '';
+        } else {
+            el.textContent = '—';
+        }
+    });
+
+    const bar = getElement('metric-bonding-bar');
+    if (bar) {
+        bar.style.width = '0%';
+    }
+}
+
+function updateTokenMetrics({
+    priceSol = null,
+    priceUsd = null,
+    marketCapUsd = null,
+    bondingPercent = null,
+    totalTokenHoldings = null,
+    holdingsValueSol = null,
+    holdingsValueUsd = null,
+    amountInvestedSol = null,
+    amountSoldSol = null,
+    profitLossSol = null,
+    solPrice = null,
+    source = ''
+} = {}) {
+    const formatMaybeSol = (value) => (value !== null ? formatSol(value) : '—');
+    const formatMaybeUsd = (value) => (value !== null ? formatUSD(value) : '—');
+
+    const priceDisplay = (() => {
+        if (priceSol === null && priceUsd === null) {
+            return '—';
+        }
+        if (priceSol !== null && priceUsd !== null) {
+            return `${priceSol.toFixed(priceSol >= 1 ? 3 : 6)} SOL (${formatUSD(priceUsd)})`;
+        }
+        if (priceSol !== null) {
+            return `${priceSol.toFixed(priceSol >= 1 ? 3 : 6)} SOL`;
+        }
+        return formatUSD(priceUsd);
+    })();
+
+    const profitDisplay = profitLossSol !== null ? formatSol(profitLossSol) : '—';
+    const profitDetail =
+        profitLossSol !== null && holdingsValueUsd !== null
+            ? `${formatUSD(profitLossSol * (solPrice || 0))} converted`
+            : '';
+
+    const amountInvestedDisplay = amountInvestedSol !== null ? formatSol(amountInvestedSol) : '—';
+    const holdingsDisplay =
+        totalTokenHoldings !== null
+            ? `${totalTokenHoldings.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`
+            : '—';
+    const holdingsDetail =
+        holdingsValueSol !== null
+            ? `${formatSol(holdingsValueSol)}${holdingsValueUsd !== null ? ` (${formatUSD(holdingsValueUsd)})` : ''}`
+            : '';
+
+    const amountSoldDisplay = amountSoldSol !== null ? formatSol(amountSoldSol) : '—';
+    const amountSoldDetail =
+        amountSoldSol !== null && solPrice !== null ? `${formatUSD(amountSoldSol * solPrice)}` : '';
+
+    const priceDetail = source ? `Source: ${source.toUpperCase()}` : '';
+    const marketCapDisplay = marketCapUsd !== null ? formatUSD(marketCapUsd) : '—';
+
+    const bondingDisplay =
+        bondingPercent !== null && Number.isFinite(bondingPercent)
+            ? `${Math.max(0, Math.min(100, bondingPercent)).toFixed(1)}%`
+            : '—';
+
+    const profitEl = getElement('metric-profit-loss');
+    if (profitEl) profitEl.textContent = profitDisplay;
+    const profitDetailEl = getElement('metric-profit-loss-detail');
+    if (profitDetailEl) profitDetailEl.textContent = profitDetail;
+
+    const investedEl = getElement('metric-amount-invested');
+    if (investedEl) investedEl.textContent = amountInvestedDisplay;
+    const investedDetailEl = getElement('metric-amount-invested-detail');
+    if (investedDetailEl && amountInvestedSol !== null && solPrice !== null) {
+        investedDetailEl.textContent = formatUSD(amountInvestedSol * solPrice);
+    } else if (investedDetailEl) {
+        investedDetailEl.textContent = '';
+    }
+
+    const holdingsEl = getElement('metric-token-holdings');
+    if (holdingsEl) holdingsEl.textContent = holdingsDisplay;
+    const holdingsDetailEl = getElement('metric-token-holdings-detail');
+    if (holdingsDetailEl) holdingsDetailEl.textContent = holdingsDetail;
+
+    const holdingsValueEl = getElement('metric-holdings-value');
+    if (holdingsValueEl) holdingsValueEl.textContent = formatMaybeSol(holdingsValueSol);
+    const holdingsValueDetailEl = getElement('metric-holdings-value-detail');
+    if (holdingsValueDetailEl) holdingsValueDetailEl.textContent = holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '';
+
+    const soldEl = getElement('metric-amount-sold');
+    if (soldEl) soldEl.textContent = amountSoldDisplay;
+    const soldDetailEl = getElement('metric-amount-sold-detail');
+    if (soldDetailEl) soldDetailEl.textContent = amountSoldDetail;
+
+    const priceEl = getElement('metric-price-per-token');
+    if (priceEl) priceEl.textContent = priceDisplay;
+    const priceDetailEl = getElement('metric-price-per-token-detail');
+    if (priceDetailEl) priceDetailEl.textContent = priceDetail;
+
+    const marketCapEl = getElement('metric-market-cap');
+    if (marketCapEl) marketCapEl.textContent = marketCapDisplay;
+
+    const marketCapDetailEl = getElement('metric-market-cap-detail');
+    if (marketCapDetailEl && marketCapUsd !== null) {
+        marketCapDetailEl.textContent = solPrice ? `${formatSol(marketCapUsd / solPrice)} equivalent` : '';
+    } else if (marketCapDetailEl) {
+        marketCapDetailEl.textContent = '';
+    }
+
+    const bondingPercentEl = getElement('metric-bonding-percent');
+    if (bondingPercentEl) bondingPercentEl.textContent = bondingDisplay;
+
+    const bondingBar = getElement('metric-bonding-bar');
+    if (bondingBar) {
+        const width = bondingPercent !== null && Number.isFinite(bondingPercent)
+            ? `${Math.max(0, Math.min(100, bondingPercent))}%`
+            : '0%';
+        bondingBar.style.width = width;
+    }
+}
+
+function renderLaunchPlanTable(record) {
+    const table = getElement('token-wallets-table');
+    if (!table) {
+        return;
+    }
+
+    if (!record) {
+        table.innerHTML = `
+            <tr>
+                <td colspan="3" class="p-4 text-center text-gray-500 text-sm">
+                    Select a token to view launch configuration.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (record.type !== 'draft') {
+        const creatorWallet = record.creatorWallet || record.creatorWalletId || 'Unknown';
+        const creatorLabel = record.creatorWalletLabel || '';
+        const launchpad = record.launchpad || record.platform || 'Pump.fun';
+        const launchedAt = record.launchedAt ? formatRelativeTime(record.launchedAt) : null;
+
+        table.innerHTML = `
+            <tr class="border-t border-neutral-800">
+                <td class="p-3">
+                    <div class="flex flex-col">
+                        <span class="text-sm text-gray-300 font-medium">Creator Wallet</span>
+                        <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(creatorWallet))}</code>
+                        ${creatorLabel ? `<span class="text-xs text-gray-500">${escapeHtml(creatorLabel)}</span>` : ''}
+                    </div>
+                </td>
+                <td class="p-3">
+                    <span class="px-2 py-1 rounded-full bg-purple-900/40 text-purple-200 text-xs">${escapeHtml(launchpad)}</span>
+                </td>
+                <td class="p-3 text-sm text-gray-400">
+                    ${launchedAt ? `Launched ${escapeHtml(launchedAt)}` : 'Launch date unavailable'}
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const launchConfig = record.launchConfig || createDefaultLaunchConfig();
+    const rows = [];
+
+    const creatorDetails =
+        resolveCreatorWalletDetails(launchConfig.devWalletId || record.creatorWalletId || record.creatorWallet) || null;
+
+    rows.push(`
+        <tr class="border-t border-neutral-800">
+            <td class="p-3">
+                <div class="flex flex-col">
+                    <span class="text-sm text-gray-300 font-medium">Creator Wallet</span>
+                    <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(creatorDetails?.address || 'Not set'))}</code>
+                    ${
+                        creatorDetails?.name
+                            ? `<span class="text-xs text-gray-500">${escapeHtml(creatorDetails.name)}</span>`
+                            : ''
+                    }
+                </div>
+            </td>
+            <td class="p-3">
+                <span class="text-sm text-gray-200">${launchConfig.devBuyAmount !== null ? formatSol(launchConfig.devBuyAmount) : '—'}</span>
+            </td>
+            <td class="p-3 text-xs text-gray-500">
+                Creator buy amount to seed liquidity
+            </td>
+        </tr>
+    `);
+
+    if (launchConfig.blockZero?.enabled && launchConfig.blockZero.selections) {
+        const selections = Object.entries(launchConfig.blockZero.selections).slice(0, 10);
+        if (selections.length) {
+            selections.forEach(([walletId, config]) => {
+                const walletDetails = resolveCreatorWalletDetails(walletId) || { address: walletId };
+                rows.push(`
+                    <tr class="border-t border-neutral-800">
+                        <td class="p-3">
+                            <div class="flex flex-col">
+                                <span class="text-sm text-gray-300 font-medium">Block Zero Wallet</span>
+                                <code class="text-xs text-gray-400">${escapeHtml(truncateMiddle(walletDetails.address))}</code>
+                                ${
+                                    walletDetails.name
+                                        ? `<span class="text-xs text-gray-500">${escapeHtml(walletDetails.name)}</span>`
+                                        : ''
+                                }
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <span class="text-sm text-gray-200">${config.amount !== null ? formatSol(config.amount) : '—'}</span>
+                        </td>
+                        <td class="p-3 text-xs text-gray-500">
+                            Scheduled Block Zero buy (${escapeHtml(launchConfig.blockZero.mode || 'quick').toUpperCase()})
+                        </td>
+                    </tr>
+                `);
+            });
+        } else {
+            rows.push(`
+                <tr class="border-t border-neutral-800">
+                    <td class="p-3 text-sm text-gray-300">Block Zero</td>
+                    <td class="p-3 text-sm text-gray-400">Enabled</td>
+                    <td class="p-3 text-xs text-gray-500">Select wallets to finalize Block Zero snipes.</td>
+                </tr>
+            `);
+        }
+    } else {
+        rows.push(`
+            <tr class="border-t border-neutral-800">
+                <td class="p-3 text-sm text-gray-300">Block Zero</td>
+                <td class="p-3 text-sm text-gray-400">Disabled</td>
+                <td class="p-3 text-xs text-gray-500">Enable in launch configurator to prepare snipes.</td>
+            </tr>
+        `);
+    }
+
+    table.innerHTML = rows.join('');
+}
+
+function resetHoldingsTable({ message = 'No wallet balances available yet.', isLoading = false } = {}) {
+    const body = getElement('token-holdings-body');
+    if (!body) return;
+    const loadingIcon = isLoading ? '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>' : '';
+    body.innerHTML = `
+        <tr>
+            <td colspan="5" class="py-8 text-center text-gray-500 text-sm flex items-center justify-center">
+                ${loadingIcon}
+                <span>${escapeHtml(message)}</span>
+            </td>
+        </tr>
+    `;
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = null } = {}) {
+    const body = getElement('token-holdings-body');
+    if (!body) {
+        return;
+    }
+
+    if (!Array.isArray(holdings) || holdings.length === 0) {
+        resetHoldingsTable({ message: 'No token holdings detected across managed wallets.' });
+        return;
+    }
+
+    const rows = holdings
+        .map((holding) => {
+            const solBalanceLabel =
+                holding.solBalance !== null && holding.solBalance !== undefined
+                    ? formatSol(holding.solBalance)
+                    : '—';
+
+            const tokenBalanceLabel =
+                holding.tokenBalance !== null && holding.tokenBalance !== undefined
+                    ? `${holding.tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+                    : '—';
+
+            let tokenValueLabel = '';
+            if (priceSol !== null && holding.tokenBalance !== null) {
+                const valueSol = holding.tokenBalance * priceSol;
+                const valueUsd =
+                    priceUsd !== null && priceSol > 0 ? valueSol * (priceUsd / priceSol) : null;
+                tokenValueLabel = `${formatSol(valueSol)}${
+                    valueUsd !== null ? ` (${formatUSD(valueUsd)})` : ''
+                }`;
+            }
+
+            const actions = [];
+            if (holding.walletId) {
+                actions.push(
+                    `<button class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1 rounded transition"
+                        onclick="handleWalletTradeAction('buy', '${holding.walletId}', '${holding.address}', '${holding.tokenMint}')">
+                        Buy
+                    </button>`
+                );
+
+                if (holding.tokenBalance && holding.tokenBalance > 0) {
+                    [25, 50, 100].forEach((percentage) => {
+                        actions.push(
+                            `<button class="bg-neutral-800 hover:bg-neutral-700 text-white text-xs px-2 py-1 rounded transition"
+                                onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint}', ${percentage}, ${holding.tokenBalance})">
+                                ${percentage}%
+                            </button>`
+                        );
+                    });
+                }
+            } else {
+                actions.push('<span class="text-xs text-gray-500">Read-only wallet</span>');
+            }
+
+            return `
+                <tr class="border-b border-neutral-800">
+                    <td class="py-3">
+                        <div class="flex items-center gap-2">
+                            <span>${escapeHtml(holding.emoji || '👛')}</span>
+                            <div>
+                                <div class="text-sm text-white">${escapeHtml(holding.name || 'Unnamed Wallet')}</div>
+                                <div class="text-xs text-gray-500">${holding.tags?.length ? escapeHtml(holding.tags.join(', ')) : ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-3">
+                        <div class="flex items-center gap-2">
+                            <code class="font-mono text-xs text-gray-300">${escapeHtml(truncateMiddle(holding.address))}</code>
+                            <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition"
+                                onclick="copyAddress('${holding.address}')">
+                                Copy
+                            </button>
+                        </div>
+                    </td>
+                    <td class="py-3">${solBalanceLabel}</td>
+                    <td class="py-3">
+                        <div class="flex flex-col">
+                            <span class="text-sm text-gray-200">${tokenBalanceLabel}</span>
+                            ${tokenValueLabel ? `<span class="text-xs text-gray-500 mt-1">${tokenValueLabel}</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="py-3">
+                        <div class="flex flex-wrap gap-1">${actions.join('')}</div>
+                    </td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    body.innerHTML = rows;
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function renderTokenActivity(entries = [], { loading = false, isLive = false } = {}) {
+    const empty = getElement('token-activity-empty');
+    const tableWrapper = getElement('token-activity-table');
+    const tbody = getElement('token-activity-body');
+
+    if (!empty || !tableWrapper || !tbody) {
+        return;
+    }
+
+    if (loading) {
+        empty.classList.remove('hidden');
+        empty.innerHTML = `
+            <div class="flex items-center justify-center text-sm text-gray-500">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin mr-2"></i>
+                <span>${isLive ? 'Streaming live trades…' : 'Loading activity…'}</span>
+            </div>
+        `;
+        tableWrapper.classList.add('hidden');
+        return;
+    }
+
+    if (!Array.isArray(entries) || entries.length === 0) {
+        empty.classList.remove('hidden');
+        empty.innerHTML = `
+            <div class="text-sm text-gray-500">
+                ${isLive ? 'No live trades captured yet.' : 'No activity recorded.'}
+            </div>
+        `;
+        tableWrapper.classList.add('hidden');
+        return;
+    }
+
+    tableWrapper.classList.remove('hidden');
+    empty.classList.add('hidden');
+
+    const rows = entries
+        .map((entry) => {
+            const age = entry.timestamp ? formatRelativeTime(entry.timestamp) : '—';
+            const walletLabel = entry.wallet ? truncateMiddle(entry.wallet) : '—';
+            const typeBadgeClass =
+                entry.type === 'buy'
+                    ? 'text-emerald-300'
+                    : entry.type === 'sell'
+                    ? 'text-rose-300'
+                    : 'text-gray-300';
+            const amountLabel = entry.amountSol !== undefined && entry.amountSol !== null
+                ? `${entry.amountSol.toFixed(entry.amountSol >= 1 ? 3 : 6)} SOL`
+                : entry.amountTokens !== undefined && entry.amountTokens !== null
+                ? `${entry.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`
+                : '—';
+
+            return `
+                <tr class="border-b border-neutral-800 last:border-b-0">
+                    <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
+                    <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
+                    <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
+                    <td class="py-2 text-sm text-right text-gray-200">${amountLabel}</td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    tbody.innerHTML = rows;
+}
+
+async function fetchPumpFunTradeFeed(mint, limit = 20) {
+    try {
+        const response = await fetch(`${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${mint}`);
+        if (!response.ok) {
+            throw new Error(`Pump.fun responded with ${response.status}`);
+        }
+        const data = await response.json();
+        const candidateArrays = [
+            data?.trades,
+            data?.recent_trades,
+            data?.recentTrades,
+            data?.latest_transactions,
+            data?.transactions
+        ].filter(Array.isArray);
+
+        const entries = [];
+        candidateArrays.forEach((collection) => {
+            collection.forEach((item) => {
+                const rawType = String(
+                    item?.type ||
+                        item?.action ||
+                        item?.side ||
+                        item?.event_type ||
+                        item?.transaction_type ||
+                        ''
+                ).toLowerCase();
+
+                let type = 'trade';
+                if (rawType.includes('buy')) {
+                    type = 'buy';
+                } else if (rawType.includes('sell')) {
+                    type = 'sell';
+                }
+
+                const timestamp =
+                    normalizeTimestamp(
+                        item?.timestamp ||
+                            item?.time ||
+                            item?.blockTime ||
+                            item?.block_timestamp ||
+                            item?.created_at
+                    ) || null;
+
+                const amountSol = safeNumber(
+                    item?.sol_amount ||
+                        item?.solAmount ||
+                        item?.amountSol ||
+                        item?.amount_sol ||
+                        item?.sol
+                );
+                const amountTokens = safeNumber(
+                    item?.token_amount ||
+                        item?.tokenAmount ||
+                        item?.amountTokens ||
+                        item?.token_quantity
+                );
+                const wallet =
+                    item?.wallet ||
+                    item?.owner ||
+                    item?.trader ||
+                    item?.buyer ||
+                    item?.seller ||
+                    item?.user ||
+                    item?.signature ||
+                    '';
+
+                entries.push({
+                    timestamp,
+                    wallet,
+                    type,
+                    amountSol: amountSol !== null ? amountSol : null,
+                    amountTokens: amountTokens !== null ? amountTokens : null
+                });
+            });
+        });
+
+        return entries
+            .filter((entry) => entry.timestamp)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .slice(0, limit);
+    } catch (error) {
+        console.warn(`Pump.fun trade feed unavailable for ${mint}:`, error.message || error);
+        return [];
+    }
+}
+
+async function fetchPumpFunTokenDetails(mint) {
+    if (!mint) return null;
+    try {
+        await ensureApiClientReady();
+        const info = await window.apiClient.getPumpFunToken(mint);
+        if (!info) {
+            return null;
+        }
+        if (info.success === false && !info.marketCap && !info.price) {
+            return null;
+        }
+        return info;
+    } catch (error) {
+        console.warn(`Pump.fun token lookup failed for ${mint}:`, error.message || error);
+        return null;
+    }
+}
+
+async function fetchTokenPriceDetails(mint, { solPrice = null } = {}) {
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        console.warn('API client unavailable for price lookup:', error.message || error);
+    }
+
+    try {
+        const response = await window.apiClient.getTokenPrice(mint);
+        if (!response || response.success === false) {
+            return { priceSol: null, priceUsd: null, source: null, marketCapUsd: null };
+        }
+
+        let priceSol = null;
+        let priceUsd = null;
+        if (response.source === 'pumpfun') {
+            priceUsd = safeNumber(response.price);
+            if (priceUsd !== null && solPrice) {
+                priceSol = priceUsd / solPrice;
+            }
+        } else if (response.source === 'jupiter') {
+            const tokensPerSol = safeNumber(response.price);
+            if (tokensPerSol && tokensPerSol > 0) {
+                priceSol = 1 / tokensPerSol;
+                if (solPrice) {
+                    priceUsd = priceSol * solPrice;
+                }
+            }
+        }
+
+        return {
+            priceSol,
+            priceUsd,
+            source: response.source || null,
+            marketCapUsd: safeNumber(response.marketCap)
+        };
+    } catch (error) {
+        console.warn(`Token price lookup failed for ${mint}:`, error.message || error);
+        return { priceSol: null, priceUsd: null, source: null, marketCapUsd: null };
+    }
+}
+
+async function fetchTokenBalanceViaConnection(connection, walletAddress, mint) {
+    if (!connection || !walletAddress || !mint || !window.solanaWeb3?.PublicKey) {
+        return null;
+    }
+    try {
+        const owner = new window.solanaWeb3.PublicKey(walletAddress);
+        const mintKey = new window.solanaWeb3.PublicKey(mint);
+        const response = await connection.getParsedTokenAccountsByOwner(owner, { mint: mintKey });
+        if (!response?.value?.length) {
+            return 0;
+        }
+        const tokenAmount = response.value[0]?.account?.data?.parsed?.info?.tokenAmount;
+        if (!tokenAmount) {
+            return 0;
+        }
+        if (typeof tokenAmount.uiAmount === 'number') {
+            return tokenAmount.uiAmount;
+        }
+        if (typeof tokenAmount.uiAmountString === 'string') {
+            return Number(tokenAmount.uiAmountString);
+        }
+        if (typeof tokenAmount.amount === 'string' && tokenAmount.decimals !== undefined) {
+            const raw = Number(tokenAmount.amount);
+            if (Number.isFinite(raw)) {
+                return raw / Math.pow(10, tokenAmount.decimals);
+            }
+        }
+        return 0;
+    } catch (error) {
+        console.warn(`Token balance fetch failed for ${walletAddress} / ${mint}:`, error.message || error);
+        return null;
+    }
+}
+
+async function fetchSolBalanceViaConnection(connection, walletAddress) {
+    if (!connection || !walletAddress || !window.solanaWeb3?.PublicKey) {
+        return null;
+    }
+    try {
+        const publicKey = new window.solanaWeb3.PublicKey(walletAddress);
+        const lamports = await connection.getBalance(publicKey);
+        const denominator = window.solanaWeb3?.LAMPORTS_PER_SOL || FALLBACK_LAMPORTS_PER_SOL;
+        return lamports / denominator;
+    } catch (error) {
+        console.warn(`SOL balance fetch failed for ${walletAddress}:`, error.message || error);
+        return null;
+    }
+}
+
+async function fetchWalletHoldingsForMint(mint, { priceSol = null } = {}) {
+    const connection = getSolanaConnection();
+    const wallets = getKnownWallets();
+    if (!connection || wallets.length === 0) {
+        return { holdings: [], summary: { totalTokenBalance: 0, totalHoldingsSol: 0 } };
+    }
+
+    const results = await Promise.all(
+        wallets.map(async (wallet, index) => {
+            const address = wallet.address;
+            if (!address) {
+                return null;
+            }
+
+            let tokenBalance = null;
+            if (solana?.getTokenBalance) {
+                try {
+                    tokenBalance = await solana.getTokenBalance(address, mint);
+                } catch (error) {
+                    console.warn(`Token balance via solana integration failed (${address}):`, error.message || error);
+                }
+            }
+            if (tokenBalance === null) {
+                tokenBalance = await fetchTokenBalanceViaConnection(connection, address, mint);
+            }
+
+            let solBalance = typeof wallet.balance === 'number' ? wallet.balance : null;
+            if (solBalance === null && solana?.getBalance) {
+                try {
+                    solBalance = await solana.getBalance(address);
+                } catch (error) {
+                    console.warn(`SOL balance via solana integration failed (${address}):`, error.message || error);
+                }
+            }
+            if (solBalance === null) {
+                solBalance = await fetchSolBalanceViaConnection(connection, address);
+            }
+
+            return {
+                walletId: wallet.id || null,
+                address,
+                name: wallet.name || '',
+                emoji: wallet.emoji || getWalletEmoji(index),
+                tags: wallet.tags || [],
+                solBalance: solBalance !== null && Number.isFinite(solBalance) ? solBalance : null,
+                tokenBalance: tokenBalance !== null && Number.isFinite(tokenBalance) ? tokenBalance : null,
+                tokenMint: mint
+            };
+        })
+    );
+
+    const holdings = results.filter(Boolean);
+
+    const summary = holdings.reduce(
+        (acc, holding) => {
+            if (holding.tokenBalance && Number.isFinite(holding.tokenBalance)) {
+                acc.totalTokenBalance += holding.tokenBalance;
+                if (priceSol !== null) {
+                    acc.totalHoldingsSol += holding.tokenBalance * priceSol;
+                }
+            }
+            return acc;
+        },
+        { totalTokenBalance: 0, totalHoldingsSol: 0 }
+    );
+
+    return { holdings, summary };
+}
+
+async function fetchRuntimeAutomationsForMint(mint) {
+    const tasks = [];
+    const stats = {
+        totalVolume: 0,
+        activeSessions: 0
+    };
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        console.warn('Unable to connect to automation backend:', error.message || error);
+        return { tasks, stats };
+    }
+
+    const [volumeResp, smartResp] = await Promise.all([
+        window.apiClient
+            .getVolumeSessions()
+            .catch((error) => {
+                console.warn('Volume session lookup failed:', error.message || error);
+                return null;
+            }),
+        window.apiClient
+            .getSmartSellPositions()
+            .catch((error) => {
+                console.warn('Smart Sell positions lookup failed:', error.message || error);
+                return null;
+            })
+    ]);
+
+    if (volumeResp?.success && Array.isArray(volumeResp.sessions)) {
+        const relevantSessions = volumeResp.sessions.filter(
+            (session) => (session?.tokenMint || '').toLowerCase() === mint.toLowerCase()
+        );
+        relevantSessions.forEach((session) => {
+            const sessionVolume = safeNumber(session?.stats?.totalVolume) || 0;
+            stats.totalVolume += sessionVolume;
+            if (session?.isActive) {
+                stats.activeSessions += 1;
+            }
+
+            const detailLines = [];
+            if (Array.isArray(session.walletIds)) {
+                detailLines.push(`Wallets: ${session.walletIds.length}`);
+            }
+            if (session?.stats?.cyclesCompleted) {
+                detailLines.push(`Cycles: ${session.stats.cyclesCompleted}`);
+            }
+            if (sessionVolume > 0) {
+                detailLines.push(`Volume: ${sessionVolume.toFixed(sessionVolume >= 1 ? 3 : 6)} SOL`);
+            }
+
+            tasks.push({
+                title: 'Volume Bot',
+                icon: 'activity',
+                iconBackground: 'bg-blue-900/60',
+                statusLabel: session?.isActive ? 'Running' : 'Stopped',
+                statusClass: session?.isActive ? 'bg-emerald-900/60 text-emerald-200' : 'bg-neutral-800 text-gray-300',
+                details: detailLines
+            });
+        });
+    }
+
+    if (smartResp?.success && Array.isArray(smartResp.positions)) {
+        const relevantPositions = smartResp.positions.filter(
+            (position) => (position?.tokenMint || '').toLowerCase() === mint.toLowerCase()
+        );
+
+        relevantPositions.forEach((position) => {
+            const detailLines = [];
+            if (position.walletId) {
+                detailLines.push(`Wallet: ${truncateMiddle(position.walletId)}`);
+            }
+            if (position.profitLoss !== undefined && position.profitLoss !== null) {
+                detailLines.push(`PnL: ${position.profitLoss.toFixed(4)} SOL`);
+            }
+            if (position.entryPrice !== undefined && position.entryPrice !== null) {
+                detailLines.push(`Entry: ${position.entryPrice.toFixed(6)} SOL`);
+            }
+
+            tasks.push({
+                title: 'Smart Sell',
+                icon: 'shield',
+                iconBackground: 'bg-purple-900/60',
+                statusLabel: position.enabled === false ? 'Paused' : 'Monitoring',
+                statusClass: position.enabled === false ? 'bg-yellow-900/60 text-yellow-200' : 'bg-emerald-900/60 text-emerald-200',
+                details: detailLines
+            });
+        });
+    }
+
+    return { tasks, stats };
+}
+
+async function loadLiveTokenDetail(record) {
+    if (!record || !record.mint) {
+        return;
+    }
+
+    const runtimeKey = record.mint;
+    if (tokenDetailViewState.loading && tokenDetailViewState.currentKey === runtimeKey) {
+        return;
+    }
+
+    tokenDetailViewState.loading = true;
+    tokenDetailViewState.currentKey = runtimeKey;
+
+    resetHoldingsTable({ message: 'Syncing wallet balances…', isLoading: true });
+    renderTokenTaskList(record, { loading: true });
+    renderTokenActivity([], { loading: true, isLive: true });
+
+    try {
+        const solPrice = await (solana?.getSolPrice?.() || Promise.resolve(null));
+
+        const [pumpFunInfo, priceDetails, runtimeAutomations, holdingsResult, activity] = await Promise.all([
+            fetchPumpFunTokenDetails(record.mint),
+            fetchTokenPriceDetails(record.mint, { solPrice }),
+            fetchRuntimeAutomationsForMint(record.mint),
+            fetchWalletHoldingsForMint(record.mint, {}),
+            fetchPumpFunTradeFeed(record.mint, 20)
+        ]);
+
+        const priceSol = priceDetails.priceSol ?? null;
+        const priceUsd = priceDetails.priceUsd ?? null;
+        const marketCapUsd = priceDetails.marketCapUsd ?? (pumpFunInfo ? safeNumber(pumpFunInfo.marketCap) : null);
+        const bondingPercent =
+            pumpFunInfo && pumpFunInfo.bondingCurve && safeNumber(pumpFunInfo.bondingCurve?.percentComplete) !== null
+                ? safeNumber(pumpFunInfo.bondingCurve.percentComplete)
+                : pumpFunInfo && pumpFunInfo.bondingCurvePercentage !== undefined
+                ? safeNumber(pumpFunInfo.bondingCurvePercentage)
+                : null;
+
+        const holdingsSummary = holdingsResult.summary || { totalTokenBalance: 0, totalHoldingsSol: 0 };
+        const holdingsValueSol =
+            priceSol !== null ? holdingsSummary.totalTokenBalance * priceSol : holdingsSummary.totalHoldingsSol || null;
+        const holdingsValueUsd =
+            holdingsValueSol !== null && solPrice ? holdingsValueSol * solPrice : null;
+
+        const amountInvestedSol = safeNumber(record.initialBuyAmount);
+        const amountSoldSol =
+            runtimeAutomations.stats.totalVolume > 0 ? runtimeAutomations.stats.totalVolume : null;
+
+        let profitLossSol = null;
+        if (holdingsValueSol !== null && amountInvestedSol !== null) {
+            const soldComponent = amountSoldSol || 0;
+            profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+        }
+
+        updateTokenMetrics({
+            priceSol,
+            priceUsd,
+            marketCapUsd,
+            bondingPercent,
+            totalTokenHoldings: holdingsSummary.totalTokenBalance,
+            holdingsValueSol,
+            holdingsValueUsd,
+            amountInvestedSol: amountInvestedSol ?? null,
+            amountSoldSol,
+            profitLossSol,
+            solPrice,
+            source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')
+        });
+
+        renderTokenHoldingsTable(holdingsResult.holdings, {
+            priceSol,
+            priceUsd
+        });
+
+        renderTokenTaskList(record, {
+            mode: 'runtime',
+            runtimeTasks: runtimeAutomations.tasks
+        });
+
+        renderTokenActivity(activity, { isLive: true });
+
+        tokenDetailViewState.lastRuntime = Date.now();
+    } catch (error) {
+        console.error('Failed to load live token data:', error);
+        notify(`Unable to load live token dashboard: ${error.message || error}`, 'error');
+        resetHoldingsTable({ message: 'Live holdings unavailable. Try reloading or check RPC connection.' });
+    } finally {
+        tokenDetailViewState.loading = false;
+    }
+}
+
+async function handleWalletTradeAction(action, walletId, walletAddress, tokenMint, percentage = null, tokenBalance = null) {
+    const current = tokenRegistry.current;
+    if (!walletId) {
+        notify('This wallet is tracked read-only. Import the private key to trade.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    try {
+        if (action === 'buy') {
+            const input = prompt('Enter SOL amount to buy with this wallet:', '0.1');
+            const amount = Number(input);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                notify('Buy cancelled.', 'info');
+                return;
+            }
+            addConsoleLog(`🟢 Executing buy of ${amount} SOL from ${walletAddress}`, 'info');
+            const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
+            if (!response?.success) {
+                throw new Error(response?.error || 'Buy operation failed');
+            }
+            notify(`Submitted buy for ${amount} SOL`, 'success');
+        } else if (action === 'sell-percentage') {
+            if (!tokenBalance || tokenBalance <= 0) {
+                notify('No token balance available to sell.', 'warning');
+                return;
+            }
+            const tokenAmount = tokenBalance * (percentage / 100);
+            if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
+                notify('Sell amount is zero.', 'warning');
+                return;
+            }
+            addConsoleLog(
+                `🔻 Selling ${percentage}% (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`,
+                'info'
+            );
+            const response = await window.apiClient.sellToken(walletId, tokenMint, tokenAmount, { executor: 'jito' });
+            if (!response?.success) {
+                throw new Error(response?.error || 'Sell operation failed');
+            }
+            notify(`Submitted sell for ${percentage}% of holdings`, 'success');
+        }
+
+        if (current && current.mint === tokenMint) {
+            setTimeout(() => loadLiveTokenDetail(current), 1500);
+        }
+    } catch (error) {
+        console.error('Wallet action failed:', error);
+        notify(`Trade failed: ${error.message || error}`, 'error');
+    }
+}
+
 function truncateText(value, maxLength = 80) {
     if (!value || value.length <= maxLength) {
         return value || '';
@@ -4095,12 +5135,12 @@ function buildTokenRow(record) {
     const isDraft = record.type === 'draft';
     const balanceLabel =
         !isDraft && record.balance !== undefined && record.balance !== null
-            ? `${record.balance.toFixed ? record.balance.toFixed(4) : record.balance} SOL`
-            : '—';
+        ? `${record.balance.toFixed ? record.balance.toFixed(4) : record.balance} SOL`
+        : '—';
     const realizedProfitLabel =
         !isDraft && record.realizedProfit !== undefined && record.realizedProfit !== null
-            ? `${formatUsd(record.realizedProfit)}`
-            : '—';
+        ? `${formatUsd(record.realizedProfit)}`
+        : '—';
 
     let statusClass = 'bg-blue-900/40 text-blue-200';
     if (isDraft) {
@@ -4193,6 +5233,8 @@ function populateTokenDetailView(record) {
     if (!record) return;
     tokenRegistry.current = record;
     tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
+    tokenDetailViewState.currentKey = record.mint || record.id || null;
+    tokenDetailViewState.lastRuntime = null;
 
     const nameEl = document.getElementById('selected-token-name');
     const titleEl = document.getElementById('selected-token-title');
@@ -4239,14 +5281,14 @@ function populateTokenDetailView(record) {
             copyIcon.onclick = null;
         } else {
             copyIcon.classList.remove('opacity-40', 'pointer-events-none');
-            copyIcon.onclick = async () => {
-                try {
-                    await navigator.clipboard.writeText(record.mint);
-                    notify('Token mint copied to clipboard.', 'success');
-                } catch (error) {
-                    notify('Unable to copy mint address.', 'error');
-                }
-            };
+        copyIcon.onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(record.mint);
+                notify('Token mint copied to clipboard.', 'success');
+            } catch (error) {
+                notify('Unable to copy mint address.', 'error');
+            }
+        };
         }
     }
 
@@ -4260,18 +5302,31 @@ function populateTokenDetailView(record) {
 
     updateTokenDetailLinks(record);
 
-    const walletsTable = document.getElementById('token-wallets-table');
-    if (walletsTable) {
-        walletsTable.innerHTML = `
-            <tr>
-                <td colspan="3" class="p-4 text-center text-gray-500 text-sm">
-                    Wallet breakdown will appear once balances are synced.
-                </td>
-            </tr>
-        `;
+    renderLaunchPlanTable(record);
+    resetTokenMetrics();
+    resetHoldingsTable({
+        message: isDraft
+            ? 'Holdings will populate once the token is launched.'
+            : 'Fetching live wallet balances…'
+    });
+    renderTokenActivity([], { isLive: !isDraft, loading: !isDraft });
+
+    if (isDraft) {
+        renderTokenTaskList(record, { mode: 'draft' });
+        return;
     }
 
-    renderTokenTaskList(record);
+    renderTokenTaskList(record, { loading: true });
+
+    if (!record.mint) {
+        notify('Token mint unavailable; live dashboards require a mint address.', 'warning');
+        return;
+    }
+
+    loadLiveTokenDetail(record).catch((error) => {
+        console.error('Failed to load live token detail:', error);
+        notify(`Unable to load live token metrics: ${error.message}`, 'error');
+    });
 }
 
 function buildAutomationTaskEntries(record = {}) {
@@ -4475,7 +5530,7 @@ function buildAutomationTaskEntries(record = {}) {
     return tasks;
 }
 
-function renderTokenTaskList(record) {
+function renderTokenTaskList(record, options = {}) {
     const list = getElement('active-tasks-list');
     const emptyState = getElement('no-tasks-state');
 
@@ -4483,10 +5538,132 @@ function renderTokenTaskList(record) {
         return;
     }
 
-    const tasks = buildAutomationTaskEntries(record);
-    const canEdit = record?.type === 'draft';
+    const mode = options.mode || (record?.type === 'draft' ? 'draft' : 'runtime');
 
-    if (!tasks.length) {
+    if (options.loading) {
+        list.innerHTML = `
+            <div class="flex items-center justify-center py-8 text-sm text-gray-500">
+                <i class="animate-spin mr-2" data-lucide="loader-2"></i>
+                <span>Loading live automations…</span>
+            </div>
+        `;
+        if (emptyState) {
+            emptyState.classList.add('hidden');
+        }
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    if (mode === 'draft') {
+        const tasks = buildAutomationTaskEntries(record);
+        const canEdit = record?.type === 'draft';
+
+        if (!tasks.length) {
+            list.innerHTML = '';
+            if (emptyState) {
+                emptyState.classList.remove('hidden');
+            }
+            return;
+        }
+
+        const rowsHtml = tasks
+            .map((task) => {
+                const description = task.details
+                    .filter((detail) => detail && detail.label && detail.value)
+                    .map((detail) => `${detail.label}: ${detail.value}`)
+                    .join(' • ');
+
+                const actions = [];
+
+                if (canEdit) {
+                    actions.push(
+                        task.enabled
+                            ? { type: 'pause', icon: 'square', label: 'Pause' }
+                            : { type: 'resume', icon: 'play', label: 'Resume' }
+                    );
+                    actions.push({ type: 'remove', icon: 'trash-2', label: 'Remove' });
+                }
+
+                const actionsHtml = actions
+                    .map(
+                        (action) => `
+                            <button
+                                class="inline-flex items-center justify-center text-gray-400 hover:text-white transition p-1"
+                                title="${escapeHtml(action.label)}"
+                                onclick="handleTokenTaskAction('${action.type}', '${task.key}')"
+                            >
+                                <i data-lucide="${action.icon}" class="w-4 h-4"></i>
+                            </button>
+                        `
+                    )
+                    .join('');
+
+                return `
+                    <tr class="border-b border-neutral-800 last:border-b-0">
+                        <td class="py-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 ${task.iconBackground} rounded-lg flex items-center justify-center">
+                                    <i data-lucide="${task.icon}" class="w-4 h-4 text-white"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-semibold text-white">${escapeHtml(task.title)}</div>
+                                    ${
+                                        description
+                                            ? `<div class="text-xs text-gray-400">${escapeHtml(description)}</div>`
+                                            : ''
+                                    }
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 align-middle">
+                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${task.statusClass}">
+                                ${escapeHtml(task.statusLabel)}
+                            </span>
+                        </td>
+                        <td class="py-3 text-right align-middle">
+                            ${
+                                actionsHtml
+                                    ? `<div class="inline-flex items-center gap-1">${actionsHtml}</div>`
+                                    : '<span class="text-xs text-gray-500">Read-only</span>'
+                            }
+                        </td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        list.innerHTML = `
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-gray-300">
+                    <thead>
+                        <tr class="border-b border-neutral-800 text-xs uppercase tracking-wide text-gray-500">
+                            <th class="text-left py-2 font-medium">Task</th>
+                            <th class="text-left py-2 font-medium">Status</th>
+                            <th class="text-right py-2 font-medium">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        if (emptyState) {
+            emptyState.classList.add('hidden');
+        }
+
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    const runtimeTasks = Array.isArray(options.runtimeTasks) ? options.runtimeTasks : [];
+
+    if (!runtimeTasks.length) {
         list.innerHTML = '';
         if (emptyState) {
             emptyState.classList.remove('hidden');
@@ -4494,47 +5671,37 @@ function renderTokenTaskList(record) {
         return;
     }
 
-    const rowsHtml = tasks
+    const rowsHtml = runtimeTasks
         .map((task) => {
-            const description = task.details
-                .filter((detail) => detail && detail.label && detail.value)
-                .map((detail) => `${detail.label}: ${detail.value}`)
-                .join(' • ');
+            const description = Array.isArray(task.details) ? task.details.filter(Boolean).join(' • ') : '';
+            const badgeClass = task.statusClass || 'bg-neutral-800 text-gray-200';
 
-            const actions = [];
-
-            if (canEdit) {
-                actions.push(
-                    task.enabled
-                        ? { type: 'pause', icon: 'square', label: 'Pause' }
-                        : { type: 'resume', icon: 'play', label: 'Resume' }
-                );
-                actions.push({ type: 'remove', icon: 'trash-2', label: 'Remove' });
-            }
-
-            const actionsHtml = actions
-                .map(
-                    (action) => `
-                        <button
-                            class="inline-flex items-center justify-center text-gray-400 hover:text-white transition p-1"
-                            title="${escapeHtml(action.label)}"
-                            onclick="handleTokenTaskAction('${action.type}', '${task.key}')"
-                        >
-                            <i data-lucide="${action.icon}" class="w-4 h-4"></i>
-                        </button>
-                    `
-                )
-                .join('');
+            const actionsHtml = Array.isArray(task.actions) && task.actions.length
+                ? task.actions
+                      .map(
+                          (action) => `
+                            <button
+                                class="inline-flex items-center justify-center text-${action.intent || 'gray'}-300 hover:text-white transition p-1"
+                                title="${escapeHtml(action.label)}"
+                                ${action.disabled ? 'disabled class="opacity-50 cursor-not-allowed"' : ''}
+                                onclick="${action.onClick || ''}"
+                            >
+                                <i data-lucide="${action.icon || 'zap'}" class="w-4 h-4"></i>
+                            </button>
+                        `
+                      )
+                      .join('')
+                : '<span class="text-xs text-gray-500">Managed automatically</span>';
 
             return `
                 <tr class="border-b border-neutral-800 last:border-b-0">
                     <td class="py-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 ${task.iconBackground} rounded-lg flex items-center justify-center">
-                                <i data-lucide="${task.icon}" class="w-4 h-4 text-white"></i>
+                            <div class="w-8 h-8 ${task.iconBackground || 'bg-neutral-800'} rounded-lg flex items-center justify-center">
+                                <i data-lucide="${task.icon || 'activity'}" class="w-4 h-4 text-white"></i>
                             </div>
                             <div>
-                                <div class="text-sm font-semibold text-white">${escapeHtml(task.title)}</div>
+                                <div class="text-sm font-semibold text-white">${escapeHtml(task.title || 'Automation')}</div>
                                 ${
                                     description
                                         ? `<div class="text-xs text-gray-400">${escapeHtml(description)}</div>`
@@ -4544,16 +5711,14 @@ function renderTokenTaskList(record) {
                         </div>
                     </td>
                     <td class="py-3 align-middle">
-                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${task.statusClass}">
-                            ${escapeHtml(task.statusLabel)}
+                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${badgeClass}">
+                            ${escapeHtml(task.statusLabel || 'Unknown')}
                         </span>
                     </td>
                     <td class="py-3 text-right align-middle">
-                        ${
-                            actionsHtml
-                                ? `<div class="inline-flex items-center gap-1">${actionsHtml}</div>`
-                                : '<span class="text-xs text-gray-500">Read-only</span>'
-                        }
+                        <div class="inline-flex items-center gap-1">
+                            ${actionsHtml}
+                        </div>
                     </td>
                 </tr>
             `;
@@ -4565,9 +5730,9 @@ function renderTokenTaskList(record) {
             <table class="w-full text-sm text-gray-300">
                 <thead>
                     <tr class="border-b border-neutral-800 text-xs uppercase tracking-wide text-gray-500">
-                        <th class="text-left py-2 font-medium">Task</th>
+                        <th class="text-left py-2 font-medium">Automation</th>
                         <th class="text-left py-2 font-medium">Status</th>
-                        <th class="text-right py-2 font-medium">Actions</th>
+                        <th class="text-right py-2 font-medium">Controls</th>
                     </tr>
                 </thead>
                 <tbody>

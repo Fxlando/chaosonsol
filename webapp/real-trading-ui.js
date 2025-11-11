@@ -4199,15 +4199,29 @@ function updateTokenMetrics({
     }
 }
 
+function updateTokenLastRuntime(timestamp = null) {
+    const runtimeEl = getElement('token-last-runtime');
+    if (!runtimeEl) {
+        return;
+    }
+    if (!timestamp) {
+        runtimeEl.textContent = '—';
+        return;
+    }
+    runtimeEl.textContent = formatRelativeTime(timestamp);
+}
+
 function resetHoldingsTable({ message = 'Holdings will populate once the token is launched.', isLoading = false } = {}) {
     const body = getElement('token-holdings-body');
     if (!body) return;
     const loadingIcon = isLoading ? '<i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i>' : '';
     body.innerHTML = `
         <tr>
-            <td colspan="5" class="py-8 text-center text-gray-500 text-sm flex items-center justify-center">
-                ${loadingIcon}
-                <span>${escapeHtml(message)}</span>
+            <td colspan="5" class="py-10 px-4 text-center text-sm text-gray-500 bg-black/30">
+                <div class="flex items-center justify-center gap-2">
+                    ${loadingIcon}
+                    <span>${escapeHtml(message)}</span>
+                </div>
             </td>
         </tr>
     `;
@@ -4353,58 +4367,97 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                 }`;
             }
 
-            const actions = [];
-            if (holding.walletId) {
-                actions.push(
-                    `<button class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1 rounded transition"
-                        onclick="handleWalletTradeAction('buy', '${holding.walletId}', '${holding.address}', '${holding.tokenMint}')">
-                        Buy
-                    </button>`
-                );
+            const walletTags =
+                Array.isArray(holding.tags) && holding.tags.length
+                    ? `<div class="flex flex-wrap gap-1 mt-1">${holding.tags
+                          .map(
+                              (tag) =>
+                                  `<span class="px-2 py-0.5 text-[10px] rounded-full bg-neutral-900 text-gray-400 border border-neutral-800">${escapeHtml(
+                                      tag
+                                  )}</span>`
+                          )
+                          .join('')}</div>`
+                    : '';
 
-                if (holding.tokenBalance && holding.tokenBalance > 0) {
-                    [25, 50, 100].forEach((percentage) => {
-                        actions.push(
-                            `<button class="bg-neutral-800 hover:bg-neutral-700 text-white text-xs px-2 py-1 rounded transition"
-                                onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint}', ${percentage}, ${holding.tokenBalance})">
-                                ${percentage}%
+            let actionMarkup = '<span class="text-xs text-gray-500">Read-only wallet</span>';
+
+            if (holding.walletId) {
+                const quickBuyOptions = [0.1, 0.5, 1];
+                const quickBuyButtons = quickBuyOptions
+                    .map(
+                        (amount) => `
+                            <button class="px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-900 text-gray-300 border border-neutral-800 hover:bg-neutral-800 transition"
+                                onclick="handleQuickBuy('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${amount})">
+                                ${amount}
                             </button>`
-                        );
-                    });
-                }
-            } else {
-                actions.push('<span class="text-xs text-gray-500">Read-only wallet</span>');
+                    )
+                    .join('');
+
+                const sellButtons =
+                    holding.tokenBalance && holding.tokenBalance > 0
+                        ? [25, 50, 100]
+                              .map(
+                                  (percentage) => `
+                                <button class="px-2 py-1 rounded-md text-[11px] bg-neutral-900 text-gray-400 border border-neutral-800 hover:bg-neutral-800 transition"
+                                    onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${percentage}, ${holding.tokenBalance})">
+                                    ${percentage}%
+                                </button>`
+                              )
+                              .join('')
+                        : '';
+
+                actionMarkup = `
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                        <div class="flex items-center gap-1">${quickBuyButtons}</div>
+                        <button class="px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition border border-emerald-500/40"
+                            onclick="handleWalletTradeAction('buy', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')">
+                            Buy
+                        </button>
+                        ${sellButtons}
+                        ${
+                            holding.tokenBalance && holding.tokenBalance > 0
+                                ? `<button class="px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/70 text-rose-200 border border-rose-900 hover:bg-rose-800/80 transition"
+                                    onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', 100, ${holding.tokenBalance})">
+                                    Sell
+                                </button>`
+                                : ''
+                        }
+                    </div>
+                `;
             }
 
             return `
-                <tr class="border-b border-neutral-800">
-                    <td class="py-3">
-                        <div class="flex items-center gap-2">
-                            <span>${escapeHtml(holding.emoji || '👛')}</span>
+                <tr class="border-b border-neutral-900/60 hover:bg-black/40 transition">
+                    <td class="py-4 pl-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">${escapeHtml(holding.emoji || '👛')}</span>
                             <div>
-                                <div class="text-sm text-white">${escapeHtml(holding.name || 'Unnamed Wallet')}</div>
-                                <div class="text-xs text-gray-500">${holding.tags?.length ? escapeHtml(holding.tags.join(', ')) : ''}</div>
+                                <div class="text-sm font-semibold text-white">${escapeHtml(holding.name || 'Unnamed Wallet')}</div>
+                                ${walletTags}
                             </div>
                         </div>
                     </td>
-                    <td class="py-3">
+                    <td class="py-4 text-gray-400">
                         <div class="flex items-center gap-2">
-                            <code class="font-mono text-xs text-gray-300">${escapeHtml(truncateMiddle(holding.address))}</code>
-                            <button class="bg-neutral-800 hover:bg-neutral-700 text-xs text-gray-300 px-2 py-1 rounded transition"
+                            <code class="font-mono text-xs text-gray-300 bg-black/40 px-2 py-1 rounded-md border border-neutral-900">${escapeHtml(
+                                truncateMiddle(holding.address)
+                            )}</code>
+                            <button class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] bg-neutral-900 text-gray-300 border border-neutral-800 hover:bg-neutral-800 transition"
                                 onclick="copyAddress('${holding.address}')">
+                                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
                                 Copy
                             </button>
                         </div>
                     </td>
-                    <td class="py-3">${solBalanceLabel}</td>
-                    <td class="py-3">
-                        <div class="flex flex-col">
-                            <span class="text-sm text-gray-200">${tokenBalanceLabel}</span>
-                            ${tokenValueLabel ? `<span class="text-xs text-gray-500 mt-1">${tokenValueLabel}</span>` : ''}
-                        </div>
+                    <td class="py-4 text-gray-300">
+                        <div class="font-medium">${solBalanceLabel}</div>
                     </td>
-                    <td class="py-3">
-                        <div class="flex flex-wrap gap-1">${actions.join('')}</div>
+                    <td class="py-4 text-gray-300">
+                        <div class="font-medium">${tokenBalanceLabel}</div>
+                        ${tokenValueLabel ? `<div class="text-[11px] text-gray-500 mt-1">${tokenValueLabel}</div>` : ''}
+                    </td>
+                    <td class="py-4 pr-4">
+                        ${actionMarkup}
                     </td>
                 </tr>
             `;
@@ -4994,6 +5047,7 @@ async function loadLiveTokenDetail(record) {
         renderTokenActivity(activity, { isLive: true });
 
         tokenDetailViewState.lastRuntime = Date.now();
+        updateTokenLastRuntime(tokenDetailViewState.lastRuntime);
     } catch (error) {
         console.error('Failed to load live token data:', error);
         notify(`Unable to load live token dashboard: ${error.message || error}`, 'error');
@@ -5059,6 +5113,57 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
         console.error('Wallet action failed:', error);
         notify(`Trade failed: ${error.message || error}`, 'error');
     }
+}
+
+async function handleQuickBuy(walletId, walletAddress, tokenMint, solAmount) {
+    const amount = Number(solAmount);
+
+    if (!walletId) {
+        notify('This wallet is tracked read-only. Import the private key to trade.', 'warning');
+        return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+        notify('Invalid quick buy amount.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    try {
+        addConsoleLog(`🟢 Quick buy ${amount} SOL from ${walletAddress}`, 'info');
+        const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
+        if (!response?.success) {
+            throw new Error(response?.error || 'Buy operation failed');
+        }
+        notify(`Submitted buy for ${amount} SOL`, 'success');
+
+        if (tokenRegistry.current && tokenRegistry.current.mint === tokenMint) {
+            setTimeout(() => loadLiveTokenDetail(tokenRegistry.current), 1500);
+        }
+    } catch (error) {
+        console.error('Quick buy failed:', error);
+        notify(`Quick buy failed: ${error.message || error}`, 'error');
+    }
+}
+
+function resyncTokenHoldings() {
+    const current = tokenRegistry.current;
+    if (!current) {
+        notify('Select a token before syncing holdings.', 'warning');
+        return;
+    }
+
+    resetHoldingsTable({ message: 'Syncing wallet balances…', isLoading: true });
+    loadLiveTokenDetail(current).catch((error) => {
+        console.error('Unable to re-sync holdings:', error);
+        notify(`Unable to re-sync holdings: ${error.message || error}`, 'error');
+    });
 }
 
 async function handleRuntimeTaskAction(action, taskKey) {
@@ -5362,6 +5467,7 @@ function populateTokenDetailView(record) {
     tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
     tokenDetailViewState.currentKey = record.mint || record.id || null;
     tokenDetailViewState.lastRuntime = null;
+    updateTokenLastRuntime(null);
 
     const nameEl = document.getElementById('selected-token-name');
     const titleEl = document.getElementById('selected-token-title');
@@ -5371,6 +5477,7 @@ function populateTokenDetailView(record) {
     const statusEl = document.getElementById('token-status');
     const copyIcon = document.getElementById('selected-token-copy');
     const prepareButton = document.getElementById('prepare-launch-btn');
+    const platformEl = document.getElementById('selected-token-platform');
 
     const isDraft = record.type === 'draft';
 
@@ -5413,12 +5520,41 @@ function populateTokenDetailView(record) {
         }
     }
 
+    if (platformEl) {
+        const sourceLabel = typeof record.source === 'string' ? record.source : '';
+        const fallbackPlatform =
+            record.type === 'draft'
+                ? ''
+                : record.provider ||
+                  (sourceLabel && sourceLabel.toLowerCase() === 'pumpfun' ? 'Pump.fun' : '') ||
+                  (record.launchSource && typeof record.launchSource === 'string'
+                      ? record.launchSource
+                      : '');
+        const platform =
+            record.launchPlatform ||
+            record.platform ||
+            sourceLabel ||
+            (typeof record.launchSource === 'string' ? record.launchSource : '') ||
+            record.market ||
+            fallbackPlatform;
+        if (platform) {
+            platformEl.textContent = platform;
+            platformEl.classList.remove('hidden');
+        } else {
+            platformEl.textContent = '';
+            platformEl.classList.add('hidden');
+        }
+    }
+
     if (copyIcon) {
+        copyIcon.setAttribute('type', 'button');
         if (isDraft) {
             copyIcon.classList.add('opacity-40', 'pointer-events-none');
+            copyIcon.setAttribute('disabled', 'disabled');
             copyIcon.onclick = null;
         } else {
             copyIcon.classList.remove('opacity-40', 'pointer-events-none');
+            copyIcon.removeAttribute('disabled');
         copyIcon.onclick = async () => {
             try {
                 await navigator.clipboard.writeText(record.mint);
@@ -5436,6 +5572,10 @@ function populateTokenDetailView(record) {
         } else {
             prepareButton.classList.add('hidden');
         }
+    }
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
     }
 
     updateTokenDetailLinks(record);
@@ -5891,6 +6031,8 @@ registerGlobalHandler('showAddVolumeTask', () => openTokenAutomationConfigurator
 registerGlobalHandler('showBulkSellTask', () => openTokenAutomationConfigurator('smartSell'));
 registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bump'));
 registerGlobalHandler('showSellBuybackTask', () => openTokenAutomationConfigurator('sellBuyback'));
+registerGlobalHandler('handleQuickBuy', handleQuickBuy);
+registerGlobalHandler('resyncTokenHoldings', resyncTokenHoldings);
 
 function viewTokenDetails(identifier, source = 'imported') {
     if (!identifier) return;

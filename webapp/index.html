@@ -2405,192 +2405,277 @@
 
         <!-- Token Detail Page -->
         <div id="token-detail-page" class="view flex-1 flex flex-col hidden">
-            <div class="bg-neutral-900 border-b border-neutral-800 p-6">
-                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
-                    <span class="cursor-pointer hover:text-white" onclick="navigateToPage('tokens')">Tokens</span>
+            <div class="bg-neutral-950 border-b border-neutral-900/70 px-6 py-6">
+                <div class="flex items-center gap-2 text-xs text-gray-500 uppercase tracking-wide mb-4">
+                    <span class="cursor-pointer hover:text-white transition" onclick="navigateToPage('tokens')">Tokens</span>
                     <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                    <span class="text-white" id="selected-token-name">Token</span>
+                    <span class="text-white normal-case tracking-normal" id="selected-token-name">Token</span>
                 </div>
-                
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div class="w-16 h-16 bg-neutral-800 rounded-full flex items-center justify-center text-3xl" id="selected-token-icon">🪙</div>
-                        <div>
-                            <h1 class="text-2xl font-semibold mb-1" id="selected-token-title">Token <span class="text-gray-500" id="selected-token-subtitle">Subtitle</span></h1>
-                            <div class="flex items-center gap-2 text-sm">
-                                <span class="font-mono text-gray-400" id="selected-token-address">Address...</span>
-                                <i data-lucide="copy" id="selected-token-copy" class="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-300"></i>
-                            </div>
-                            <div class="mt-2">
-                                <span id="token-status" class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-neutral-800 text-gray-300">STATUS</span>
-                            </div>
-                            <div class="flex items-center gap-3 mt-2 text-sm text-gray-400">
-                                <a id="selected-token-website" href="#" target="_blank" rel="noopener" class="hover:text-white">🌐</a>
-                                <a id="selected-token-twitter" href="#" target="_blank" rel="noopener" class="hover:text-white">𝕏</a>
-                                <a id="selected-token-telegram" href="#" target="_blank" rel="noopener" class="hover:text-white">📱</a>
-                                <a id="selected-token-metadata" href="#" target="_blank" rel="noopener" class="hover:text-white">📥</a>
+
+                <div class="flex flex-col gap-6">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex items-center gap-5">
+                            <div class="w-20 h-20 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-4xl shadow-lg shadow-purple-500/20" id="selected-token-icon">🪙</div>
+                            <div class="space-y-2">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <h1 class="text-3xl font-semibold text-white" id="selected-token-title">Token</h1>
+                                    <span class="text-gray-500 text-2xl" id="selected-token-subtitle">Subtitle</span>
+                                    <span id="token-status" class="inline-flex items-center px-3 py-1 text-xs font-semibold tracking-wide rounded-full bg-neutral-900/80 text-gray-300">STATUS</span>
+                                    <span id="selected-token-platform" class="hidden px-3 py-1 text-[11px] rounded-full bg-purple-900/30 text-purple-200 tracking-wide uppercase">Pump.fun</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3 text-sm text-gray-400 font-mono">
+                                    <span id="selected-token-address">Address...</span>
+                                    <button id="selected-token-copy" class="flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-neutral-900 hover:bg-neutral-800 transition text-gray-300 border border-neutral-800">
+                                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                        Copy
+                                    </button>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3 text-sm text-gray-400">
+                                    <a id="selected-token-website" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-white transition">
+                                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                                        Website
+                                    </a>
+                                    <a id="selected-token-twitter" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-white transition">
+                                        <i data-lucide="twitter" class="w-3.5 h-3.5"></i>
+                                        X
+                                    </a>
+                                    <a id="selected-token-telegram" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-white transition">
+                                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                        Telegram
+                                    </a>
+                                    <a id="selected-token-metadata" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-white transition">
+                                        <i data-lucide="database" class="w-3.5 h-3.5"></i>
+                                        Metadata
+                                    </a>
+                                </div>
                             </div>
                         </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button id="prepare-launch-btn" class="hidden bg-purple-600 hover:bg-purple-500 text-white px-5 py-2 rounded-full transition flex items-center gap-2 shadow-lg shadow-purple-500/30" onclick="prepareSavedTokenLaunch()">
+                                <span>🚀</span>
+                                <span>Prepare Launch</span>
+                            </button>
+                            <button class="bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-full transition flex items-center gap-2 border border-neutral-800">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                <span>Edit</span>
+                            </button>
+                            <button class="bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-full transition flex items-center gap-2 border border-neutral-800">
+                                <i data-lucide="archive" class="w-4 h-4"></i>
+                                <span>Archive</span>
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div class="flex items-center gap-3">
-                        <button id="prepare-launch-btn" class="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 hidden" onclick="prepareSavedTokenLaunch()">
-                            <span>🚀</span>
-                            <span>Prepare Launch</span>
+
+                    <div class="flex flex-wrap items-center gap-2 text-gray-400 text-xs">
+                        <button class="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 transition" type="button">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
-                            <i data-lucide="edit-2" class="w-4 h-4"></i>
-                            <span>Edit</span>
+                        <button class="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 transition" type="button">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2">
-                            <i data-lucide="file-text" class="w-4 h-4"></i>
-                            <span>Archive</span>
+                        <button class="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 transition" type="button">
+                            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button class="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 transition" type="button">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button class="p-1.5 rounded-lg border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 transition" type="button">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
                 </div>
             </div>
-            
-            <div class="flex-1 overflow-auto p-6">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-3">
-                        <!-- Metrics Grid -->
-                        <div id="token-metrics-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Total Profit/Loss</div>
-                                <div id="metric-profit-loss" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-profit-loss-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Amount Invested</div>
-                                <div id="metric-amount-invested" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-amount-invested-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Token Holdings</div>
-                                <div id="metric-token-holdings" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-token-holdings-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="flex items-center justify-between text-xs uppercase tracking-wide text-gray-400">
-                                    <span>Bonding Curve</span>
-                                    <span id="metric-bonding-percent" class="text-gray-300">--</span>
-                                </div>
-                                <div class="mt-3 h-2 bg-neutral-800 rounded-full overflow-hidden">
-                                    <div id="metric-bonding-bar" class="h-2 bg-purple-500 transition-all duration-300" style="width:0%;"></div>
-                                </div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Value of Holdings</div>
-                                <div id="metric-holdings-value" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-holdings-value-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Amount Sold</div>
-                                <div id="metric-amount-sold" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-amount-sold-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Price per Token</div>
-                                <div id="metric-price-per-token" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-price-per-token-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                            <div class="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
-                                <div class="text-xs uppercase tracking-wide text-gray-400">Market Cap</div>
-                                <div id="metric-market-cap" class="mt-2 text-2xl font-semibold text-white">--</div>
-                                <div id="metric-market-cap-detail" class="text-xs text-gray-500 mt-1"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Tasks Section -->
-                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold">Tasks</h3>
+
+            <div class="flex-1 overflow-auto px-6 py-6">
+                <div class="flex flex-col gap-6 lg:flex-row">
+                    <div class="flex flex-col gap-6 lg:w-80">
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl overflow-hidden shadow-[0_0_45px_rgba(139,92,246,0.15)]">
+                            <div class="px-5 py-4 border-b border-neutral-900/60 flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-white">Tasks</h3>
                                 <span id="token-tasks-summary" class="text-xs text-gray-500"></span>
                             </div>
-                            <div id="token-tasks-empty" class="text-center py-8 text-gray-500 text-sm">
-                                No automations configured for this token.
-                            </div>
-                            <div id="token-tasks-table" class="overflow-x-auto hidden">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-neutral-800 text-gray-400">
-                                            <th class="text-left py-2">Task</th>
-                                            <th class="text-left py-2">Status</th>
-                                            <th class="text-right py-2">Controls</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="token-tasks-body"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <!-- Activity Section -->
-                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
-                            <h3 class="text-lg font-semibold mb-4">Activity</h3>
-                            <div id="token-activity-empty" class="text-sm text-gray-500 text-center py-6">
-                                No live trades captured yet.
-                            </div>
-                            <div id="token-activity-table" class="overflow-x-auto hidden">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-neutral-800 text-gray-400">
-                                            <th class="text-left py-2">Age</th>
-                                            <th class="text-left py-2">Wallet</th>
-                                            <th class="text-left py-2">Type</th>
-                                            <th class="text-right py-2">Amount</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="token-activity-body"></tbody>
-                                </table>
+                            <div class="p-5">
+                                <div id="token-tasks-empty" class="text-center py-6 text-sm text-gray-500">
+                                    No automations configured for this token.
+                                </div>
+                                <div id="token-tasks-table" class="hidden overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead>
+                                            <tr class="text-gray-500 text-[11px] uppercase tracking-wide">
+                                                <th class="text-left py-2">Task</th>
+                                                <th class="text-left py-2">Status</th>
+                                                <th class="text-right py-2">Controls</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="token-tasks-body" class="divide-y divide-neutral-900/60"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
-                        
-                        <!-- Holdings Section -->
-                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
-                            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                                <div class="flex items-center gap-3">
-                                    <h3 class="text-lg font-semibold">Holdings</h3>
-                                    <div class="flex items-center gap-2">
-                                        <button class="bg-purple-700 text-white text-xs px-3 py-1 rounded">Jito</button>
-                                        <button class="bg-neutral-800 text-white text-xs px-3 py-1 rounded">RPC</button>
+
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl flex-1 shadow-[0_0_45px_rgba(59,130,246,0.12)]">
+                            <div class="px-5 py-4 border-b border-neutral-900/60">
+                                <h3 class="text-lg font-semibold text-white">Activity</h3>
+                            </div>
+                            <div class="p-5">
+                                <div id="token-activity-empty" class="text-sm text-gray-500 text-center py-6">
+                                    No live trades captured yet.
+                                </div>
+                                <div id="token-activity-table" class="hidden overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead>
+                                            <tr class="text-gray-500 text-[11px] uppercase tracking-wide">
+                                                <th class="text-left py-2">Age</th>
+                                                <th class="text-left py-2">Wallet</th>
+                                                <th class="text-left py-2">Type</th>
+                                                <th class="text-right py-2">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="token-activity-body" class="divide-y divide-neutral-900/60"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 flex flex-col gap-6">
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 shadow-[0_0_55px_rgba(168,85,247,0.18)]">
+                            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Total Profit/Loss</div>
+                                    <div id="metric-profit-loss" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-profit-loss-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Amount Invested</div>
+                                    <div id="metric-amount-invested" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-amount-invested-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Token Holdings</div>
+                                    <div id="metric-token-holdings" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-token-holdings-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="flex items-center justify-between text-[11px] uppercase tracking-wider text-gray-500">
+                                        <span>Bonding Curve</span>
+                                        <span id="metric-bonding-percent" class="text-gray-300">—</span>
+                                    </div>
+                                    <div class="mt-3 h-2 bg-neutral-900 rounded-full overflow-hidden">
+                                        <div id="metric-bonding-bar" class="h-2 bg-purple-500 transition-all duration-300" style="width:0%;"></div>
                                     </div>
                                 </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm px-3 py-1 rounded transition" onclick="showAddVolumeTask()">
-                                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>
-                                        Add Volume
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Market Cap</div>
+                                    <div id="metric-market-cap" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-market-cap-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 mt-4">
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Value of Holdings</div>
+                                    <div id="metric-holdings-value" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-holdings-value-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Amount Sold</div>
+                                    <div id="metric-amount-sold" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-amount-sold-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                                <div class="p-4 rounded-xl border border-neutral-900 bg-black/30">
+                                    <div class="text-[11px] uppercase tracking-wider text-gray-500">Price per Token</div>
+                                    <div id="metric-price-per-token" class="mt-2 text-2xl font-semibold text-white">—</div>
+                                    <div id="metric-price-per-token-detail" class="text-xs text-gray-500 mt-1"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 flex-1 shadow-[0_0_55px_rgba(45,212,191,0.12)]">
+                            <div class="flex flex-wrap items-center gap-3 mb-5">
+                                <div class="flex items-center gap-2 bg-neutral-900/80 border border-neutral-900 rounded-full p-1">
+                                    <button type="button" class="px-3 py-1 text-xs rounded-full bg-purple-600 text-white font-medium shadow-lg shadow-purple-500/30">Jito</button>
+                                    <button type="button" class="px-3 py-1 text-xs rounded-full text-gray-400 hover:text-white transition">RPC</button>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 ml-auto">
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-600/80 text-white hover:bg-purple-500 transition border border-purple-500/40" onclick="showAddVolumeTask()">
+                                        <i data-lucide="wifi" class="w-4 h-4"></i>
+                                        <span>Add Volume</span>
                                     </button>
-                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showBumpTask()">
-                                        <i data-lucide="trending-up" class="w-4 h-4 inline mr-1"></i>
-                                        Bump
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showBumpTask()">
+                                        <i data-lucide="zap" class="w-4 h-4"></i>
+                                        <span>Bump</span>
                                     </button>
-                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showSellBuybackTask()">
-                                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>
-                                        Sell/Buyback
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showSellBuybackTask()">
+                                        <i data-lucide="repeat-2" class="w-4 h-4"></i>
+                                        <span>Sell Buyback</span>
                                     </button>
-                                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm px-3 py-1 rounded transition" onclick="showBulkSellTask()">
-                                        <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>
-                                        Bulk Sell
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showBulkSellTask()">
+                                        <i data-lucide="rows" class="w-4 h-4"></i>
+                                        <span>Bulk Sell</span>
+                                    </button>
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-rose-900/60 text-rose-200 hover:bg-rose-800/70 transition border border-rose-900/60" onclick="showBulkSellTask()">
+                                        <i data-lucide="x-circle" class="w-4 h-4"></i>
+                                        <span>Sell All</span>
+                                    </button>
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="resyncTokenHoldings()">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                        <span>Re-Sync Balances</span>
                                     </button>
                                 </div>
                             </div>
-                            <div class="overflow-x-auto">
+                            <div class="overflow-hidden border border-neutral-900/60 rounded-xl bg-black/40">
                                 <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-neutral-800">
-                                            <th class="text-left py-2 text-gray-400">Wallet</th>
-                                            <th class="text-left py-2 text-gray-400">Address</th>
-                                            <th class="text-left py-2 text-gray-400">SOL Balance</th>
-                                            <th class="text-left py-2 text-gray-400">Token Balance</th>
-                                            <th class="text-left py-2 text-gray-400">Actions</th>
+                                    <thead class="bg-black/30">
+                                        <tr class="text-gray-500 text-xs uppercase tracking-wide">
+                                            <th class="text-left py-3 pl-4">Wallet</th>
+                                            <th class="text-left py-3">Address</th>
+                                            <th class="text-left py-3">SOL Balance</th>
+                                            <th class="text-left py-3">Token Balance</th>
+                                            <th class="text-right py-3 pr-4">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="token-holdings-body"></tbody>
                                 </table>
                             </div>
                         </div>
-                        
-                        
+                    </div>
+
+                    <div class="flex flex-col gap-6 lg:w-64">
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 shadow-[0_0_45px_rgba(45,212,191,0.1)]">
+                            <h3 class="text-sm font-semibold text-gray-200 mb-4 uppercase tracking-wide">Actions</h3>
+                            <div class="flex flex-wrap gap-2">
+                                <button class="inline-flex items-center justify-center p-2 rounded-lg border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-gray-400 transition" onclick="navigateToPage('wallets')">
+                                    <i data-lucide="wallet-2" class="w-4 h-4"></i>
+                                </button>
+                                <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-sm font-medium text-white transition shadow-lg shadow-emerald-500/20" onclick="collectAllFees()">
+                                    <i data-lucide="coins" class="w-4 h-4"></i>
+                                    Collect Fees
+                                </button>
+                                <button class="inline-flex items-center justify-center p-2 rounded-lg border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-gray-400 transition" type="button">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                </button>
+                                <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-sm text-gray-300 border border-neutral-900 transition" type="button">
+                                    <i data-lucide="archive" class="w-4 h-4"></i>
+                                    Archive
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 text-xs text-gray-500 space-y-3">
+                            <div class="flex items-center gap-2 text-gray-300">
+                                <i data-lucide="info" class="w-4 h-4"></i>
+                                <span>Automations execute entirely on-chain using Jito bundles or RPC transactions.</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                                <span>Ensure each wallet remains funded for live operations.</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="clock" class="w-4 h-4 text-purple-300"></i>
+                                <span>Recent run <span id="token-last-runtime" class="text-gray-300">—</span></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

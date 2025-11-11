@@ -1313,6 +1313,29 @@
                             </div>
                         </div>
                         
+                        <!-- Tasks Section -->
+                        <div class="bg-neutral-900 rounded-lg p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold">Tasks</h3>
+                                <span id="token-tasks-summary" class="text-xs text-gray-500"></span>
+                            </div>
+                            <div id="token-tasks-empty" class="text-center py-8 text-gray-500 text-sm">
+                                No automations configured for this token.
+                            </div>
+                            <div id="token-tasks-table" class="overflow-x-auto hidden">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-neutral-800 text-gray-400">
+                                            <th class="text-left py-2">Task</th>
+                                            <th class="text-left py-2">Status</th>
+                                            <th class="text-right py-2">Controls</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="token-tasks-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
                         <!-- Activity Section -->
                         <div class="bg-neutral-900 rounded-lg p-6 mb-6">
                             <h3 class="text-lg font-semibold mb-4">Activity</h3>

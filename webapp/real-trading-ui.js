@@ -3698,6 +3698,7 @@ window.updatePriorityFee = updatePriorityFee;
 window.resetSettings = resetSettings;
 window.exportSettings = exportSettings;
 window.importSettings = importSettings;
+window.handleRuntimeTaskAction = handleRuntimeTaskAction;
 // Instant Trading Functions
 async function loadInstantTradingData() {
     try {
@@ -3968,6 +3969,8 @@ const tokenDetailViewState = {
     loading: false,
     lastRuntime: null
 };
+
+const runtimeTaskRegistry = new Map();
 
 const FALLBACK_RPC_ENDPOINT =
     'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
@@ -4776,31 +4779,69 @@ async function fetchRuntimeAutomationsForMint(mint) {
         const relevantSessions = volumeResp.sessions.filter(
             (session) => (session?.tokenMint || '').toLowerCase() === mint.toLowerCase()
         );
-        relevantSessions.forEach((session) => {
+        relevantSessions.forEach((session, index) => {
             const sessionVolume = safeNumber(session?.stats?.totalVolume) || 0;
             stats.totalVolume += sessionVolume;
             if (session?.isActive) {
                 stats.activeSessions += 1;
             }
 
-            const detailLines = [];
-            if (Array.isArray(session.walletIds)) {
-                detailLines.push(`Wallets: ${session.walletIds.length}`);
-            }
+            const walletCount = Array.isArray(session.walletIds) ? session.walletIds.length : 0;
+            const resumeAvailable = walletCount > 0 && session?.config;
+
+            const detailFragments = [];
+            detailFragments.push(`Wallets: ${walletCount}`);
             if (session?.stats?.cyclesCompleted) {
-                detailLines.push(`Cycles: ${session.stats.cyclesCompleted}`);
+                detailFragments.push(`Cycles: ${session.stats.cyclesCompleted}`);
             }
             if (sessionVolume > 0) {
-                detailLines.push(`Volume: ${sessionVolume.toFixed(sessionVolume >= 1 ? 3 : 6)} SOL`);
+                detailFragments.push(`Volume ${sessionVolume.toFixed(sessionVolume >= 1 ? 3 : 6)} SOL`);
             }
 
+            const isActive = Boolean(session?.isActive);
+            const taskKey = `volume-${session?.id || index}`;
+
             tasks.push({
+                key: taskKey,
+                source: 'runtime',
+                type: 'volumeBot',
                 title: 'Volume Bot',
+                subtitle: detailFragments.join(' • '),
                 icon: 'activity',
                 iconBackground: 'bg-blue-900/60',
-                statusLabel: session?.isActive ? 'Running' : 'Stopped',
-                statusClass: session?.isActive ? 'bg-emerald-900/60 text-emerald-200' : 'bg-neutral-800 text-gray-300',
-                details: detailLines
+                statusLabel: isActive ? 'Running' : 'Stopped',
+                statusClass: isActive ? 'bg-emerald-900/60 text-emerald-200' : 'bg-neutral-800 text-gray-300',
+                statusState: isActive ? 'running' : 'paused',
+                metadata: {
+                    type: 'volumeBot',
+                    sessionId: session?.id || null,
+                    walletIds: session?.walletIds || [],
+                    config: session?.config || null,
+                    tokenMint: mint
+                },
+                actions: [
+                    {
+                        type: 'resume',
+                        icon: 'play',
+                        label: 'Resume',
+                        intent: 'green',
+                        disabled: isActive || !resumeAvailable
+                    },
+                    {
+                        type: 'pause',
+                        icon: 'pause',
+                        label: 'Pause',
+                        intent: 'yellow',
+                        disabled: !isActive
+                    },
+                    {
+                        type: 'stop',
+                        icon: 'square',
+                        label: 'Stop',
+                        intent: 'red',
+                        disabled: !isActive
+                    }
+                ]
             });
         });
     }
@@ -4810,25 +4851,61 @@ async function fetchRuntimeAutomationsForMint(mint) {
             (position) => (position?.tokenMint || '').toLowerCase() === mint.toLowerCase()
         );
 
-        relevantPositions.forEach((position) => {
-            const detailLines = [];
+        relevantPositions.forEach((position, index) => {
+            const isEnabled = position.enabled !== false;
+            const detailFragments = [];
             if (position.walletId) {
-                detailLines.push(`Wallet: ${truncateMiddle(position.walletId)}`);
+                detailFragments.push(`Wallet ${truncateMiddle(position.walletId)}`);
             }
             if (position.profitLoss !== undefined && position.profitLoss !== null) {
-                detailLines.push(`PnL: ${position.profitLoss.toFixed(4)} SOL`);
+                detailFragments.push(`PnL ${position.profitLoss.toFixed(4)} SOL`);
             }
             if (position.entryPrice !== undefined && position.entryPrice !== null) {
-                detailLines.push(`Entry: ${position.entryPrice.toFixed(6)} SOL`);
+                detailFragments.push(`Entry ${position.entryPrice.toFixed(6)} SOL`);
             }
 
+            const taskKey = `smartsell-${position.walletId || index}`;
+
             tasks.push({
+                key: taskKey,
+                source: 'runtime',
+               type: 'smartSell',
                 title: 'Smart Sell',
+                subtitle: detailFragments.join(' • '),
                 icon: 'shield',
                 iconBackground: 'bg-purple-900/60',
-                statusLabel: position.enabled === false ? 'Paused' : 'Monitoring',
-                statusClass: position.enabled === false ? 'bg-yellow-900/60 text-yellow-200' : 'bg-emerald-900/60 text-emerald-200',
-                details: detailLines
+                statusLabel: isEnabled ? 'Monitoring' : 'Paused',
+                statusClass: isEnabled ? 'bg-emerald-900/60 text-emerald-200' : 'bg-yellow-900/60 text-yellow-200',
+                statusState: isEnabled ? 'running' : 'paused',
+                metadata: {
+                    type: 'smartSell',
+                    walletId: position.walletId || null,
+                    tokenMint: position.tokenMint || mint,
+                    canResume: false
+                },
+                actions: [
+                    {
+                        type: 'resume',
+                        icon: 'play',
+                        label: 'Resume',
+                        intent: 'green',
+                        disabled: isEnabled
+                    },
+                    {
+                        type: 'pause',
+                        icon: 'pause',
+                        label: 'Pause',
+                        intent: 'yellow',
+                        disabled: !isEnabled
+                    },
+                    {
+                        type: 'stop',
+                        icon: 'square',
+                        label: 'Stop',
+                        intent: 'red',
+                        disabled: false
+                    }
+                ]
             });
         });
     }
@@ -4911,7 +4988,6 @@ async function loadLiveTokenDetail(record) {
         });
 
         renderTokenTaskList(record, {
-            mode: 'runtime',
             runtimeTasks: runtimeAutomations.tasks
         });
 
@@ -4982,6 +5058,71 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
     } catch (error) {
         console.error('Wallet action failed:', error);
         notify(`Trade failed: ${error.message || error}`, 'error');
+    }
+}
+
+async function handleRuntimeTaskAction(action, taskKey) {
+    const task = runtimeTaskRegistry.get(taskKey);
+    if (!task) {
+        notify('Runtime task metadata unavailable.', 'error');
+        return;
+    }
+
+    if (!tokenRegistry.current) {
+        notify('Select a token before managing runtime tasks.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    try {
+        if (task.type === 'volumeBot') {
+            const { sessionId, walletIds, config, tokenMint } = task.metadata || {};
+            if (action === 'stop' || action === 'pause') {
+                if (!sessionId) {
+                    notify('Volume session id unavailable.', 'error');
+                    return;
+                }
+                await window.apiClient.stopVolumeSession(sessionId);
+                notify(action === 'pause' ? 'Volume bot paused.' : 'Volume bot stopped.', 'success');
+            } else if (action === 'resume') {
+                if (!Array.isArray(walletIds) || !walletIds.length || !config) {
+                    notify('Volume bot resume requires wallet selection and config. Reapply blueprint to restart.', 'warning');
+                    return;
+                }
+                const mint = tokenMint || tokenRegistry.current.mint;
+                await window.apiClient.startVolumeSession(walletIds, mint, config);
+                notify('Volume bot resumed.', 'success');
+            }
+        } else if (task.type === 'smartSell') {
+            const { walletId, tokenMint } = task.metadata || {};
+            if (!walletId) {
+                notify('Smart Sell wallet unavailable.', 'error');
+                return;
+            }
+            if (action === 'resume') {
+                notify('Resume Smart Sell from Blueprint view or prepare launch. (Coming soon)', 'info');
+                return;
+            }
+            await window.apiClient.removeSmartSellPosition(walletId, tokenMint || tokenRegistry.current.mint);
+            notify('Smart Sell automation stopped.', 'success');
+        } else if (task.type === 'launch') {
+            notify('Launch tasks are managed automatically during deploy.', 'info');
+            return;
+        } else {
+            notify('Unsupported runtime task type.', 'warning');
+            return;
+        }
+
+        await loadLiveTokenDetail(tokenRegistry.current);
+    } catch (error) {
+        console.error('Runtime task action failed:', error);
+        notify(`Task action failed: ${error.message || error}`, 'error');
     }
 }
 
@@ -5257,8 +5398,19 @@ function populateTokenDetailView(record) {
     }
 
     if (statusEl) {
-        const statusLabel = record.status || (isDraft ? 'PRE-LAUNCH' : record.type?.toUpperCase() || 'ACTIVE');
+        const statusLabel = (record.status || (isDraft ? 'PRE-LAUNCH' : record.type?.toUpperCase() || 'ACTIVE')).toString();
         statusEl.textContent = statusLabel;
+        statusEl.className = 'inline-flex items-center px-2 py-1 text-xs rounded-full';
+        const normalized = statusLabel.toLowerCase();
+        if (normalized.includes('running') || normalized.includes('live')) {
+            statusEl.classList.add('bg-emerald-900/60', 'text-emerald-200');
+        } else if (normalized.includes('queued') || normalized.includes('pre')) {
+            statusEl.classList.add('bg-blue-900/50', 'text-blue-200');
+        } else if (normalized.includes('paused')) {
+            statusEl.classList.add('bg-yellow-900/60', 'text-yellow-200');
+        } else {
+            statusEl.classList.add('bg-neutral-800', 'text-gray-200');
+        }
     }
 
     if (copyIcon) {
@@ -5297,7 +5449,7 @@ function populateTokenDetailView(record) {
     renderTokenActivity([], { isLive: !isDraft, loading: !isDraft });
 
     if (isDraft) {
-        renderTokenTaskList(record, { mode: 'draft' });
+        renderTokenTaskList(record, { runtimeTasks: [] });
         return;
     }
 
@@ -5314,332 +5466,190 @@ function populateTokenDetailView(record) {
     });
 }
 
-function buildAutomationTaskEntries(record = {}) {
+function buildAutomationTaskEntries(record = {}, runtimeTasks = []) {
     const tasks = [];
-    const automations = record.automations || {};
-    const enabledMap = record.automationsEnabled || {};
+    const isDraft = record?.type === 'draft';
+    const automations = record?.automations || {};
+    const enabledMap = record?.automationsEnabled || {};
 
-    const createEntry = (key, config, defaults = {}) => {
-        if (!config || typeof config !== 'object') {
-            return null;
-        }
-        const normalizedConfig = { ...config };
-        const enabled =
-            (enabledMap && Object.prototype.hasOwnProperty.call(enabledMap, key)
-                ? Boolean(enabledMap[key])
-                : normalizedConfig.enabled !== false);
+    const statusLabel = (record?.status || (isDraft ? 'PRE-LAUNCH' : 'LAUNCHED')).toString();
+    const hasRuntimeLaunch = Array.isArray(runtimeTasks) && runtimeTasks.some((task) => task.key === 'launch_token');
 
-        const selectorDescription = describeAutomationSelector(normalizedConfig);
+    if (!hasRuntimeLaunch) {
+        let launchState = 'queued';
+        let launchClass = 'bg-blue-900/50 text-blue-200';
+        let launchLabel = 'Queued';
 
-        const entry = {
-            key,
-            enabled,
-            selectorDescription,
-            details: [],
-            statusLabel: enabled ? 'Active' : 'Paused',
-            statusClass: enabled ? 'bg-emerald-900/60 text-emerald-200' : 'bg-yellow-900/60 text-yellow-200',
-            icon: defaults.icon || 'settings',
-            iconBackground: defaults.iconBackground || 'bg-neutral-800',
-            title: defaults.title || key,
-            subtitle: defaults.subtitle || '',
-            config: normalizedConfig
-        };
-
-        if (key === 'smartSell') {
-            entry.icon = 'shield';
-            entry.iconBackground = 'bg-purple-900/60';
-            entry.title = 'Smart Sell';
-            entry.subtitle = 'Automation';
-
-            const profitTarget = safeNumber(normalizedConfig.profitTarget);
-            const stopLoss = safeNumber(normalizedConfig.stopLoss);
-            const trailingStop = safeNumber(normalizedConfig.trailingStop);
-
-            entry.details = [
-                { label: 'Wallets', value: selectorDescription },
-                {
-                    label: 'Profit target',
-                    value: profitTarget !== null ? `${profitTarget}%` : 'Auto'
-                },
-                {
-                    label: 'Stop loss',
-                    value: stopLoss !== null ? `${stopLoss}%` : 'Unset'
-                },
-                {
-                    label: 'Trailing stop',
-                    value: trailingStop !== null ? `${trailingStop}%` : 'Disabled'
-                },
-                {
-                    label: 'Partial sells',
-                    value: normalizedConfig.partialSells ? 'Enabled (25% bands)' : 'Disabled'
-                }
-            ];
-        } else if (key === 'volumeBot') {
-            entry.icon = 'activity';
-            entry.iconBackground = 'bg-blue-900/60';
-            entry.title = 'Volume Bot';
-            entry.subtitle = 'Automation';
-
-            const minAmount = safeNumber(normalizedConfig.minAmount);
-            const maxAmount = safeNumber(normalizedConfig.maxAmount);
-            const buyAmount = safeNumber(normalizedConfig.buyAmount);
-
-            const buyLabel = (() => {
-                if (minAmount !== null && maxAmount !== null) {
-                    if (minAmount === maxAmount) {
-                        return formatSol(minAmount);
-                    }
-                    return `${formatSol(minAmount)} - ${formatSol(maxAmount)}`;
-                }
-                if (minAmount !== null) {
-                    return `≥ ${formatSol(minAmount)}`;
-                }
-                if (maxAmount !== null) {
-                    return `≤ ${formatSol(maxAmount)}`;
-                }
-                if (buyAmount !== null) {
-                    return formatSol(buyAmount);
-                }
-                return 'Adaptive';
-            })();
-
-            const cycles = safeNumber(normalizedConfig.cycles);
-            const sellDelay = safeNumber(normalizedConfig.sellDelay);
-
-            const buyInterval = safeNumber(normalizedConfig.buyIntervalSeconds);
-            const buyIntervalMin = safeNumber(normalizedConfig.buyIntervalMinSeconds);
-            const buyIntervalMax = safeNumber(normalizedConfig.buyIntervalMaxSeconds);
-
-            const sellInterval = safeNumber(normalizedConfig.sellIntervalSeconds);
-            const sellIntervalMin = safeNumber(normalizedConfig.sellIntervalMinSeconds);
-            const sellIntervalMax = safeNumber(normalizedConfig.sellIntervalMaxSeconds);
-
-            const sellPercentMin = safeNumber(normalizedConfig.sellPercentageMin);
-            const sellPercentMax = safeNumber(normalizedConfig.sellPercentageMax);
-
-            const guardrails = normalizedConfig.guardrails || {};
-
-            const formatRange = (single, min, max, unit = 's') => {
-                const formatUnit = (value) => `${value}${unit}`;
-                if (min !== null && max !== null) {
-                    if (min === max) {
-                        return formatUnit(min);
-                    }
-                    return `${formatUnit(min)} - ${formatUnit(max)}`;
-                }
-                if (single !== null) {
-                    return formatUnit(single);
-                }
-                if (min !== null) {
-                    return `≥ ${formatUnit(min)}`;
-                }
-                if (max !== null) {
-                    return `≤ ${formatUnit(max)}`;
-                }
-                return 'Adaptive';
-            };
-
-            const percentRange = (min, max) => {
-                if (min !== null && max !== null) {
-                    if (min === max) {
-                        return `${min}%`;
-                    }
-                    return `${min}% - ${max}%`;
-                }
-                if (min !== null) {
-                    return `≥ ${min}%`;
-                }
-                if (max !== null) {
-                    return `≤ ${max}%`;
-                }
-                return 'Adaptive';
-            };
-
-            entry.details = [
-                { label: 'Wallets', value: selectorDescription },
-                { label: 'Buy size', value: buyLabel },
-                {
-                    label: 'Buy delay',
-                    value: formatRange(buyInterval, buyIntervalMin, buyIntervalMax)
-                },
-                {
-                    label: 'Sell delay',
-                    value: formatRange(sellInterval, sellIntervalMin, sellIntervalMax)
-                },
-                {
-                    label: 'Sell percent',
-                    value: percentRange(sellPercentMin, sellPercentMax)
-                },
-                {
-                    label: 'Cycles',
-                    value: cycles !== null ? `${cycles}` : 'Continuous'
-                },
-                {
-                    label: 'Cooldown',
-                    value: sellDelay !== null ? `${sellDelay}s between moves` : 'Auto manage'
-                },
-                {
-                    label: 'Guardrails',
-                    value:
-                        guardrails.enabled === false
-                            ? 'Disabled'
-                            : [
-                                  guardrails.realizedProfitTarget !== undefined && guardrails.realizedProfitTarget !== null
-                                      ? `TP ${guardrails.realizedProfitTarget}%`
-                                      : null,
-                                  guardrails.realizedLossLimit !== undefined && guardrails.realizedLossLimit !== null
-                                      ? `SL ${guardrails.realizedLossLimit}%`
-                                      : null
-                              ]
-                                  .filter(Boolean)
-                                  .join(' • ') || 'Enabled'
-                }
-            ];
-        } else {
-            entry.details = [{ label: 'Wallets', value: selectorDescription }];
+        const normalized = statusLabel.toLowerCase();
+        if (normalized.includes('running') || normalized.includes('launching')) {
+            launchState = 'running';
+            launchClass = 'bg-amber-900/60 text-amber-200';
+            launchLabel = 'Running';
+        } else if (!isDraft && (normalized.includes('live') || normalized.includes('launched'))) {
+            launchState = 'completed';
+            launchClass = 'bg-emerald-900/60 text-emerald-200';
+            launchLabel = 'Completed';
         }
 
-        return entry;
-    };
-
-    const smartSellEntry = createEntry('smartSell', automations.smartSell);
-    if (smartSellEntry) {
-        tasks.push(smartSellEntry);
+        tasks.push({
+            key: 'launch_token',
+            source: isDraft ? 'draft' : 'runtime',
+            type: 'launch',
+            title: 'Launch Token',
+            subtitle: isDraft ? 'Prepare Launch to deploy blueprint' : `Status: ${statusLabel}`,
+            icon: 'rocket',
+            iconBackground: 'bg-orange-900/60',
+            statusLabel: launchLabel,
+            statusClass: launchClass,
+            statusState: launchState,
+            actions: []
+        });
     }
 
-    const volumeEntry = createEntry('volumeBot', automations.volumeBot);
-    if (volumeEntry) {
-        tasks.push(volumeEntry);
+    if (isDraft) {
+        const describeAutomation = (key, config, defaults = {}) => {
+            if (!config || typeof config !== 'object') {
+                return null;
+            }
+            const normalizedConfig = { ...config };
+            const enabled =
+                (enabledMap && Object.prototype.hasOwnProperty.call(enabledMap, key)
+                    ? Boolean(enabledMap[key])
+                    : normalizedConfig.enabled !== false);
+
+            const selectorDescription = describeAutomationSelector(normalizedConfig);
+            const details = [];
+
+            const entry = {
+                key,
+                source: 'draft',
+                type: key,
+                title: defaults.title || key,
+                icon: defaults.icon || 'settings',
+                iconBackground: defaults.iconBackground || 'bg-neutral-800',
+                statusLabel: enabled ? 'Queued' : 'Paused',
+                statusClass: enabled ? 'bg-blue-900/50 text-blue-200' : 'bg-yellow-900/60 text-yellow-200',
+                statusState: enabled ? 'queued' : 'paused',
+                subtitle: selectorDescription,
+                actions: [
+                    { type: 'resume', icon: 'play', label: 'Play', intent: 'green', disabled: enabled },
+                    { type: 'pause', icon: 'pause', label: 'Pause', intent: 'yellow', disabled: !enabled },
+                    { type: 'remove', icon: 'square', label: 'Remove', intent: 'red', disabled: false }
+                ]
+            };
+
+            if (key === 'smartSell') {
+                entry.icon = 'shield';
+                entry.iconBackground = 'bg-purple-900/60';
+                entry.title = 'Smart Sell';
+                const profitTarget = safeNumber(normalizedConfig.profitTarget);
+                const stopLoss = safeNumber(normalizedConfig.stopLoss);
+                const trailingStop = safeNumber(normalizedConfig.trailingStop);
+                details.push(`Profit ${profitTarget !== null ? `${profitTarget}%` : 'Auto'}`);
+                details.push(`Stop ${stopLoss !== null ? `${stopLoss}%` : 'Unset'}`);
+                details.push(`Trailing ${trailingStop !== null ? `${trailingStop}%` : 'Disabled'}`);
+            } else if (key === 'volumeBot') {
+                entry.icon = 'activity';
+                entry.iconBackground = 'bg-blue-900/60';
+                entry.title = 'Volume Bot';
+                const minAmount = safeNumber(normalizedConfig.minAmount);
+                const maxAmount = safeNumber(normalizedConfig.maxAmount);
+                const buyAmount = safeNumber(normalizedConfig.buyAmount);
+
+                const buyLabel = (() => {
+                    if (minAmount !== null && maxAmount !== null) {
+                        if (minAmount === maxAmount) {
+                            return formatSol(minAmount);
+                        }
+                        return `${formatSol(minAmount)} - ${formatSol(maxAmount)}`;
+                    }
+                    if (minAmount !== null) {
+                        return `≥ ${formatSol(minAmount)}`;
+                    }
+                    if (maxAmount !== null) {
+                        return `≤ ${formatSol(maxAmount)}`;
+                    }
+                    if (buyAmount !== null) {
+                        return formatSol(buyAmount);
+                    }
+                    return 'Adaptive';
+                })();
+                details.push(`Buy size ${buyLabel}`);
+
+                const cycles = safeNumber(normalizedConfig.cycles);
+                if (cycles !== null) {
+                    details.push(`Cycles ${cycles}`);
+                }
+                const guardrails = normalizedConfig.guardrails || {};
+                if (guardrails.enabled === false) {
+                    details.push('Guardrails disabled');
+                } else if (guardrails.realizedProfitTarget || guardrails.realizedLossLimit) {
+                    details.push(
+                        `Guardrails TP ${guardrails.realizedProfitTarget ?? '—'} / SL ${guardrails.realizedLossLimit ?? '—'}`
+                    );
+                } else {
+                    details.push('Guardrails enabled');
+                }
+            }
+
+            entry.subtitle = details.join(' • ') || selectorDescription || defaults.subtitle || '';
+            return entry;
+        };
+
+        const smartSellEntry = describeAutomation('smartSell', automations.smartSell, { title: 'Smart Sell' });
+        if (smartSellEntry) {
+            tasks.push(smartSellEntry);
+        }
+
+        const volumeEntry = describeAutomation('volumeBot', automations.volumeBot, { title: 'Volume Bot' });
+        if (volumeEntry) {
+            tasks.push(volumeEntry);
+        }
+    }
+
+    if (Array.isArray(runtimeTasks) && runtimeTasks.length) {
+        runtimeTasks.forEach((task) => {
+            const normalizedTask = {
+                key: task.key,
+                source: task.source || 'runtime',
+                type: task.type || task.key,
+                title: task.title || 'Automation',
+                subtitle: task.subtitle || '',
+                icon: task.icon || 'cpu',
+                iconBackground: task.iconBackground || 'bg-neutral-800',
+                statusLabel: task.statusLabel || 'Running',
+                statusClass: task.statusClass || 'bg-emerald-900/60 text-emerald-200',
+                statusState: task.statusState || 'running',
+                actions: Array.isArray(task.actions) ? task.actions : [],
+                metadata: task.metadata || {}
+            };
+            tasks.push(normalizedTask);
+        });
     }
 
     return tasks;
 }
 
 function renderTokenTaskList(record, options = {}) {
-    const list = getElement('active-tasks-list');
-    const emptyState = getElement('no-tasks-state');
+    const body = getElement('token-tasks-body');
+    const emptyState = getElement('token-tasks-empty');
+    const tableWrapper = getElement('token-tasks-table');
+    const summaryEl = getElement('token-tasks-summary');
 
-    if (!list) {
+    if (!body || !emptyState || !tableWrapper || !summaryEl) {
         return;
     }
-
-    const mode = options.mode || (record?.type === 'draft' ? 'draft' : 'runtime');
 
     if (options.loading) {
-        list.innerHTML = `
-            <div class="flex items-center justify-center py-8 text-sm text-gray-500">
-                <i class="animate-spin mr-2" data-lucide="loader-2"></i>
-                <span>Loading live automations…</span>
+        tableWrapper.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        emptyState.innerHTML = `
+            <div class="flex items-center justify-center gap-2 text-sm text-gray-500">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                <span>Loading automation status…</span>
             </div>
         `;
-        if (emptyState) {
-            emptyState.classList.add('hidden');
-        }
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
-        return;
-    }
-
-    if (mode === 'draft') {
-        const tasks = buildAutomationTaskEntries(record);
-        const canEdit = record?.type === 'draft';
-
-        if (!tasks.length) {
-            list.innerHTML = '';
-            if (emptyState) {
-                emptyState.classList.remove('hidden');
-            }
-            return;
-        }
-
-        const rowsHtml = tasks
-            .map((task) => {
-                const description = task.details
-                    .filter((detail) => detail && detail.label && detail.value)
-                    .map((detail) => `${detail.label}: ${detail.value}`)
-                    .join(' • ');
-
-                const actions = [];
-
-                if (canEdit) {
-                    actions.push(
-                        task.enabled
-                            ? { type: 'pause', icon: 'square', label: 'Pause' }
-                            : { type: 'resume', icon: 'play', label: 'Resume' }
-                    );
-                    actions.push({ type: 'remove', icon: 'trash-2', label: 'Remove' });
-                }
-
-                const actionsHtml = actions
-                    .map(
-                        (action) => `
-                            <button
-                                class="inline-flex items-center justify-center text-gray-400 hover:text-white transition p-1"
-                                title="${escapeHtml(action.label)}"
-                                onclick="handleTokenTaskAction('${action.type}', '${task.key}')"
-                            >
-                                <i data-lucide="${action.icon}" class="w-4 h-4"></i>
-                            </button>
-                        `
-                    )
-                    .join('');
-
-                return `
-                    <tr class="border-b border-neutral-800 last:border-b-0">
-                        <td class="py-3">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 ${task.iconBackground} rounded-lg flex items-center justify-center">
-                                    <i data-lucide="${task.icon}" class="w-4 h-4 text-white"></i>
-                                </div>
-                                <div>
-                                    <div class="text-sm font-semibold text-white">${escapeHtml(task.title)}</div>
-                                    ${
-                                        description
-                                            ? `<div class="text-xs text-gray-400">${escapeHtml(description)}</div>`
-                                            : ''
-                                    }
-                                </div>
-                            </div>
-                        </td>
-                        <td class="py-3 align-middle">
-                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${task.statusClass}">
-                                ${escapeHtml(task.statusLabel)}
-                            </span>
-                        </td>
-                        <td class="py-3 text-right align-middle">
-                            ${
-                                actionsHtml
-                                    ? `<div class="inline-flex items-center gap-1">${actionsHtml}</div>`
-                                    : '<span class="text-xs text-gray-500">Read-only</span>'
-                            }
-                        </td>
-                    </tr>
-                `;
-            })
-            .join('');
-
-        list.innerHTML = `
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-gray-300">
-                    <thead>
-                        <tr class="border-b border-neutral-800 text-xs uppercase tracking-wide text-gray-500">
-                            <th class="text-left py-2 font-medium">Task</th>
-                            <th class="text-left py-2 font-medium">Status</th>
-                            <th class="text-right py-2 font-medium">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        if (emptyState) {
-            emptyState.classList.add('hidden');
-        }
-
+        summaryEl.textContent = '';
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
         }
@@ -5647,62 +5657,92 @@ function renderTokenTaskList(record, options = {}) {
     }
 
     const runtimeTasks = Array.isArray(options.runtimeTasks) ? options.runtimeTasks : [];
+    const tasks = buildAutomationTaskEntries(record, runtimeTasks);
 
-    if (!runtimeTasks.length) {
-        list.innerHTML = '';
-        if (emptyState) {
-            emptyState.classList.remove('hidden');
-        }
+    runtimeTaskRegistry.clear();
+    tasks.filter((task) => task.source === 'runtime').forEach((task) => runtimeTaskRegistry.set(task.key, task));
+
+    if (!tasks.length) {
+        body.innerHTML = '';
+        tableWrapper.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        emptyState.textContent = 'No automations configured for this token.';
+        summaryEl.textContent = '';
         return;
     }
 
-    const rowsHtml = runtimeTasks
+    tableWrapper.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+
+    const runningCount = tasks.filter((task) => task.statusState === 'running').length;
+    const queuedCount = tasks.filter((task) => task.statusState === 'queued').length;
+    const totalLabel = `${tasks.length} task${tasks.length === 1 ? '' : 's'}`;
+    const statusFragments = [];
+    if (runningCount) statusFragments.push(`${runningCount} running`);
+    if (queuedCount) statusFragments.push(`${queuedCount} queued`);
+    summaryEl.textContent = statusFragments.length ? `${totalLabel} • ${statusFragments.join(', ')}` : totalLabel;
+
+    const actionsToHtml = (task) => {
+        if (!Array.isArray(task.actions) || !task.actions.length) {
+            return '<span class="text-xs text-gray-500">—</span>';
+        }
+
+        return task.actions
+            .map((action) => {
+                const isRuntime = task.source === 'runtime';
+                const disabled = action.disabled;
+                const handler = isRuntime
+                    ? `handleRuntimeTaskAction('${action.type}', '${task.key}')`
+                    : `handleTokenTaskAction('${action.type}', '${task.key}')`;
+
+                const intentClass =
+                    action.intent === 'green'
+                        ? 'border-emerald-500/40 text-emerald-200 hover:text-emerald-100'
+                        : action.intent === 'yellow'
+                        ? 'border-amber-500/40 text-amber-200 hover:text-amber-100'
+                        : 'border-rose-500/40 text-rose-200 hover:text-rose-100';
+
+                const baseClass =
+                    'inline-flex items-center justify-center w-8 h-8 rounded-full border transition';
+                const disabledClass = disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '';
+
+                return `
+                    <button
+                        class="${baseClass} ${intentClass} ${disabledClass}"
+                        ${disabled ? 'disabled' : `onclick="${handler}"`}
+                        title="${escapeHtml(action.label || action.type)}"
+                    >
+                        <i data-lucide="${escapeHtml(action.icon || 'zap')}" class="w-4 h-4"></i>
+                    </button>
+                `;
+            })
+            .join('');
+    };
+
+    const rowsHtml = tasks
         .map((task) => {
-            const description = Array.isArray(task.details) ? task.details.filter(Boolean).join(' • ') : '';
-            const badgeClass = task.statusClass || 'bg-neutral-800 text-gray-200';
-
-            const actionsHtml = Array.isArray(task.actions) && task.actions.length
-                ? task.actions
-                      .map(
-                          (action) => `
-                            <button
-                                class="inline-flex items-center justify-center text-${action.intent || 'gray'}-300 hover:text-white transition p-1"
-                                title="${escapeHtml(action.label)}"
-                                ${action.disabled ? 'disabled class="opacity-50 cursor-not-allowed"' : ''}
-                                onclick="${action.onClick || ''}"
-                            >
-                                <i data-lucide="${action.icon || 'zap'}" class="w-4 h-4"></i>
-                            </button>
-                        `
-                      )
-                      .join('')
-                : '<span class="text-xs text-gray-500">Managed automatically</span>';
-
+            const subtitle = task.subtitle ? `<div class="text-xs text-gray-400">${escapeHtml(task.subtitle)}</div>` : '';
             return `
                 <tr class="border-b border-neutral-800 last:border-b-0">
                     <td class="py-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 ${task.iconBackground || 'bg-neutral-800'} rounded-lg flex items-center justify-center">
-                                <i data-lucide="${task.icon || 'activity'}" class="w-4 h-4 text-white"></i>
+                            <div class="w-8 h-8 ${escapeHtml(task.iconBackground || 'bg-neutral-800')} rounded-lg flex items-center justify-center">
+                                <i data-lucide="${escapeHtml(task.icon || 'settings')}" class="w-4 h-4 text-white"></i>
                             </div>
                             <div>
-                                <div class="text-sm font-semibold text-white">${escapeHtml(task.title || 'Automation')}</div>
-                                ${
-                                    description
-                                        ? `<div class="text-xs text-gray-400">${escapeHtml(description)}</div>`
-                                        : ''
-                                }
+                                <div class="text-sm font-semibold text-white">${escapeHtml(task.title || 'Task')}</div>
+                                ${subtitle}
                             </div>
                         </div>
                     </td>
                     <td class="py-3 align-middle">
-                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${badgeClass}">
+                        <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${task.statusClass || 'bg-neutral-800 text-gray-300'}">
                             ${escapeHtml(task.statusLabel || 'Unknown')}
                         </span>
                     </td>
                     <td class="py-3 text-right align-middle">
-                        <div class="inline-flex items-center gap-1">
-                            ${actionsHtml}
+                        <div class="inline-flex items-center gap-2">
+                            ${actionsToHtml(task)}
                         </div>
                     </td>
                 </tr>
@@ -5710,26 +5750,7 @@ function renderTokenTaskList(record, options = {}) {
         })
         .join('');
 
-    list.innerHTML = `
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm text-gray-300">
-                <thead>
-                    <tr class="border-b border-neutral-800 text-xs uppercase tracking-wide text-gray-500">
-                        <th class="text-left py-2 font-medium">Automation</th>
-                        <th class="text-left py-2 font-medium">Status</th>
-                        <th class="text-right py-2 font-medium">Controls</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rowsHtml}
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    if (emptyState) {
-        emptyState.classList.add('hidden');
-    }
+    body.innerHTML = rowsHtml;
 
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();

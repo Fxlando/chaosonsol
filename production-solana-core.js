@@ -3,7 +3,7 @@
  * Complete integration with PumpFun, Raydium DEX, and optimized RPC
  */
 
-const { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, VersionedTransaction } = require('@solana/web3.js');
+const { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL, Transaction, VersionedTransaction, ComputeBudgetProgram } = require('@solana/web3.js');
 const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount } = require('@solana/spl-token');
 const axios = require('axios');
 const bs58 = require('bs58');
@@ -85,54 +85,75 @@ class ProductionSolanaCore {
     }
 
     async executeTransaction(transaction, signers = [], options = {}) {
-        const maxRetries = options.maxRetries || this.config.maxRetries;
+        const maxRetries = options.maxRetries ?? this.config.maxRetries ?? 3;
+        const skipPreflight = options.skipPreflight ?? false;
+        const commitment = options.commitment ?? 'confirmed';
+        const priorityFeeMicroLamports =
+            options.priorityFeeMicroLamports ??
+            this.config.priorityFeeMicroLamports ??
+            this.config.priorityFee ??
+            0;
+        const computeUnitLimit = options.computeUnitLimit ?? this.config.computeUnitLimit ?? null;
+
+        if (transaction instanceof Transaction) {
+            const computeInstructions = [];
+
+            if (computeUnitLimit) {
+                computeInstructions.push(
+                    ComputeBudgetProgram.setComputeUnitLimit({
+                        units: computeUnitLimit
+                    })
+                );
+            }
+
+            if (priorityFeeMicroLamports > 0) {
+                computeInstructions.push(
+                    ComputeBudgetProgram.setComputeUnitPrice({
+                        microLamports: priorityFeeMicroLamports
+                    })
+                );
+            }
+
+            // Prepend so they run before user instructions
+            for (let i = computeInstructions.length - 1; i >= 0; i--) {
+                transaction.instructions.unshift(computeInstructions[i]);
+            }
+        }
+
         let lastError;
-        
+
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
                 const connection = this.getConnection();
-                
-                // Add priority fee if specified
-                if (this.config.priorityFee > 0) {
-                    transaction.add(
-                        SystemProgram.transfer({
-                            fromPubkey: signers[0]?.publicKey,
-                            toPubkey: signers[0]?.publicKey,
-                            lamports: this.config.priorityFee
-                        })
-                    );
-                }
-                
-                // Send and confirm transaction
+
                 const signature = await connection.sendTransaction(transaction, signers, {
-                    skipPreflight: false,
-                    preflightCommitment: 'confirmed',
+                    skipPreflight,
+                    preflightCommitment: commitment,
                     maxRetries: 0
                 });
-                
-                const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-                
+
+                const confirmation = await connection.confirmTransaction(signature, commitment);
+
                 if (confirmation.value.err) {
-                    throw new Error(`Transaction failed: ${confirmation.value.err}`);
+                    throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
                 }
-                
+
                 return {
                     signature,
                     success: true,
                     confirmation
                 };
-                
             } catch (error) {
                 lastError = error;
                 console.warn(`Transaction attempt ${attempt + 1} failed:`, error.message);
-                
+
                 if (attempt < maxRetries - 1) {
-                    await this.delay(1000 * (attempt + 1)); // Exponential backoff
+                    await this.delay(1000 * (attempt + 1));
                 }
             }
         }
-        
-        throw new Error(`Transaction failed after ${maxRetries} attempts: ${lastError.message}`);
+
+        throw new Error(`Transaction failed after ${maxRetries} attempts: ${lastError?.message || 'unknown error'}`);
     }
 
     async getTokenBalance(walletAddress, tokenMint) {

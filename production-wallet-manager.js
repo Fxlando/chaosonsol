@@ -69,6 +69,14 @@ class ProductionWalletManager {
         const toNumber = (value, fallback) =>
             typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
+        const fallbackCooldown =
+            toNumber(
+                settings.cooldownMs,
+                Number.isFinite(this.config.autoTradeCooldownMs)
+                    ? this.config.autoTradeCooldownMs
+                    : 5 * 60 * 1000
+            );
+
         const normalized = {
             maxWallets: toNumber(settings.maxWallets, 100),
             slippage: toNumber(settings.slippage, 1.0),
@@ -95,15 +103,20 @@ class ProductionWalletManager {
                 targetProfit: toNumber(rawAutoTrade.targetProfit, normalized.targetProfit),
                 stopLoss: toNumber(rawAutoTrade.stopLoss, normalized.stopLoss),
                 reserveBalance: toNumber(rawAutoTrade.reserveBalance, normalized.reserveBalance),
-                cooldownMs: toNumber(rawAutoTrade.cooldownMs, undefined)
+                cooldownMs: toNumber(rawAutoTrade.cooldownMs, fallbackCooldown)
             };
         } else {
             autoTrade = {
-                enabled: Boolean(rawAutoTrade)
+                enabled: Boolean(rawAutoTrade),
+                cooldownMs: fallbackCooldown
             };
         }
 
-        normalized.autoTrade = autoTrade;
+        normalized.autoTrade = {
+            ...autoTrade,
+            cooldownMs: toNumber(autoTrade.cooldownMs, fallbackCooldown)
+        };
+        normalized.cooldownMs = fallbackCooldown;
         return normalized;
     }
 
@@ -601,7 +614,10 @@ class ProductionWalletManager {
             
             // Import groups
             for (const group of parsedData.groups || []) {
-                this.groups.set(group.id, group);
+                this.groups.set(group.id, {
+                    ...group,
+                    settings: this.normalizeGroupSettings(group.settings || {})
+                });
             }
             
             this.saveWallets();

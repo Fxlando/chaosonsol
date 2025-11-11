@@ -1011,6 +1011,7 @@ class ProductionTradingEngine {
                                 outcome !== null ? outcome.toFixed(4) : 'n/a'
                             } SOL`
                         );
+                        this.registerRecentOpportunity(exitSnapshot.tokenMint);
                     } else {
                         console.warn(
                             `Auto-trade exit failed for ${exitSnapshot.tokenMint}:`,

@@ -9,12 +9,6 @@ import path from 'path';
 const PROJECT_ROOT = process.env.LAMBDA_TASK_ROOT || process.cwd();
 const MAIN_WALLET_FILE = 'wallets-main.json';
 const MAIN_WALLET_BLOB_KEY = 'wallets-main';
-const isBlobStorageAvailable = Boolean(
-  process.env.NETLIFY ||
-    process.env.NETLIFY_LOCAL ||
-    process.env.NETLIFY_DEV ||
-    process.env.NETLIFY_BLOBS_CONTEXT
-);
 
 function loadJson(relativePath) {
   try {
@@ -49,17 +43,15 @@ function ensureMainWalletFileExists() {
 }
 
 async function getBlobStoreInstance() {
-  if (!isBlobStorageAvailable) {
-    return null;
+  if (blobStore) {
+    return blobStore;
   }
 
-  if (!blobStore) {
-    try {
-      blobStore = getStore({ name: 'chaosbot-wallets', consistency: 'strong' });
-    } catch (error) {
-      console.error('Failed to initialize Netlify Blob store:', error.message);
-      blobStore = null;
-    }
+  try {
+    blobStore = getStore({ name: 'chaosbot-wallets', consistency: 'strong' });
+  } catch (error) {
+    console.error('Failed to initialize Netlify Blob store:', error.message);
+    blobStore = null;
   }
 
   return blobStore;

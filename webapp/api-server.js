@@ -1,13 +1,18 @@
 // Production-ready API server for Chaos Bot Control Panel
-require('dotenv').config();
-const cors = require('cors');
-const crypto = require('crypto');
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { pathToFileURL } = require('url');
-const { PublicKey } = require('@solana/web3.js');
-const { TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+import dotenv from 'dotenv';
+import cors from 'cors';
+import crypto from 'node:crypto';
+import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { PublicKey } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.WEB_PORT) || 3000;
 const NETWORK = process.env.NETWORK || 'mainnet-beta';
@@ -717,4 +722,4 @@ const server = app.listen(PORT, () => {
     .forEach((route) => console.log(`   ${route}`));
 });
 
-module.exports = server;
+export default server;

@@ -1118,7 +1118,13 @@ async function prepareCreateTokenView() {
     if (!tokenLaunchState.initialized) {
         setupTokenImageUploader();
         walletSelect.addEventListener('change', (event) => {
-            tokenLaunchState.selectedWalletId = event.target.value;
+            const value = event.target.value;
+            if (value === '__import_creator__') {
+                event.target.value = tokenLaunchState.selectedWalletId || '';
+                openCreatorWalletModal();
+                return;
+            }
+            tokenLaunchState.selectedWalletId = value;
         });
         tokenLaunchState.initialized = true;
     }
@@ -1310,6 +1316,7 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
     selectEl.appendChild(placeholder);
 
     const seenKeys = new Set();
+    let hasCreatorWallet = false;
 
     wallets.forEach(wallet => {
         const value = wallet.id || wallet.publicKey;
@@ -1344,11 +1351,30 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         if (typeof balance === 'number') {
             option.dataset.balance = balance.toFixed(4);
         }
-        if (Array.isArray(wallet.tags) && wallet.tags.map(normalizeValueForMatch).includes('creator')) {
+        const normalizedTags = Array.isArray(wallet.tags)
+            ? wallet.tags.map(normalizeValueForMatch)
+            : [];
+        if (
+            normalizedTags.includes('creator') ||
+            normalizeValueForMatch(wallet.publicKey || wallet.address || wallet.id) ===
+                normalizeValueForMatch(creatorWalletState.address)
+        ) {
             option.dataset.creator = 'true';
+            hasCreatorWallet = true;
+        }
+        if (!wallet.name && normalizedTags.includes('creator')) {
+            option.textContent = `Creator Wallet${balanceLabel}`;
         }
         selectEl.appendChild(option);
     });
+
+    if (!hasCreatorWallet) {
+        const importOption = document.createElement('option');
+        importOption.value = '__import_creator__';
+        importOption.textContent = '➕ Import Creator Key';
+        importOption.dataset.action = 'import';
+        selectEl.appendChild(importOption);
+    }
 
     if (wallets.length > 0) {
         selectEl.disabled = false;
@@ -1365,17 +1391,14 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
             matchingOption.selected = true;
             placeholder.selected = false;
         }
-    } else if (wallets.length === 1) {
-        selectEl.value = wallets[0].id || wallets[0].publicKey;
-        tokenLaunchState.selectedWalletId = selectEl.value;
-        placeholder.selected = false;
-        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-    } else if (wallets.length > 1) {
-        const firstOption = selectEl.options[1];
-        if (firstOption) {
-            firstOption.selected = true;
+    } else {
+        const viableOption = Array.from(selectEl.options).find(
+            (option) => option.value && option.value !== '__import_creator__'
+        );
+        if (viableOption) {
+            viableOption.selected = true;
             placeholder.selected = false;
-            tokenLaunchState.selectedWalletId = firstOption.value;
+            tokenLaunchState.selectedWalletId = viableOption.value;
             selectEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }

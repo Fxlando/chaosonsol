@@ -1206,7 +1206,8 @@ async function loadCreatorWallets() {
         }
 
         const response = await window.apiClient.getAllWallets();
-        const wallets = Array.isArray(response?.wallets) ? response.wallets : [];
+        let wallets = Array.isArray(response?.wallets) ? response.wallets : [];
+        wallets = ensureCreatorWalletIncluded(wallets);
 
         if (wallets.length) {
             populateCreatorWalletSelect(walletSelect, wallets, { walletStatus });
@@ -1216,7 +1217,8 @@ async function loadCreatorWallets() {
         }
 
         // Fall back to local wallets if backend has none (useful during migration)
-        const localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+        let localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+        localWallets = ensureCreatorWalletIncluded(localWallets);
         if (localWallets.length) {
             populateCreatorWalletSelect(walletSelect, localWallets, {
                 walletStatus,
@@ -1227,8 +1229,17 @@ async function loadCreatorWallets() {
             return;
         }
 
-        populateCreatorWalletSelect(walletSelect, [], { walletStatus });
-        tokenLaunchState.wallets = [];
+        const creatorOnly = ensureCreatorWalletIncluded([]);
+        if (creatorOnly.length) {
+            populateCreatorWalletSelect(walletSelect, creatorOnly, {
+                walletStatus,
+                local: true
+            });
+            tokenLaunchState.wallets = creatorOnly;
+        } else {
+            populateCreatorWalletSelect(walletSelect, [], { walletStatus });
+            tokenLaunchState.wallets = [];
+        }
         refreshLaunchWalletDependencies();
     } catch (error) {
         console.error('Failed to load creator wallets:', error);
@@ -1238,17 +1249,19 @@ async function loadCreatorWallets() {
                 : [];
 
         if (operationsWallets.length) {
-            populateCreatorWalletSelect(walletSelect, operationsWallets, {
+            const enrichedOperations = ensureCreatorWalletIncluded(operationsWallets);
+            populateCreatorWalletSelect(walletSelect, enrichedOperations, {
                 walletStatus,
                 local: !operationsWallets[0]?.id,
                 error
             });
-            tokenLaunchState.wallets = operationsWallets;
+            tokenLaunchState.wallets = enrichedOperations;
             refreshLaunchWalletDependencies();
             return;
         }
 
-        const localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+        let localWallets = Array.isArray(window.solana?.wallets) ? window.solana.wallets : [];
+        localWallets = ensureCreatorWalletIncluded(localWallets);
 
         if (localWallets.length) {
             populateCreatorWalletSelect(walletSelect, localWallets, {
@@ -1258,14 +1271,27 @@ async function loadCreatorWallets() {
             });
             tokenLaunchState.wallets = localWallets;
             refreshLaunchWalletDependencies();
+            return;
         } else {
-            walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
-            walletSelect.disabled = true;
-            if (walletStatus) {
-                walletStatus.textContent = `Unable to load wallets (${error.message}). Import wallets from the Wallets view.`;
-                walletStatus.classList.remove('text-gray-500');
-                walletStatus.classList.add('text-red-400');
+            const creatorOnly = ensureCreatorWalletIncluded([]);
+            if (creatorOnly.length) {
+                populateCreatorWalletSelect(walletSelect, creatorOnly, {
+                    walletStatus,
+                    local: true,
+                    error
+                });
+                tokenLaunchState.wallets = creatorOnly;
+                refreshLaunchWalletDependencies();
+                return;
             }
+        }
+
+        walletSelect.innerHTML = '<option value="">Unable to load wallets</option>';
+        walletSelect.disabled = true;
+        if (walletStatus) {
+            walletStatus.textContent = `Unable to load wallets (${error.message}). Import wallets from the Wallets view.`;
+            walletStatus.classList.remove('text-gray-500');
+            walletStatus.classList.add('text-red-400');
         }
     }
 }
@@ -1283,19 +1309,43 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
     placeholder.selected = true;
     selectEl.appendChild(placeholder);
 
+    const seenKeys = new Set();
+
     wallets.forEach(wallet => {
         const value = wallet.id || wallet.publicKey;
         if (!value) return;
+
+        const key =
+            normalizeValueForMatch(value) ||
+            normalizeValueForMatch(wallet.address) ||
+            normalizeValueForMatch(wallet.pubkey);
+        if (key && seenKeys.has(key)) {
+            return;
+        }
+        if (key) {
+            seenKeys.add(key);
+        }
 
         const option = document.createElement('option');
         option.value = value;
         const baseLabel = wallet.name || 'Unnamed';
         const suffix = isLocal ? ' (local)' : '';
-        option.textContent = `${baseLabel}${suffix} • ${truncateAddress(wallet.publicKey || wallet.address || value)}`;
+        const balance =
+            typeof wallet.balance === 'number'
+                ? wallet.balance
+                : typeof wallet.solBalance === 'number'
+                ? wallet.solBalance
+                : null;
+        const balanceLabel = typeof balance === 'number' ? ` • ${balance.toFixed(4)} SOL` : '';
+        option.textContent = `${baseLabel}${suffix} • ${truncateAddress(
+            wallet.publicKey || wallet.address || value
+        )}${balanceLabel}`;
 
-        const balance = wallet.balance ?? wallet.solBalance;
         if (typeof balance === 'number') {
             option.dataset.balance = balance.toFixed(4);
+        }
+        if (Array.isArray(wallet.tags) && wallet.tags.map(normalizeValueForMatch).includes('creator')) {
+            option.dataset.creator = 'true';
         }
         selectEl.appendChild(option);
     });
@@ -7032,6 +7082,64 @@ async function refreshCreatorWalletBalance(options = {}) {
 
 function normalizeValueForMatch(value) {
     return value ? String(value).toLowerCase() : '';
+}
+
+function ensureCreatorWalletIncluded(wallets = [], { prepend = true } = {}) {
+    const list = Array.isArray(wallets) ? [...wallets] : [];
+    const creatorAddress = creatorWalletState.address;
+
+    if (!creatorAddress) {
+        return list;
+    }
+
+    const normalizedCreator = normalizeValueForMatch(creatorAddress);
+    if (!normalizedCreator) {
+        return list;
+    }
+
+    const alreadyPresent = list.find((wallet) =>
+        [wallet?.id, wallet?.publicKey, wallet?.address, wallet?.pubkey]
+            .map(normalizeValueForMatch)
+            .includes(normalizedCreator)
+    );
+
+    if (alreadyPresent) {
+        if (Array.isArray(alreadyPresent.tags)) {
+            if (!alreadyPresent.tags.map(normalizeValueForMatch).includes('creator')) {
+                alreadyPresent.tags = [...alreadyPresent.tags, 'creator'];
+            }
+        } else {
+            alreadyPresent.tags = ['creator'];
+        }
+        if (typeof alreadyPresent.balance !== 'number' && typeof creatorWalletState.balance === 'number') {
+            alreadyPresent.balance = creatorWalletState.balance;
+        }
+        if (!alreadyPresent.name) {
+            alreadyPresent.name = creatorWalletState.name || 'Creator Wallet';
+        }
+        return list;
+    }
+
+    const creatorEntry = {
+        id: creatorWalletState.id || creatorAddress,
+        publicKey: creatorAddress,
+        address: creatorAddress,
+        name: creatorWalletState.name || 'Creator Wallet',
+        balance:
+            typeof creatorWalletState.balance === 'number' ? creatorWalletState.balance : null,
+        tags: Array.isArray(creatorWalletState.tags)
+            ? Array.from(new Set([...creatorWalletState.tags, 'creator']))
+            : ['creator'],
+        source: 'creator-storage'
+    };
+
+    if (prepend) {
+        list.unshift(creatorEntry);
+    } else {
+        list.push(creatorEntry);
+    }
+
+    return list;
 }
 
 function findCreatorWalletInList(wallets, preferences = {}) {

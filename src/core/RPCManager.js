@@ -177,8 +177,9 @@ export class RPCManager {
     let lastError;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
+      let connection;
       try {
-        const connection = this.getConnection();
+        connection = this.getConnection();
         const startTime = Date.now();
         
         const result = await Promise.race([
@@ -280,10 +281,13 @@ export class RPCManager {
         const startTime = Date.now();
         const slot = await Promise.race([
           connectionData.connection.getSlot(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Health check timeout')), this.config.healthCheckTimeout)
-          )
-        );
+          new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error('Health check timeout')),
+              this.config.healthCheckTimeout
+            );
+          })
+        ]);
         const latency = Date.now() - startTime;
 
         connectionData.healthy = true;

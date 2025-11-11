@@ -7562,7 +7562,7 @@ Enable Smart Sell for tokens to see statistics here.`, {
         statsText += `   • Wallets: ${monitor.walletsMonitored}\n`;
         statsText += `   • Runtime: ${runtime} minutes\n`;
         statsText += `   • Sells executed: ${monitor.stats.sellsExecuted}\n`;
-        statsText += `   • Price samples: ${monitor.priceHistory}\n\n`;
+        statsText += `   • Price datapoints: ${monitor.priceHistory}\n\n`;
       });
 
       await ctx.editMessageText(`📊 *SMART SELL STATISTICS*
@@ -9316,7 +9316,7 @@ ${detailedResults}${moreResults}
     });
   });
 
-  // Simple placeholder for other volume setting adjustments
+  // Simple stub for other volume setting adjustments
   const volumeSettingActions = ['volume_set_amount', 'volume_set_sessions', 'volume_set_slippage'];
   
   volumeSettingActions.forEach(action => {

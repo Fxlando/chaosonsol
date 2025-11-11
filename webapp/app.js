@@ -33,7 +33,7 @@ async function checkBackendConnection() {
         }
     } catch (error) {
         isBackendAvailable = false;
-        console.log('ℹ️ Running in demo mode (backend not connected)');
+        console.error('❌ Backend API unreachable:', error);
     }
 }
 
@@ -136,22 +136,17 @@ async function loadDashboard() {
     } catch (error) {
         console.error('❌ Dashboard load error:', error);
         console.error('Error details:', error.message);
-        // Fallback to demo data
-        stats = {
-            wallets: { total: 0, active: 0 },
-            balance: { sol: 0, usd: 0 },
-            groups: 0,
-            solPrice: null,
-            network: 'mainnet-beta'
-        };
-        console.log('⚠️ Using fallback demo data');
-        updateDashboardStats();
-        showToast('Using demo data - check console for errors', 'error');
+        stats = null;
+        setDashboardUnavailable();
+        showToast('Unable to load live dashboard data. Check backend status.', 'error');
     }
 }
 
 function updateDashboardStats() {
-    if (!stats) return;
+    if (!stats) {
+        setDashboardUnavailable();
+        return;
+    }
     
     // Update stats
     document.getElementById('total-wallets').textContent = stats.wallets.total;
@@ -168,6 +163,17 @@ function updateDashboardStats() {
         solPriceEl.textContent = 'N/A';
     }
     solPriceEl.setAttribute('data-source', stats.priceSource || 'unknown');
+}
+
+function setDashboardUnavailable() {
+    document.getElementById('total-wallets').textContent = 'N/A';
+    document.getElementById('active-wallets').textContent = 'N/A';
+    document.getElementById('total-sol').textContent = 'N/A';
+    document.getElementById('total-usd').textContent = 'N/A';
+    document.getElementById('total-groups').textContent = 'N/A';
+    const solPriceEl = document.getElementById('sol-price');
+    solPriceEl.textContent = 'N/A';
+    solPriceEl.setAttribute('data-source', 'unavailable');
 }
 
 async function updateSystemStatus() {
@@ -198,13 +204,13 @@ async function updateSystemStatus() {
     } catch (error) {
         console.error('Status update error:', error);
         // Set defaults on error
-        document.getElementById('volume-status').textContent = 'Standby';
+        document.getElementById('volume-status').textContent = 'Unavailable';
         document.getElementById('volume-indicator').className = 'indicator-dot';
-        document.getElementById('volume-sessions').textContent = '0';
-        document.getElementById('volume-cycles').textContent = '0';
-        document.getElementById('smartsell-status').textContent = 'Disabled';
+        document.getElementById('volume-sessions').textContent = 'N/A';
+        document.getElementById('volume-cycles').textContent = 'N/A';
+        document.getElementById('smartsell-status').textContent = 'Unavailable';
         document.getElementById('smartsell-indicator').className = 'indicator-dot';
-        document.getElementById('smartsell-monitoring').textContent = '0 tokens';
+        document.getElementById('smartsell-monitoring').textContent = 'N/A';
     }
 }
 
@@ -220,44 +226,11 @@ async function loadWallets() {
         
     } catch (error) {
         console.error('Wallets load error:', error);
-        wallets = generateDemoWallets();
+        wallets = [];
         updateWalletGroups();
-        updateWalletsTable();
+        renderWalletsError('Unable to load wallet data - backend unavailable');
+        showToast('Unable to load wallet data. Check backend status.', 'error');
     }
-}
-
-function generateDemoWallets() {
-    const demoWallets = [];
-    for (let i = 1; i <= 20; i++) {
-        demoWallets.push({
-            name: `Volume_${i}`,
-            publicKey: generateRandomAddress(),
-            groupName: 'Volume',
-            balance: 0,
-            usdValue: 0,
-            status: 'active'
-        });
-    }
-    for (let i = 1; i <= 20; i++) {
-        demoWallets.push({
-            name: `Pump_${i}`,
-            publicKey: generateRandomAddress(),
-            groupName: 'VolumePump',
-            balance: 0,
-            usdValue: 0,
-            status: 'active'
-        });
-    }
-    return demoWallets;
-}
-
-function generateRandomAddress() {
-    const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-    let address = '';
-    for (let i = 0; i < 44; i++) {
-        address += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return address;
 }
 
 function updateWalletGroups() {
@@ -298,6 +271,12 @@ function updateWalletsTable() {
     });
 }
 
+function renderWalletsError(message) {
+    const tbody = document.getElementById('wallets-table');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="7" class="loading">${message}</td></tr>`;
+}
+
 async function refreshWallets() {
     showToast('Refreshing wallet balances...', 'success');
     await loadWallets();
@@ -328,19 +307,11 @@ async function loadVolumeView() {
         
     } catch (error) {
         console.error('Volume view load error:', error);
-        // Fallback groups
-        groups = [
-            { id: 'test', name: 'Test Wallets', walletCount: 10 },
-            { id: 'VolumePump', name: 'Pump.Fun Launch Group', walletCount: 20 }
-        ];
+        groups = [];
         const select = document.getElementById('volume-group');
-        select.innerHTML = '<option value="">Select group...</option>';
-        groups.forEach(group => {
-            const option = document.createElement('option');
-            option.value = group.id;
-            option.textContent = `${group.name} (${group.walletCount} wallets)`;
-            select.appendChild(option);
-        });
+        select.innerHTML = '<option value="">Backend unavailable</option>';
+        select.setAttribute('disabled', 'disabled');
+        showToast('Unable to load volume groups. Check backend status.', 'error');
     }
 }
 

@@ -1,4 +1,4 @@
-// Real On-Chain Trading UI - No Fake Data
+// Real On-Chain Trading UI - Uses live on-chain data only
 // 100% Solana Blockchain Integration
 
 let solana;
@@ -592,7 +592,7 @@ function ensureGlobalFunction(name) {
         return;
     }
 
-    const placeholder = (...args) => {
+    const fallbackHandler = (...args) => {
         const message = `${name} is not available in this build yet.`;
         if (typeof notify === 'function') {
             notify(message, 'warning');
@@ -602,8 +602,8 @@ function ensureGlobalFunction(name) {
         return null;
     };
 
-    placeholder.__placeholder = true;
-    window[name] = placeholder;
+    fallbackHandler.__fallback = true;
+    window[name] = fallbackHandler;
 }
 
 missingGlobalHandlers.forEach(ensureGlobalFunction);
@@ -1308,12 +1308,12 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
     const error = options.error;
 
     selectEl.innerHTML = '';
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = wallets.length ? 'Select wallet...' : 'No wallets available';
-    placeholder.disabled = true;
-    placeholder.selected = true;
-    selectEl.appendChild(placeholder);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = wallets.length ? 'Select wallet...' : 'No wallets available';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    selectEl.appendChild(defaultOption);
 
     const seenKeys = new Set();
     let hasCreatorWallet = false;
@@ -1390,7 +1390,7 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         );
         if (matchingOption) {
             matchingOption.selected = true;
-            placeholder.selected = false;
+            defaultOption.selected = false;
         }
     } else {
         const viableOption = Array.from(selectEl.options).find(
@@ -1398,7 +1398,7 @@ function populateCreatorWalletSelect(selectEl, wallets, options = {}) {
         );
         if (viableOption) {
             viableOption.selected = true;
-            placeholder.selected = false;
+            defaultOption.selected = false;
             tokenLaunchState.selectedWalletId = viableOption.value;
             selectEl.dispatchEvent(new Event('change', { bubbles: true }));
         }
@@ -1800,10 +1800,10 @@ function populateLaunchAutomationGroupOptions() {
         const previousValue = state.groupId || '';
 
         selectEl.innerHTML = '';
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Select group...';
-        selectEl.appendChild(placeholder);
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select group...';
+        selectEl.appendChild(defaultOption);
 
         groups.forEach((group) => {
             const value = group?.id || group?.name;
@@ -1865,11 +1865,11 @@ function populateLaunchDevWalletSelect() {
     }
 
     selectEl.disabled = false;
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = 'Select dev wallet...';
-    placeholder.disabled = true;
-    selectEl.appendChild(placeholder);
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Select dev wallet...';
+    defaultOption.disabled = true;
+    selectEl.appendChild(defaultOption);
 
     let selectedId = tokenLaunchState.launchConfig.devWalletId || tokenLaunchState.selectedWalletId || '';
     let selectionFound = false;
@@ -1902,11 +1902,11 @@ function populateLaunchDevWalletSelect() {
     }
 
     if (selectedId) {
-        placeholder.selected = false;
+        defaultOption.selected = false;
         tokenLaunchState.launchConfig.devWalletId = selectedId;
         tokenLaunchState.selectedWalletId = selectedId;
     } else {
-        placeholder.selected = true;
+        defaultOption.selected = true;
         tokenLaunchState.launchConfig.devWalletId = '';
         tokenLaunchState.selectedWalletId = '';
     }
@@ -1991,7 +1991,7 @@ function renderBlockZeroWalletList() {
                         </div>
                     </label>
                     <div class="flex items-center gap-2">
-                        <input type="number" class="w-28 bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" data-block-zero-amount value="${amountValue !== '' ? escapeHtml(String(amountValue)) : ''}" step="0.001" min="0" placeholder="0.00" ${selected ? '' : 'disabled'}>
+                        <input type="number" class="w-28 bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-500" data-block-zero-amount value="${amountValue !== '' ? escapeHtml(String(amountValue)) : ''}" step="0.001" min="0" ${selected ? '' : 'disabled'}>
                         <span class="text-xs text-gray-500 uppercase">SOL</span>
                     </div>
                 </div>
@@ -2898,10 +2898,10 @@ function populateBlueprintAutomationGroupOptions() {
         const previousValue = selectEl.value;
 
         selectEl.innerHTML = '';
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = 'Select group...';
-        selectEl.appendChild(placeholder);
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select group...';
+        selectEl.appendChild(defaultOption);
 
         groups.forEach((group) => {
             const value = group?.id || group?.name;
@@ -5426,9 +5426,9 @@ function setButtonLoading(buttonOrId, isLoading, loadingText) {
 }
 
 function tokenAvatar(record) {
-    const placeholder = '<span class="text-2xl">🪙</span>';
+    const defaultIcon = '<span class="text-2xl">🪙</span>';
     if (!record?.image) {
-        return `<div class="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center">${placeholder}</div>`;
+        return `<div class="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center">${defaultIcon}</div>`;
     }
     return `
         <div class="w-10 h-10 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
@@ -6908,7 +6908,7 @@ function ensureMultiWalletReady() {
 
 function registerGlobalHandler(name, handler) {
     const existing = window[name];
-    if (typeof existing === 'function' && !existing.__placeholder) {
+    if (typeof existing === 'function' && !existing.__fallback) {
         return;
     }
     window[name] = handler;

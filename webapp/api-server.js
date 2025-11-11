@@ -697,7 +697,7 @@ register('get', '/stats', async () => {
     wallets: {
       total: wallets.length,
       active: activeWallets,
-      sampled: wallets.length
+      evaluated: wallets.length
     },
     balance: {
       sol: balanceSol,

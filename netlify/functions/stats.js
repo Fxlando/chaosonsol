@@ -172,7 +172,7 @@ exports.handler = async (event, context) => {
       wallets: {
         total: allWallets.length,
         active: activeWallets,
-        sampled: 10
+        evaluated: balances.length
       },
       balance: {
         sol: totalBalance,

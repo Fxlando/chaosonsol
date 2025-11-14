@@ -5446,7 +5446,7 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                 try {
                     const payload = JSON.parse(text);
                     collectFromPayload(payload);
-                } catch (error) {
+    } catch (error) {
                     console.warn(`Pump.fun trade feed returned non-JSON (${endpoint}):`, error.message || error);
                 }
             }
@@ -5825,6 +5825,50 @@ async function fetchRuntimeAutomationsForMint(mint) {
         });
     }
 
+    // Add Sell Buyback task if running
+    if (sellBuybackTaskConfig.running && sellBuybackTaskConfig.tokenMint === mint) {
+        const buyWalletCount = sellBuybackTaskConfig.buyWallets.length;
+        const statusLabel = sellBuybackTaskConfig.running ? 'Running' : 'Stopped';
+        const statusClass = sellBuybackTaskConfig.running 
+            ? 'bg-emerald-900/60 text-emerald-200' 
+            : 'bg-neutral-800 text-gray-300';
+        
+        // Get sell wallet name
+        const allWallets = collectBlueprintWallets();
+        const sellWallet = allWallets.find(w => {
+            const id = w.id || w.address || w.publicKey || '';
+            return id === sellBuybackTaskConfig.sellWalletId;
+        });
+        const sellWalletName = sellWallet?.name || 'Unknown';
+        
+        tasks.push({
+            key: sellBuybackTaskConfig.taskId || `sell-buyback-${mint}`,
+            source: 'runtime',
+            type: 'sellBuyback',
+            title: 'Sell Buyback',
+            subtitle: `Sell ${sellBuybackTaskConfig.sellPercentage}% from ${sellWalletName} • Buy back with ${buyWalletCount} wallet(s)`,
+            icon: 'repeat-2',
+            iconBackground: 'bg-blue-900/60',
+            statusLabel,
+            statusClass,
+            statusState: sellBuybackTaskConfig.running ? 'running' : 'paused',
+            metadata: {
+                type: 'sellBuyback',
+                tokenMint: mint,
+                config: { ...sellBuybackTaskConfig }
+            },
+            actions: [
+                {
+                    type: 'stop',
+                    icon: 'square',
+                    label: 'Stop',
+                    intent: 'red',
+                    disabled: !sellBuybackTaskConfig.running
+                }
+            ]
+        });
+    }
+
     return { tasks, stats };
 }
 
@@ -6086,6 +6130,12 @@ async function handleRuntimeTaskAction(action, taskKey) {
             }
             await window.apiClient.removeSmartSellPosition(walletId, tokenMint || tokenRegistry.current.mint);
             notify('Smart Sell automation stopped.', 'success');
+        } else if (task.type === 'sellBuyback') {
+            if (action === 'stop' || action === 'pause') {
+                stopSellBuybackTask();
+            } else {
+                notify('Sell Buyback task can only be stopped.', 'info');
+            }
         } else if (task.type === 'launch') {
             notify('Launch tasks are managed automatically during deploy.', 'info');
             return;
@@ -7087,12 +7137,28 @@ function renderTokenTaskList(record, options = {}) {
     summaryEl.textContent = statusFragments.length ? `${totalLabel} • ${statusFragments.join(', ')}` : totalLabel;
 
     const actionsToHtml = (task) => {
-        if (!Array.isArray(task.actions) || !task.actions.length) {
-            return '<span class="text-xs text-gray-500">—</span>';
+        const actionButtons = [];
+        
+        // Add Edit button for configurable tasks
+        const canEdit = task.type === 'volumeBot' || task.type === 'smartSell' || task.type === 'launch';
+        if (canEdit) {
+            const editHandler = task.source === 'runtime' 
+                ? `handleRuntimeTaskAction('edit', '${task.key}')`
+                : `handleTokenTaskAction('edit', '${task.key}')`;
+            actionButtons.push(`
+                <button
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-blue-500/40 text-blue-200 hover:text-blue-100 transition"
+                    onclick="${editHandler}"
+                    title="Edit ${escapeHtml(task.title || 'task')}"
+                >
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
+            `);
         }
 
-        return task.actions
-            .map((action) => {
+        // Add existing action buttons
+        if (Array.isArray(task.actions) && task.actions.length) {
+            task.actions.forEach((action) => {
                 const isRuntime = task.source === 'runtime';
                 const disabled = action.disabled;
                 const handler = isRuntime
@@ -7110,7 +7176,7 @@ function renderTokenTaskList(record, options = {}) {
                     'inline-flex items-center justify-center w-8 h-8 rounded-full border transition';
                 const disabledClass = disabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : '';
 
-                return `
+                actionButtons.push(`
                     <button
                         class="${baseClass} ${intentClass} ${disabledClass}"
                         ${disabled ? 'disabled' : `onclick="${handler}"`}
@@ -7118,9 +7184,15 @@ function renderTokenTaskList(record, options = {}) {
                     >
                         <i data-lucide="${escapeHtml(action.icon || 'zap')}" class="w-4 h-4"></i>
                     </button>
-                `;
-            })
-            .join('');
+                `);
+            });
+        }
+        
+        if (actionButtons.length === 0) {
+            return '<span class="text-xs text-gray-500">—</span>';
+        }
+        
+        return actionButtons.join('');
     };
 
     const rowsHtml = tasks
@@ -7240,10 +7312,9 @@ function openTokenAutomationConfigurator(taskKey) {
             label = 'Smart Sell automation';
             break;
         case 'sellBuyback':
-            options.smartSell = true;
-            options.volumeBot = true;
-            label = 'Sell/Buyback automations';
-            break;
+            // Open the sell buyback configuration window directly
+            configureSellBuybackTask();
+            return;
         case 'bump':
         default:
             label = 'Automation tools';
@@ -7293,7 +7364,533 @@ registerGlobalHandler('openTokenAutomationConfigurator', openTokenAutomationConf
 registerGlobalHandler('showAddVolumeTask', () => openTokenAutomationConfigurator('volumeBot'));
 registerGlobalHandler('showBulkSellTask', () => openTokenAutomationConfigurator('smartSell'));
 registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bump'));
-registerGlobalHandler('showSellBuybackTask', () => openTokenAutomationConfigurator('sellBuyback'));
+registerGlobalHandler('showSellBuybackTask', configureSellBuybackTask);
+registerGlobalHandler('updateSellBuybackBuyWalletSelection', updateSellBuybackBuyWalletSelection);
+registerGlobalHandler('updateSellBuybackBuyAmount', updateSellBuybackBuyAmount);
+// Sell Buyback Task Configuration and Execution
+let sellBuybackTaskConfig = {
+    sellWalletId: null,
+    sellPercentage: 100,
+    buyWallets: [], // Array of { walletId, buyAmount }
+    enabled: false,
+    running: false,
+    tokenMint: null,
+    taskId: null
+};
+
+function configureSellBuybackTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before configuring Sell Buyback task.', 'warning');
+        return;
+    }
+
+    // Open configuration modal or show floating window
+    const window = document.getElementById('sell-buyback-window');
+    if (window) {
+        window.classList.remove('hidden');
+        
+        // Populate with current config
+        const sellPctInput = document.getElementById('sell-buyback-sell-percentage');
+        if (sellPctInput) sellPctInput.value = sellBuybackTaskConfig.sellPercentage || 100;
+        
+        // Load wallets for sell wallet dropdown
+        loadSellBuybackSellWallets();
+        
+        // Load wallets for buy wallets table
+        loadSellBuybackBuyWallets();
+    } else {
+        // Fallback: navigate to create token view
+        openTokenAutomationConfigurator('sellBuyback');
+    }
+}
+
+function loadSellBuybackSellWallets() {
+    const sellWalletSelect = document.getElementById('sell-buyback-sell-wallet');
+    if (!sellWalletSelect) return;
+    
+    try {
+        const wallets = collectBlueprintWallets();
+        if (!wallets || wallets.length === 0) {
+            sellWalletSelect.innerHTML = '<option value="">No wallets available. Load wallets first.</option>';
+            return;
+        }
+        
+        sellWalletSelect.innerHTML = '<option value="">Select wallet to sell from...</option>' + 
+            wallets.map(wallet => {
+                const id = wallet.id || wallet.address || wallet.publicKey || '';
+                const name = wallet.name || 'Unnamed';
+                const address = wallet.address || wallet.publicKey || '';
+                const truncated = address.length > 20 ? `${address.substring(0, 10)}...${address.substring(address.length - 8)}` : address;
+                const selected = sellBuybackTaskConfig.sellWalletId === id ? 'selected' : '';
+                return `<option value="${escapeHtml(id)}" ${selected}>${escapeHtml(name)} (${escapeHtml(truncated)})</option>`;
+            }).join('');
+        
+        sellWalletSelect.addEventListener('change', (e) => {
+            sellBuybackTaskConfig.sellWalletId = e.target.value || null;
+        });
+    } catch (error) {
+        console.error('Failed to load sell wallets:', error);
+        sellWalletSelect.innerHTML = '<option value="">Failed to load wallets.</option>';
+    }
+}
+
+async function loadSellBuybackBuyWallets() {
+    const walletList = document.getElementById('sell-buyback-buy-wallets-list');
+    if (!walletList) return;
+    
+    try {
+        const wallets = collectBlueprintWallets();
+        if (!wallets || wallets.length === 0) {
+            walletList.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-gray-500">No wallets available. Load wallets first.</td></tr>';
+            return;
+        }
+        
+        // Get SOL balances for wallets
+        const walletsWithBalances = await Promise.all(
+            wallets.map(async (wallet) => {
+                const address = wallet.address || wallet.publicKey || '';
+                let solBalance = 0;
+                try {
+                    if (solanaIntegration?.getBalance) {
+                        solBalance = await solanaIntegration.getBalance(address);
+                    }
+                } catch (error) {
+                    console.warn(`Failed to get balance for ${address}:`, error);
+                }
+                return { ...wallet, solBalance };
+            })
+        );
+        
+        walletList.innerHTML = walletsWithBalances.map(wallet => {
+            const id = wallet.id || wallet.address || wallet.publicKey || '';
+            const name = wallet.name || 'Unnamed';
+            const address = wallet.address || wallet.publicKey || '';
+            const truncated = address.length > 20 ? `${address.substring(0, 4)}...${address.substring(address.length - 4)}` : address;
+            const solBalance = wallet.solBalance || 0;
+            const balanceDisplay = solBalance < 0.01 ? '<0.01 SOL' : `${solBalance.toFixed(2)} SOL`;
+            
+            // Check if this wallet is already in buyWallets config
+            const existingBuyWallet = sellBuybackTaskConfig.buyWallets.find(bw => bw.walletId === id);
+            const isChecked = existingBuyWallet ? 'checked' : '';
+            const buyAmount = existingBuyWallet ? existingBuyWallet.buyAmount : '';
+            
+            return `
+                <tr class="hover:bg-neutral-900/50 transition">
+                    <td class="py-2 px-3">
+                        <input type="checkbox" 
+                            class="sell-buyback-buy-wallet-checkbox" 
+                            data-wallet-id="${escapeHtml(id)}"
+                            ${isChecked}
+                            onchange="updateSellBuybackBuyWalletSelection(this)"
+                            ${sellBuybackTaskConfig.buyWallets.length >= 4 && !isChecked ? 'disabled' : ''}
+                        />
+                    </td>
+                    <td class="py-2 px-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${getWalletEmoji(name)}</span>
+                            <span class="text-xs font-medium text-white">${escapeHtml(name)}</span>
+                        </div>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-400 font-mono">${escapeHtml(truncated)}</span>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-300">${balanceDisplay}</span>
+                    </td>
+                    <td class="py-2 px-3">
+                        <input type="number" 
+                            class="sell-buyback-buy-amount-input w-20 bg-black border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500" 
+                            data-wallet-id="${escapeHtml(id)}"
+                            value="${buyAmount}"
+                            step="0.01"
+                            min="0.05"
+                            placeholder="0.00"
+                            onchange="updateSellBuybackBuyAmount(this)"
+                            ${!isChecked ? 'disabled' : ''}
+                        />
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        updateSellBuybackSelectedCount();
+    } catch (error) {
+        console.error('Failed to load buy wallets:', error);
+        walletList.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-xs text-red-400">Failed to load wallets.</td></tr>';
+    }
+}
+
+function getWalletEmoji(name) {
+    // Simple emoji mapping based on wallet name patterns
+    const emojiMap = {
+        'elephant': '🐘',
+        'parrot': '🦜',
+        'shark': '🦈',
+        'cat': '🐱',
+        'flamingo': '🦩',
+        'giraffe': '🦒',
+        'rabbit': '🐰',
+        'fish': '🐟',
+        'dog': '🐶',
+        'turtle': '🐢'
+    };
+    
+    for (const [key, emoji] of Object.entries(emojiMap)) {
+        if (name.toLowerCase().includes(key)) {
+            return emoji;
+        }
+    }
+    return '👛'; // Default wallet emoji
+}
+
+function updateSellBuybackBuyWalletSelection(checkbox) {
+    const walletId = checkbox.dataset.walletId;
+    const buyAmountInput = document.querySelector(`.sell-buyback-buy-amount-input[data-wallet-id="${walletId}"]`);
+    
+    if (checkbox.checked) {
+        // Check if we already have 4 wallets selected
+        if (sellBuybackTaskConfig.buyWallets.length >= 4) {
+            checkbox.checked = false;
+            notify('Maximum 4 buy wallets allowed.', 'warning');
+            return;
+        }
+        
+        // Add wallet to buyWallets
+        if (!sellBuybackTaskConfig.buyWallets.find(bw => bw.walletId === walletId)) {
+            sellBuybackTaskConfig.buyWallets.push({
+                walletId,
+                buyAmount: ''
+            });
+        }
+        
+        // Enable buy amount input
+        if (buyAmountInput) {
+            buyAmountInput.disabled = false;
+            buyAmountInput.focus();
+        }
+    } else {
+        // Remove wallet from buyWallets
+        sellBuybackTaskConfig.buyWallets = sellBuybackTaskConfig.buyWallets.filter(bw => bw.walletId !== walletId);
+        
+        // Disable and clear buy amount input
+        if (buyAmountInput) {
+            buyAmountInput.disabled = true;
+            buyAmountInput.value = '';
+        }
+    }
+    
+    // Update disabled state of other checkboxes
+    updateSellBuybackCheckboxStates();
+    updateSellBuybackSelectedCount();
+}
+
+function updateSellBuybackBuyAmount(input) {
+    const walletId = input.dataset.walletId;
+    const buyAmount = Number(input.value) || 0;
+    
+    const buyWallet = sellBuybackTaskConfig.buyWallets.find(bw => bw.walletId === walletId);
+    if (buyWallet) {
+        buyWallet.buyAmount = buyAmount;
+    }
+}
+
+function updateSellBuybackCheckboxStates() {
+    const checkboxes = document.querySelectorAll('.sell-buyback-buy-wallet-checkbox');
+    const selectedCount = sellBuybackTaskConfig.buyWallets.length;
+    
+    checkboxes.forEach(checkbox => {
+        const walletId = checkbox.dataset.walletId;
+        const isSelected = sellBuybackTaskConfig.buyWallets.find(bw => bw.walletId === walletId);
+        
+        if (!isSelected && selectedCount >= 4) {
+            checkbox.disabled = true;
+        } else {
+            checkbox.disabled = false;
+        }
+    });
+}
+
+function updateSellBuybackSelectedCount() {
+    const countEl = document.getElementById('sell-buyback-selected-count');
+    if (countEl) {
+        const count = sellBuybackTaskConfig.buyWallets.length;
+        countEl.textContent = `${count} wallet${count === 1 ? '' : 's'} selected`;
+    }
+}
+
+async function executeSellBuybackTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before starting Sell Buyback task.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    // Get configuration from inputs
+    const sellWalletSelect = document.getElementById('sell-buyback-sell-wallet');
+    const sellPctInput = document.getElementById('sell-buyback-sell-percentage');
+    
+    if (!sellWalletSelect || !sellWalletSelect.value) {
+        notify('Select a sell wallet.', 'warning');
+        return;
+    }
+    
+    sellBuybackTaskConfig.sellWalletId = sellWalletSelect.value;
+    sellBuybackTaskConfig.sellPercentage = Number(sellPctInput?.value) || 100;
+    
+    // Get buy wallets from config (already updated by checkbox handlers)
+    if (sellBuybackTaskConfig.buyWallets.length === 0) {
+        notify('Select at least one buy wallet.', 'warning');
+        return;
+    }
+    
+    if (sellBuybackTaskConfig.buyWallets.length > 4) {
+        notify('Maximum 4 buy wallets allowed.', 'error');
+        return;
+    }
+
+    // Validate buy amounts
+    for (const buyWallet of sellBuybackTaskConfig.buyWallets) {
+        if (!buyWallet.buyAmount || buyWallet.buyAmount < 0.05) {
+            notify(`Buy amount must be at least 0.05 SOL for all selected wallets.`, 'error');
+            return;
+        }
+    }
+
+    if (sellBuybackTaskConfig.running) {
+        notify('Sell Buyback task is already running.', 'warning');
+        return;
+    }
+
+    // Validate configuration
+    if (sellBuybackTaskConfig.sellPercentage < 1 || sellBuybackTaskConfig.sellPercentage > 100) {
+        notify('Sell percentage must be between 1 and 100.', 'error');
+        return;
+    }
+
+    sellBuybackTaskConfig.enabled = true;
+    sellBuybackTaskConfig.running = true;
+    sellBuybackTaskConfig.tokenMint = current.mint;
+    sellBuybackTaskConfig.taskId = `sell-buyback-${Date.now()}`;
+
+    notify('Sell Buyback task started!', 'success');
+    addConsoleLog(`🔄 Starting Sell Buyback: Sell ${sellBuybackTaskConfig.sellPercentage}% from 1 wallet, buy back with ${sellBuybackTaskConfig.buyWallets.length} wallet(s)`, 'info');
+
+    // Close the configuration window
+    closeFloatingWindow('sell-buyback-window');
+
+    // Start the task execution
+    runSellBuybackTask().catch(error => {
+        console.error('Sell Buyback task failed:', error);
+        notify(`Sell Buyback task failed: ${error.message}`, 'error');
+        sellBuybackTaskConfig.running = false;
+        if (tokenRegistry.current) {
+            loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+        }
+    });
+}
+
+async function runSellBuybackTask() {
+    const { tokenMint, sellWalletId, sellPercentage, buyWallets } = sellBuybackTaskConfig;
+    
+    if (!tokenMint || !sellWalletId || !buyWallets || buyWallets.length === 0) {
+        throw new Error('Invalid Sell Buyback configuration');
+    }
+
+    // Get sell wallet
+    const allWallets = collectBlueprintWallets();
+    const sellWallet = allWallets.find(w => {
+        const id = w.id || w.address || w.publicKey || '';
+        return id === sellWalletId;
+    });
+
+    if (!sellWallet) {
+        throw new Error('Sell wallet not found');
+    }
+
+    const sellWalletId_full = sellWallet.id || sellWallet.address || sellWallet.publicKey || '';
+    const sellWalletAddress = sellWallet.address || sellWallet.publicKey || '';
+    const sellWalletName = sellWallet.name || 'Unnamed';
+
+    // Get buy wallets
+    const buyWalletObjects = buyWallets.map(bw => {
+        const wallet = allWallets.find(w => {
+            const id = w.id || w.address || w.publicKey || '';
+            return id === bw.walletId;
+        });
+        return wallet ? { ...wallet, buyAmount: bw.buyAmount } : null;
+    }).filter(Boolean);
+
+    if (buyWalletObjects.length === 0) {
+        throw new Error('No valid buy wallets found');
+    }
+
+    addConsoleLog(`📊 Sell Buyback: Selling from ${sellWalletName}, buying back with ${buyWalletObjects.length} wallet(s)...`, 'info');
+
+    // Phase 1: Sell from the sell wallet
+    let sellResult = null;
+    try {
+        // Get token balance using solanaIntegration
+        let tokenBalance = 0;
+        try {
+            if (solanaIntegration?.getTokenBalance) {
+                tokenBalance = await solanaIntegration.getTokenBalance(sellWalletAddress, tokenMint);
+            } else {
+                // Fallback: try to get balance via connection
+                const connection = solanaIntegration?.connection || fallbackSolanaConnection;
+                if (connection) {
+                    const { PublicKey } = await import('@solana/web3.js');
+                    const { getAssociatedTokenAddress, getAccount } = await import('@solana/spl-token');
+                    const tokenAccount = await getAssociatedTokenAddress(
+                        new PublicKey(tokenMint),
+                        new PublicKey(sellWalletAddress)
+                    );
+                    try {
+                        const accountInfo = await getAccount(connection, tokenAccount);
+                        tokenBalance = Number(accountInfo.amount) / Math.pow(10, accountInfo.mint.decimals || 9);
+                    } catch (e) {
+                        // Account doesn't exist
+                        tokenBalance = 0;
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to get token balance:', error);
+            tokenBalance = 0;
+        }
+
+        if (!tokenBalance || tokenBalance <= 0) {
+            throw new Error(`Wallet ${sellWalletName} has no tokens to sell`);
+        }
+
+        const sellAmount = tokenBalance * (sellPercentage / 100);
+
+        addConsoleLog(`💸 Selling ${sellPercentage}% (${sellAmount.toFixed(6)} tokens) from ${sellWalletName}...`, 'info');
+
+        const sellResponse = await window.apiClient.sellToken(
+            sellWalletId_full,
+            tokenMint,
+            sellAmount,
+            { executor: 'jito' } // Use Jito for faster execution
+        );
+
+        if (!sellResponse?.success) {
+            throw new Error(sellResponse?.error || 'Sell transaction failed');
+        }
+
+        sellResult = {
+            walletId: sellWalletId_full,
+            walletAddress: sellWalletAddress,
+            walletName: sellWalletName,
+            tokensSold: sellAmount,
+            solReceived: sellResponse.solReceived || 0,
+            signature: sellResponse.signature
+        };
+
+        addConsoleLog(`✅ Sold ${sellAmount.toFixed(6)} tokens from ${sellWalletName}`, 'success');
+        addConsoleLog(`💰 Received ${(sellResult.solReceived || 0).toFixed(4)} SOL`, 'info');
+    } catch (error) {
+        console.error('Error selling from wallet:', error);
+        addConsoleLog(`❌ Failed to sell from ${sellWalletName}: ${error.message}`, 'error');
+        throw error;
+    }
+
+    if (!sellBuybackTaskConfig.running) {
+        addConsoleLog('Sell Buyback task stopped.', 'warning');
+        return;
+    }
+
+    // Phase 2: Immediate buyback with selected wallets
+    addConsoleLog(`🔄 Starting immediate buyback with ${buyWalletObjects.length} wallet(s)...`, 'info');
+    
+    const buybackPromises = buyWalletObjects.map(async (buyWallet) => {
+        if (!sellBuybackTaskConfig.running) {
+            return null;
+        }
+
+        try {
+            const buyWalletId = buyWallet.id || buyWallet.address || buyWallet.publicKey || '';
+            const buyWalletAddress = buyWallet.address || buyWallet.publicKey || '';
+            const buyWalletName = buyWallet.name || 'Unnamed';
+            const buyAmount = buyWallet.buyAmount;
+
+            if (!buyAmount || buyAmount < 0.05) {
+                addConsoleLog(`⚠️ Skipping ${buyWalletName}: Invalid buy amount`, 'warning');
+                return null;
+            }
+
+            addConsoleLog(`💰 Buying ${buyAmount.toFixed(4)} SOL worth of tokens to ${buyWalletName}...`, 'info');
+
+            const buyResponse = await window.apiClient.buyToken(
+                buyWalletId,
+                tokenMint,
+                buyAmount,
+                { executor: 'jito' } // Use Jito for faster execution
+            );
+
+            if (buyResponse?.success) {
+                addConsoleLog(`✅ Bought ${buyAmount.toFixed(4)} SOL worth of tokens to ${buyWalletName}`, 'success');
+                return {
+                    walletId: buyWalletId,
+                    walletAddress: buyWalletAddress,
+                    walletName: buyWalletName,
+                    buyAmount,
+                    signature: buyResponse.signature
+                };
+            } else {
+                addConsoleLog(`❌ Failed to buyback to ${buyWalletName}: ${buyResponse?.error || 'Unknown error'}`, 'error');
+                return null;
+            }
+        } catch (error) {
+            console.error(`Error buying back to wallet ${buyWallet.id || buyWallet.address}:`, error);
+            addConsoleLog(`❌ Error buying back: ${error.message}`, 'error');
+            return null;
+        }
+    });
+
+    // Execute all buybacks in parallel for immediate execution
+    const buybackResults = await Promise.all(buybackPromises);
+    const successfulBuybacks = buybackResults.filter(Boolean);
+
+    if (successfulBuybacks.length > 0) {
+        addConsoleLog(`✅ Sell Buyback task completed! ${successfulBuybacks.length}/${buyWalletObjects.length} buybacks successful`, 'success');
+    } else {
+        addConsoleLog(`⚠️ Sell Buyback task completed but no buybacks were successful`, 'warning');
+    }
+
+    sellBuybackTaskConfig.running = false;
+
+    // Refresh token details
+    if (tokenRegistry.current) {
+        await loadLiveTokenDetail(tokenRegistry.current);
+    }
+}
+
+function stopSellBuybackTask() {
+    if (!sellBuybackTaskConfig.running) {
+        notify('Sell Buyback task is not running.', 'info');
+        return;
+    }
+
+    sellBuybackTaskConfig.running = false;
+    notify('Sell Buyback task stopped.', 'success');
+    addConsoleLog('🛑 Sell Buyback task stopped by user.', 'info');
+    
+    if (tokenRegistry.current) {
+        loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+    }
+}
+
+registerGlobalHandler('showSellBuybackTask', configureSellBuybackTask);
+registerGlobalHandler('executeSellBuybackTask', executeSellBuybackTask);
+registerGlobalHandler('stopSellBuybackTask', stopSellBuybackTask);
 registerGlobalHandler('handleQuickBuy', handleQuickBuy);
 registerGlobalHandler('resyncTokenHoldings', resyncTokenHoldings);
 registerGlobalHandler('handleTokenEdit', handleTokenEdit);
@@ -10526,7 +11123,7 @@ async function refreshVanityLaunchPerformance(force = false, tokenMints = null) 
             } catch (error) {
                 // Only log non-5xx errors as warnings (API down is expected)
                 if (!error.message || (!error.message.includes('530') && !error.message.includes('503') && !error.message.includes('502'))) {
-                    console.warn(`Failed to refresh performance for ${entry.tokenMint}:`, error.message || error);
+                console.warn(`Failed to refresh performance for ${entry.tokenMint}:`, error.message || error);
                 } else {
                     // Silently handle API downtime
                     console.debug(`Pump.fun API unavailable for ${entry.tokenMint}`);

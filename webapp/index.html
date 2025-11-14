@@ -3942,7 +3942,7 @@
                             
                             <div class="grid grid-cols-2 gap-6 mb-4">
                                 <div>
-                                    <label class="block mb-2 text-sm font-medium">Live Trade Monitoring RPC (WebSocket)</label>
+                                    <label class="block mb-2 text-sm font-medium">Activity Feed RPC (WebSocket)</label>
                                     <input
                                         type="text"
                                         id="solana-monitoring-rpc"
@@ -3950,12 +3950,13 @@
                                         class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                     />
                                     <p class="text-xs text-gray-500 mt-1">
-                                        WebSocket endpoint for live trade transaction monitoring. Free public RPC works great here.
+                                        <strong>Used for:</strong> Activity section - Live trade transaction monitoring
+                                        <br>WebSocket endpoint. Free public RPC works great here.
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label class="block mb-2 text-sm font-medium">Price/Market Cap RPC (HTTP)</label>
+                                    <label class="block mb-2 text-sm font-medium">Market Cap RPC (HTTP)</label>
                                     <input
                                         type="text"
                                         id="solana-price-rpc"
@@ -3963,9 +3964,16 @@
                                         class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
                                     />
                                     <p class="text-xs text-gray-500 mt-1">
-                                        HTTP endpoint for frequent price and market cap updates. Can use free public RPC.
+                                        <strong>Used for:</strong> Market Cap section - Price and market cap updates (every 3 seconds)
+                                        <br>HTTP endpoint. Can use free public RPC.
                                     </p>
                                 </div>
+                            </div>
+                            
+                            <div class="bg-blue-900/20 border border-blue-700/50 rounded-lg p-3 mt-4">
+                                <p class="text-xs text-blue-200">
+                                    <strong>💡 Tip:</strong> Set Activity Feed RPC to <code class="text-blue-300">wss://api.mainnet-beta.solana.com</code> and Market Cap RPC to <code class="text-blue-300">https://api.mainnet-beta.solana.com</code> to use free public RPCs for these sections, keeping your main RPC free for other operations.
+                                </p>
                             </div>
                         </div>
 

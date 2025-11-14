@@ -5410,7 +5410,17 @@ function startTokenActivityStream(mint) {
             const latest = await fetchPumpFunTradeFeed(mint, 20);
             renderTokenActivity(latest, { isLive: true });
         } catch (error) {
-            console.warn(`Live trade refresh failed for ${mint}:`, error.message || error);
+            // Silently handle API downtime - don't spam console with expected errors
+            const errorMessage = error.message || String(error);
+            const isApiDown = errorMessage.includes('530') || 
+                             errorMessage.includes('503') || 
+                             errorMessage.includes('502') ||
+                             errorMessage.includes('504') ||
+                             errorMessage.includes('Failed to fetch');
+            
+            if (!isApiDown) {
+                console.debug(`Live trade refresh failed for ${mint}:`, errorMessage);
+            }
         }
     }, 15000);
 }
@@ -5525,7 +5535,14 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                     Accept: 'application/json'
                 }
             });
+            
+            // Silently handle 5xx errors (API downtime) and 404s (endpoint not available)
             if (!response.ok) {
+                const status = response.status;
+                // Only log non-5xx, non-404 errors as they might indicate a real issue
+                if (status !== 404 && status < 500) {
+                    console.debug(`Trade feed endpoint returned ${status} (${endpoint})`);
+                }
                 continue;
             }
 
@@ -5538,8 +5555,9 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                 try {
                     const payload = JSON.parse(text);
                     collectFromPayload(payload);
-    } catch (error) {
-                    console.warn(`Pump.fun trade feed returned non-JSON (${endpoint}):`, error.message || error);
+                } catch (parseError) {
+                    // Only log if it's not a 5xx/404 response
+                    console.debug(`Pump.fun trade feed returned non-JSON (${endpoint})`);
                 }
             }
 
@@ -5547,6 +5565,18 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                 break;
             }
         } catch (error) {
+            // Silently handle network errors and 5xx errors - API might be down
+            const errorMessage = error.message || String(error);
+            const isApiDown = errorMessage.includes('530') || 
+                             errorMessage.includes('503') || 
+                             errorMessage.includes('502') ||
+                             errorMessage.includes('504') ||
+                             errorMessage.includes('Failed to fetch') ||
+                             errorMessage.includes('NetworkError');
+            
+            if (!isApiDown) {
+                console.debug(`Trade feed fetch error (${endpoint}):`, errorMessage);
+            }
             console.warn(`Pump.fun trade feed unavailable at ${endpoint}:`, error.message || error);
         }
     }

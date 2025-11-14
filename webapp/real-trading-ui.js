@@ -8396,6 +8396,14 @@ function handleTokenArchive() {
             : 'Token restored to Active tokens.',
         nextState ? 'info' : 'success'
     );
+
+    // If archiving (not unarchiving), navigate back to tokens page
+    if (nextState) {
+        // Small delay to show the notification
+        setTimeout(() => {
+            switchView('tokens');
+        }, 500);
+    }
 }
 
 function populateTokenDetailView(record) {

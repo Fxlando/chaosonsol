@@ -115,7 +115,7 @@ class SettingsManager {
 
             // Shyft RPC Settings
             shyft: {
-                apiKey: '',
+                apiKey: '6AC3vTBB5lObDYTm', // Default API key - can be overridden in Settings
                 enabled: false // Enable Shyft RPC for blockchain queries and WebSocket subscriptions
             },
 

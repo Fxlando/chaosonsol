@@ -4798,6 +4798,11 @@ window.collectCreatorFees = collectCreatorFees;
 window.collectAllCreatorFees = collectAllCreatorFees;
 window.checkCreatorFees = checkCreatorFees;
 window.toggleAutoCollect = toggleAutoCollect;
+window.enterDeleteTokenMode = enterDeleteTokenMode;
+window.exitDeleteTokenMode = exitDeleteTokenMode;
+window.toggleTokenDeleteSelection = toggleTokenDeleteSelection;
+window.toggleSelectAllTokens = toggleSelectAllTokens;
+window.deleteSelectedTokens = deleteSelectedTokens;
 window.generateVanity = generateVanity;
 window.stopVanityGeneration = stopVanityGeneration;
 window.updateRPCEndpoint = updateRPCEndpoint;
@@ -5089,6 +5094,8 @@ const uiHelperState = {
     blockZeroMode: 'quick',
     tagFilters: new Set(),
     vanityFilter: 'available',
+    tokenDeleteMode: false,
+    selectedTokensForDelete: new Set(),
     tokenFilter: 'active'
 };
 
@@ -7254,9 +7261,10 @@ function renderTokensTable() {
             filter === 'archived'
                 ? 'No archived tokens yet. Archive a draft to track it here.'
                 : 'No tokens tracked yet. Copy or import a Pump.fun token to populate this table.';
+        const colspan = uiHelperState.tokenDeleteMode ? 7 : 6;
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="p-12 text-center text-gray-500">
+                <td colspan="${colspan}" class="p-12 text-center text-gray-500">
                     <div class="flex flex-col items-center gap-2">
                         <i data-lucide="inbox" class="w-10 h-10"></i>
                         <p class="text-base font-medium">${escapeHtml(
@@ -7344,8 +7352,22 @@ function buildTokenRow(record) {
         }
     }
 
+    const isDeleteMode = uiHelperState.tokenDeleteMode;
+    const isSelected = uiHelperState.selectedTokensForDelete.has(identifier);
+    const checkboxCell = isDeleteMode 
+        ? `<td class="p-4">
+            <input type="checkbox" 
+                   class="token-delete-checkbox w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-red-600 focus:ring-red-500 focus:ring-offset-neutral-900 cursor-pointer" 
+                   data-token-id="${escapeHtml(identifier)}"
+                   data-token-source="${rowSource}"
+                   ${isSelected ? 'checked' : ''}
+                   onchange="toggleTokenDeleteSelection('${escapeHtml(identifier)}', this.checked)">
+        </td>`
+        : '<td></td>';
+    
     return `
-        <tr data-token-id="${escapeHtml(identifier)}" data-token-source="${rowSource}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition cursor-pointer">
+        <tr data-token-id="${escapeHtml(identifier)}" data-token-source="${rowSource}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition ${isDeleteMode ? '' : 'cursor-pointer'} ${isSelected ? 'bg-red-900/20' : ''}">
+            ${checkboxCell}
             <td class="p-4">
                 <div class="flex items-center gap-3">
                     ${tokenAvatar(record)}
@@ -7376,12 +7398,211 @@ function attachTokenRowHandlers() {
     const tbody = document.getElementById('tokens-table-body');
     if (!tbody) return;
     tbody.querySelectorAll('tr[data-token-id]').forEach((row) => {
-        row.addEventListener('click', () => {
-            const identifier = row.getAttribute('data-token-id');
-            const source = row.getAttribute('data-token-source') || 'imported';
-            viewTokenDetails(identifier, source);
-        });
+        // Don't attach click handler in delete mode (checkboxes handle selection)
+        if (!uiHelperState.tokenDeleteMode) {
+            row.addEventListener('click', () => {
+                const identifier = row.getAttribute('data-token-id');
+                const source = row.getAttribute('data-token-source') || 'imported';
+                viewTokenDetails(identifier, source);
+            });
+        }
     });
+}
+
+// Enter delete mode for tokens
+function enterDeleteTokenMode() {
+    uiHelperState.tokenDeleteMode = true;
+    uiHelperState.selectedTokensForDelete.clear();
+    
+    const deleteBtn = getElement('delete-tokens-btn');
+    const selectHeader = getElement('token-select-header');
+    
+    if (deleteBtn) {
+        deleteBtn.innerHTML = `
+            <i data-lucide="x" class="w-4 h-4"></i>
+            <span>Cancel</span>
+        `;
+        deleteBtn.onclick = exitDeleteTokenMode;
+        deleteBtn.classList.remove('bg-red-700', 'hover:bg-red-600');
+        deleteBtn.classList.add('bg-neutral-800', 'hover:bg-neutral-700');
+    }
+    
+    if (selectHeader) {
+        selectHeader.innerHTML = '<input type="checkbox" id="select-all-tokens" class="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-red-600 focus:ring-red-500 cursor-pointer" onchange="toggleSelectAllTokens(this.checked)">';
+    }
+    
+    renderTokensTable();
+    
+    // Add delete button next to Cancel
+    const buttonContainer = deleteBtn?.parentElement;
+    if (buttonContainer && !getElement('confirm-delete-tokens-btn')) {
+        const confirmDeleteBtn = document.createElement('button');
+        confirmDeleteBtn.id = 'confirm-delete-tokens-btn';
+        confirmDeleteBtn.className = 'bg-red-700 hover:bg-red-600 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition';
+        confirmDeleteBtn.innerHTML = `
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Delete Selected</span>
+        `;
+        confirmDeleteBtn.onclick = deleteSelectedTokens;
+        deleteBtn.insertAdjacentElement('afterend', confirmDeleteBtn);
+    }
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+    
+    notify('Select tokens to delete, then click "Delete Selected"', 'info');
+}
+
+// Exit delete mode
+function exitDeleteTokenMode() {
+    uiHelperState.tokenDeleteMode = false;
+    uiHelperState.selectedTokensForDelete.clear();
+    
+    const deleteBtn = getElement('delete-tokens-btn');
+    const selectHeader = getElement('token-select-header');
+    const confirmDeleteBtn = getElement('confirm-delete-tokens-btn');
+    
+    if (deleteBtn) {
+        deleteBtn.innerHTML = `
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Delete Token</span>
+        `;
+        deleteBtn.onclick = enterDeleteTokenMode;
+        deleteBtn.classList.add('bg-red-700', 'hover:bg-red-600');
+        deleteBtn.classList.remove('bg-neutral-800', 'hover:bg-neutral-700');
+    }
+    
+    if (selectHeader) {
+        selectHeader.innerHTML = '';
+    }
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.remove();
+    }
+    
+    renderTokensTable();
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+// Toggle token selection for deletion
+function toggleTokenDeleteSelection(tokenId, isSelected) {
+    if (isSelected) {
+        uiHelperState.selectedTokensForDelete.add(tokenId);
+    } else {
+        uiHelperState.selectedTokensForDelete.delete(tokenId);
+    }
+    
+    // Update select all checkbox
+    const selectAllCheckbox = getElement('select-all-tokens');
+    if (selectAllCheckbox) {
+        const tbody = document.getElementById('tokens-table-body');
+        const allCheckboxes = tbody?.querySelectorAll('.token-delete-checkbox') || [];
+        const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+        selectAllCheckbox.checked = checkedCount === allCheckboxes.length && allCheckboxes.length > 0;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+    }
+    
+    // Update row highlighting
+    const row = document.querySelector(`tr[data-token-id="${tokenId}"]`);
+    if (row) {
+        if (isSelected) {
+            row.classList.add('bg-red-900/20');
+        } else {
+            row.classList.remove('bg-red-900/20');
+        }
+    }
+}
+
+// Toggle select all tokens
+function toggleSelectAllTokens(selectAll) {
+    const tbody = document.getElementById('tokens-table-body');
+    if (!tbody) return;
+    
+    const checkboxes = tbody.querySelectorAll('.token-delete-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll;
+        const tokenId = checkbox.getAttribute('data-token-id');
+        toggleTokenDeleteSelection(tokenId, selectAll);
+    });
+}
+
+// Delete selected tokens
+async function deleteSelectedTokens() {
+    const selectedIds = Array.from(uiHelperState.selectedTokensForDelete);
+    
+    if (selectedIds.length === 0) {
+        notify('No tokens selected for deletion', 'warning');
+        return;
+    }
+    
+    const tokenCount = selectedIds.length;
+    const confirmMessage = `Are you sure you want to permanently delete ${tokenCount} token${tokenCount === 1 ? '' : 's'}?\n\n` +
+        `This will remove ${tokenCount === 1 ? 'it' : 'them'} from the entire project/website.\n\n` +
+        `This action cannot be undone.`;
+    
+    if (!window.confirm(confirmMessage)) {
+        return;
+    }
+    
+    addConsoleLog(`🗑️ Deleting ${tokenCount} token(s)...`, 'info');
+    
+    let deletedCount = 0;
+    let failedCount = 0;
+    
+    for (const identifier of selectedIds) {
+        try {
+            // Check if it's a draft or imported token
+            const isDraft = tokenRegistry.drafts.has(identifier);
+            
+            if (isDraft) {
+                // Delete from drafts
+                tokenRegistry.drafts.delete(identifier);
+                removeTokenDraft(identifier);
+            } else {
+                // Delete from imported tokens
+                const normalizedMint = identifier.toLowerCase();
+                tokenRegistry.imported.delete(identifier);
+                tokenRegistry.imported.delete(normalizedMint);
+                
+                // Remove from archived set
+                archivedImportedTokens.delete(identifier);
+                archivedImportedTokens.delete(normalizedMint);
+                
+                // Remove from localStorage
+                setImportedTokenArchivedState(identifier, false);
+            }
+            
+            deletedCount++;
+        } catch (error) {
+            console.error(`Error deleting token ${identifier}:`, error);
+            failedCount++;
+        }
+    }
+    
+    // Persist changes
+    persistImportedTokens();
+    
+    // Clear selections and exit delete mode
+    uiHelperState.selectedTokensForDelete.clear();
+    exitDeleteTokenMode();
+    
+    // Refresh table
+    renderTokensTable();
+    
+    // Show result
+    if (deletedCount > 0) {
+        addConsoleLog(`✅ Successfully deleted ${deletedCount} token(s)`, 'success');
+        notify(`Deleted ${deletedCount} token${deletedCount === 1 ? '' : 's'}`, 'success');
+    }
+    
+    if (failedCount > 0) {
+        addConsoleLog(`❌ Failed to delete ${failedCount} token(s)`, 'error');
+        notify(`Failed to delete ${failedCount} token${failedCount === 1 ? '' : 's'}`, 'error');
+    }
 }
 
 function updateTokenDetailLinks(record = {}) {
@@ -12204,12 +12425,25 @@ registerGlobalHandler('selectRedistributeMode', (mode) => {
 registerGlobalHandler('switchTokenTab', (tab) => {
     const activeBtn = getElement('token-active-tab');
     const archivedBtn = getElement('token-archived-tab');
+    const deleteBtn = getElement('delete-tokens-btn');
     const showActive = tab === 'Active';
     activeBtn?.classList.toggle('bg-neutral-700', showActive);
     activeBtn?.classList.toggle('text-white', showActive);
     archivedBtn?.classList.toggle('bg-neutral-700', !showActive);
     archivedBtn?.classList.toggle('text-white', !showActive);
     uiHelperState.tokenFilter = showActive ? 'active' : 'archived';
+    
+    // Show/hide Delete Token button only in Archived tab
+    if (deleteBtn) {
+        if (showActive) {
+            deleteBtn.classList.add('hidden');
+            // Exit delete mode when switching to Active
+            exitDeleteTokenMode();
+        } else {
+            deleteBtn.classList.remove('hidden');
+        }
+    }
+    
     renderTokensTable();
     notify(`Switched to ${tab} tokens`, 'info');
 });

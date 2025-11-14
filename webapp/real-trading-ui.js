@@ -5577,7 +5577,6 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
             if (!isApiDown) {
                 console.debug(`Trade feed fetch error (${endpoint}):`, errorMessage);
             }
-            console.warn(`Pump.fun trade feed unavailable at ${endpoint}:`, error.message || error);
         }
     }
 

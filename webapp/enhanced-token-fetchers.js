@@ -5,6 +5,56 @@
 // Provides reliable token data even when APIs are down
 
 /**
+ * Get Solana connection from settings or existing integration
+ * Avoids using rate-limited default RPC
+ */
+function getSolanaConnection() {
+    // First, try to use existing connection from solanaIntegration
+    if (window.solanaIntegration?.connection) {
+        return window.solanaIntegration.connection;
+    }
+    
+    // If no connection exists, try to get RPC URL from settings
+    let rpcUrl = null;
+    
+    try {
+        // Try to get from settings manager
+        if (window.settingsManager?.getSettings) {
+            const settings = window.settingsManager.getSettings();
+            rpcUrl = settings?.solana?.rpcHttp;
+        }
+        
+        // Fallback: try localStorage
+        if (!rpcUrl) {
+            const stored = localStorage.getItem('chaosbot_settings');
+            if (stored) {
+                const settings = JSON.parse(stored);
+                rpcUrl = settings?.solana?.rpcHttp;
+            }
+        }
+        
+        // Fallback: try from solanaIntegration
+        if (!rpcUrl && window.solanaIntegration?.rpcUrl) {
+            rpcUrl = window.solanaIntegration.rpcUrl;
+        }
+    } catch (error) {
+        console.debug('Failed to get RPC URL from settings:', error);
+    }
+    
+    // Only create connection if we have a valid RPC URL (not default rate-limited one)
+    if (rpcUrl && window.solanaWeb3?.Connection && !rpcUrl.includes('api.mainnet-beta.solana.com')) {
+        try {
+            return new window.solanaWeb3.Connection(rpcUrl);
+        } catch (error) {
+            console.debug('Failed to create connection:', error);
+        }
+    }
+    
+    // Return null if we can't get a valid connection
+    return null;
+}
+
+/**
  * Enhanced token price fetching with multiple fallback sources
  * Priority: Jupiter > DexScreener > On-chain calculation
  */
@@ -47,22 +97,32 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
         console.warn('⚠️ DexScreener price fetch failed:', error.message);
     }
 
-    // Try on-chain calculation as last resort
+    // Try on-chain calculation as last resort (only if we have valid RPC)
     try {
-        const onChainData = await calculateOnChainPrice(mintAddress);
-        if (onChainData && onChainData.priceSol) {
-            const priceSol = onChainData.priceSol;
-            const priceUsd = solPrice ? priceSol * solPrice : null;
-            console.log('✅ On-chain price:', { priceSol, priceUsd });
-            return {
-                priceSol,
-                priceUsd,
-                marketCapUsd: null,
-                source: 'on-chain'
-            };
+        const connection = getSolanaConnection();
+        if (connection) {
+            const onChainData = await calculateOnChainPrice(mintAddress);
+            if (onChainData && onChainData.priceSol) {
+                const priceSol = onChainData.priceSol;
+                const priceUsd = solPrice ? priceSol * solPrice : null;
+                console.log('✅ On-chain price:', { priceSol, priceUsd });
+                return {
+                    priceSol,
+                    priceUsd,
+                    marketCapUsd: null,
+                    source: 'on-chain'
+                };
+            }
+        } else {
+            console.debug('Skipping on-chain price calculation - no valid RPC connection');
         }
     } catch (error) {
-        console.warn('⚠️ On-chain price calculation failed:', error.message);
+        // Only log if it's not a connection availability error
+        if (!error.message.includes('not available')) {
+            console.warn('⚠️ On-chain price calculation failed:', error.message);
+        } else {
+            console.debug('On-chain price calculation skipped:', error.message);
+        }
     }
 
     console.error('❌ All price sources failed for:', mintAddress);
@@ -172,19 +232,10 @@ async function fetchDexScreenerPrice(mintAddress) {
  */
 async function calculateOnChainPrice(mintAddress) {
     try {
-        // This requires your solana-integration.js connection
-        if (!window.solanaIntegration?.connection && !window.solanaWeb3) {
-            throw new Error('Solana connection not available');
-        }
-        
-        const connection = window.solanaIntegration?.connection || 
-                          (window.solanaWeb3?.Connection ? 
-                           new window.solanaWeb3.Connection(
-                               window.solanaIntegration?.rpcUrl || 'https://api.mainnet-beta.solana.com'
-                           ) : null);
+        const connection = getSolanaConnection();
         
         if (!connection) {
-            throw new Error('Solana connection not available');
+            throw new Error('Solana connection not available - configure RPC in Settings');
         }
         
         // Get token account info
@@ -238,14 +289,25 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
     console.log('🔍 Fetching trade feed for:', mintAddress);
     
     // Try to fetch from on-chain transactions instead of Pump.fun API
+    // Only if we have a valid RPC connection (not rate-limited default)
     try {
-        const trades = await fetchOnChainTrades(mintAddress, limit);
-        if (trades && trades.length > 0) {
-            console.log(`✅ Retrieved ${trades.length} trades from blockchain`);
-            return trades;
+        const connection = getSolanaConnection();
+        if (connection) {
+            const trades = await fetchOnChainTrades(mintAddress, limit);
+            if (trades && trades.length > 0) {
+                console.log(`✅ Retrieved ${trades.length} trades from blockchain`);
+                return trades;
+            }
+        } else {
+            console.debug('Skipping on-chain trade fetch - no valid RPC connection available');
         }
     } catch (error) {
-        console.warn('⚠️ On-chain trade fetch failed:', error.message);
+        // Only log if it's not a connection availability error
+        if (!error.message.includes('not available')) {
+            console.warn('⚠️ On-chain trade fetch failed:', error.message);
+        } else {
+            console.debug('On-chain trade fetch skipped:', error.message);
+        }
     }
     
     // Return empty array instead of failing
@@ -258,18 +320,10 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
  */
 async function fetchOnChainTrades(mintAddress, limit = 20) {
     try {
-        if (!window.solanaIntegration?.connection && !window.solanaWeb3) {
-            throw new Error('Solana connection not available');
-        }
-        
-        const connection = window.solanaIntegration?.connection || 
-                          (window.solanaWeb3?.Connection ? 
-                           new window.solanaWeb3.Connection(
-                               window.solanaIntegration?.rpcUrl || 'https://api.mainnet-beta.solana.com'
-                           ) : null);
+        const connection = getSolanaConnection();
         
         if (!connection) {
-            throw new Error('Solana connection not available');
+            throw new Error('Solana connection not available - configure RPC in Settings');
         }
         
         const PublicKey = window.solanaWeb3?.PublicKey;
@@ -408,13 +462,23 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         }
     }
     
-    // Fallback: try to get basic info from on-chain metadata
+    // Fallback: try to get basic info from on-chain metadata (only if we have valid RPC)
     try {
-        const metadata = await fetchOnChainMetadata(mintAddress);
-        console.log('✅ Retrieved metadata from blockchain');
-        return { ...metadata, success: true };
+        const connection = getSolanaConnection();
+        if (connection) {
+            const metadata = await fetchOnChainMetadata(mintAddress);
+            console.log('✅ Retrieved metadata from blockchain');
+            return { ...metadata, success: true };
+        } else {
+            console.debug('Skipping on-chain metadata fetch - no valid RPC connection');
+        }
     } catch (error) {
-        console.warn('⚠️ On-chain metadata fetch failed:', error.message);
+        // Only log if it's not a connection availability error
+        if (!error.message.includes('not available')) {
+            console.warn('⚠️ On-chain metadata fetch failed:', error.message);
+        } else {
+            console.debug('On-chain metadata fetch skipped:', error.message);
+        }
     }
     
     // Return minimal data structure
@@ -432,18 +496,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
  */
 async function fetchOnChainMetadata(mintAddress) {
     try {
-        if (!window.solanaIntegration?.connection && !window.solanaWeb3) {
-            throw new Error('Solana connection not available');
-        }
-        
-        const connection = window.solanaIntegration?.connection || 
-                          (window.solanaWeb3?.Connection ? 
-                           new window.solanaWeb3.Connection(
-                               window.solanaIntegration?.rpcUrl || 'https://api.mainnet-beta.solana.com'
-                           ) : null);
+        const connection = getSolanaConnection();
         
         if (!connection) {
-            throw new Error('Solana connection not available');
+            throw new Error('Solana connection not available - configure RPC in Settings');
         }
         
         const PublicKey = window.solanaWeb3?.PublicKey;

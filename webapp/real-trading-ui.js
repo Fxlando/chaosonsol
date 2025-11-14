@@ -5287,11 +5287,46 @@ const FALLBACK_RPC_ENDPOINT =
     'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm';
 const FALLBACK_LAMPORTS_PER_SOL = 1_000_000_000;
 
-function getSolanaConnection() {
-    if (solanaIntegration?.connection) {
+/**
+ * Get Solana connection with support for dedicated RPCs
+ * Uses enhanced-token-fetchers.js getSolanaConnection if available, otherwise falls back
+ * @param {string} purpose - 'price' for price/market cap updates, 'monitoring' for trade monitoring, or null for general use
+ */
+function getSolanaConnection(purpose = null) {
+    // Use enhanced getSolanaConnection if available (supports dedicated RPCs)
+    if (window.enhancedTokenFetchers?.getSolanaConnection) {
+        return window.enhancedTokenFetchers.getSolanaConnection(purpose);
+    }
+    
+    // Fallback to solanaIntegration connection for general use
+    if (!purpose && solanaIntegration?.connection) {
         return solanaIntegration.connection;
     }
 
+    // If we need a dedicated RPC but enhanced fetchers aren't available, try to get from settings
+    if (purpose && window.settingsManager?.getSettings) {
+        try {
+            const settings = window.settingsManager.getSettings();
+            let rpcUrl = null;
+            
+            if (purpose === 'price' && settings?.solana?.priceRpc) {
+                rpcUrl = settings.solana.priceRpc;
+            } else if (purpose === 'monitoring' && settings?.solana?.monitoringRpc) {
+                // Convert WebSocket to HTTP for monitoring
+                rpcUrl = settings.solana.monitoringRpc.replace('wss://', 'https://').replace('ws://', 'http://');
+            } else if (settings?.solana?.rpcHttp) {
+                rpcUrl = settings.solana.rpcHttp;
+            }
+            
+            if (rpcUrl && window.solanaWeb3?.Connection) {
+                return new window.solanaWeb3.Connection(rpcUrl, 'confirmed');
+            }
+        } catch (error) {
+            console.debug('Failed to get dedicated RPC from settings:', error);
+        }
+    }
+
+    // Final fallback
     if (!fallbackSolanaConnection && window.solanaWeb3?.Connection) {
         fallbackSolanaConnection = new window.solanaWeb3.Connection(
             solanaIntegration?.rpcEndpoint || FALLBACK_RPC_ENDPOINT,

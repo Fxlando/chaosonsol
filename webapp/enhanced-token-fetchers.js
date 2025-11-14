@@ -274,7 +274,8 @@ async function fetchDexScreenerPrice(mintAddress) {
  */
 async function calculateOnChainPrice(mintAddress) {
     try {
-        const connection = getSolanaConnection();
+        // Use dedicated price RPC for price calculations
+        const connection = getSolanaConnection('price');
         
         if (!connection) {
             throw new Error('Solana connection not available - configure RPC in Settings');
@@ -331,9 +332,9 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
     console.log('🔍 Fetching trade feed for:', mintAddress);
     
     // Try to fetch from on-chain transactions instead of Pump.fun API
-    // Only if we have a valid RPC connection (not rate-limited default)
+    // Use dedicated monitoring RPC if available, otherwise general RPC
     try {
-        const connection = getSolanaConnection();
+        const connection = getSolanaConnection('monitoring');
         if (connection) {
             const trades = await fetchOnChainTrades(mintAddress, limit);
             if (trades && trades.length > 0) {
@@ -362,7 +363,8 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
  */
 async function fetchOnChainTrades(mintAddress, limit = 20) {
     try {
-        const connection = getSolanaConnection();
+        // Use dedicated monitoring RPC for trade fetching
+        const connection = getSolanaConnection('monitoring');
         
         if (!connection) {
             throw new Error('Solana connection not available - configure RPC in Settings');

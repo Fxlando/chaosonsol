@@ -5,11 +5,25 @@
 // Provides reliable token data even when APIs are down
 
 /**
- * Get Solana connection from settings or existing integration
- * Avoids using rate-limited default RPC
+ * Get Solana connection from RPC Pool Manager with automatic failover
+ * Uses intelligent rotation: Free RPCs first → Paid RPCs last
+ * Automatically handles rate limits and failover
  * @param {string} purpose - 'price' for price/market cap updates, 'monitoring' for trade monitoring, or null for general use
  */
 function getSolanaConnection(purpose = null) {
+    // Use RPC Pool Manager if available (intelligent rotation & failover)
+    if (window.rpcPoolManager) {
+        try {
+            const connection = window.rpcPoolManager.getConnection(purpose);
+            if (connection) {
+                return connection;
+            }
+        } catch (error) {
+            console.debug('RPC Pool Manager failed, falling back to legacy method:', error);
+        }
+    }
+    
+    // Fallback to legacy method if pool manager not available
     // First, try to use existing connection from solanaIntegration (unless we need a dedicated RPC)
     if (!purpose && window.solanaIntegration?.connection) {
         return window.solanaIntegration.connection;

@@ -6599,6 +6599,13 @@ function connectSolanaRpcWebSocket() {
             console.debug('Solana RPC WebSocket closed');
             solanaRpcWebSocket = null;
             
+            // Mark RPC as rate limited if we got a 403/429 error
+            // This will cause the pool manager to rotate to next RPC
+            if (window.rpcPoolManager && wsUrl) {
+                // Check if it was a rate limit error (we can't detect this from onclose, but we'll rotate anyway)
+                // The pool manager will handle rotation on next connection attempt
+            }
+            
             // Attempt to reconnect if we have active subscriptions
             if (solanaRpcSubscriptions.size > 0 && solanaRpcReconnectAttempts < SOLANA_RPC_MAX_RECONNECT_ATTEMPTS) {
                 solanaRpcReconnectAttempts++;

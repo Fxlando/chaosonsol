@@ -4,6 +4,7 @@
 class SolanaIntegration {
     constructor() {
         this.connection = null;
+        this.heliusConnection = null; // Dedicated Helius connection for indexed RPC methods
         this.wallet = null;
         this.wallets = []; // User's managed wallets
         this.rpcEndpoint = null;
@@ -22,6 +23,10 @@ class SolanaIntegration {
         const { Connection } = window.solanaWeb3;
         this.connection = new Connection(this.rpcEndpoint, 'confirmed');
         
+        // Initialize Helius connection for indexed RPC methods (getParsedTokenAccountsByOwner)
+        // Helius supports indexed methods on free/paid tiers, unlike Shyft free tier
+        this.initHeliusConnection();
+        
         // Check if wallet adapter is available
         this.checkWalletAvailability();
         
@@ -29,6 +34,53 @@ class SolanaIntegration {
         this.loadSavedWallets();
         
         console.log('✅ Solana Integration initialized');
+    }
+
+    /**
+     * Initialize Helius RPC connection for indexed RPC methods
+     * getParsedTokenAccountsByOwner requires indexed methods which Shyft free tier doesn't support
+     */
+    initHeliusConnection() {
+        try {
+            const { Connection } = window.solanaWeb3;
+            let heliusRpcUrl = null;
+            
+            // Try to get Helius RPC from settings (PRICE_RPC_HTTP or MONITORING_RPC_WSS)
+            if (window.settingsManager?.getSettings) {
+                const settings = window.settingsManager.getSettings();
+                // Use price RPC (HTTP) for token balance queries
+                if (settings?.solana?.priceRpc) {
+                    heliusRpcUrl = settings.solana.priceRpc;
+                } else if (settings?.solana?.monitoringRpc) {
+                    // Convert WebSocket to HTTP
+                    heliusRpcUrl = settings.solana.monitoringRpc.replace('wss://', 'https://').replace('ws://', 'http://');
+                }
+            }
+            
+            // Fallback: try localStorage
+            if (!heliusRpcUrl) {
+                const stored = localStorage.getItem('chaosbot_settings');
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    if (settings?.solana?.priceRpc) {
+                        heliusRpcUrl = settings.solana.priceRpc;
+                    } else if (settings?.solana?.monitoringRpc) {
+                        heliusRpcUrl = settings.solana.monitoringRpc.replace('wss://', 'https://').replace('ws://', 'http://');
+                    }
+                }
+            }
+            
+            // Fallback: use public Solana RPC (supports indexed methods)
+            if (!heliusRpcUrl) {
+                heliusRpcUrl = 'https://api.mainnet-beta.solana.com';
+            }
+            
+            this.heliusConnection = new Connection(heliusRpcUrl, 'confirmed');
+            console.log('✅ Helius connection initialized for indexed RPC methods:', heliusRpcUrl);
+        } catch (error) {
+            console.warn('⚠️ Failed to initialize Helius connection, will use main connection:', error);
+            this.heliusConnection = null;
+        }
     }
 
     checkWalletAvailability() {
@@ -296,14 +348,20 @@ class SolanaIntegration {
     }
 
     // Real token balance fetching
+    // Uses Helius RPC for indexed methods (getParsedTokenAccountsByOwner)
+    // Shyft free tier doesn't support indexed methods, but Helius does
     async getTokenBalance(walletAddress, mintAddress) {
         try {
             const { PublicKey } = window.solanaWeb3;
             const walletPubkey = new PublicKey(walletAddress);
             const mintPubkey = new PublicKey(mintAddress);
             
-            // Get token accounts
-            const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
+            // Use Helius connection for indexed RPC methods (supports getParsedTokenAccountsByOwner)
+            // Fall back to main connection if Helius isn't available
+            const connection = this.heliusConnection || this.connection;
+            
+            // Get token accounts using indexed method
+            const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
                 walletPubkey,
                 { mint: mintPubkey }
             );
@@ -315,6 +373,25 @@ class SolanaIntegration {
             const balance = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
             return balance;
         } catch (error) {
+            // If Helius connection fails with 403/IndexNotAllowed, try main connection as fallback
+            const errorMsg = error?.message || '';
+            if (this.heliusConnection && (errorMsg.includes('403') || errorMsg.includes('IndexNotAllowed'))) {
+                console.debug('Helius connection failed with indexed method error, trying main connection as fallback');
+                try {
+                    const { PublicKey } = window.solanaWeb3;
+                    const walletPubkey = new PublicKey(walletAddress);
+                    const mintPubkey = new PublicKey(mintAddress);
+                    const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(
+                        walletPubkey,
+                        { mint: mintPubkey }
+                    );
+                    if (tokenAccounts.value.length > 0) {
+                        return tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+                    }
+                } catch (fallbackError) {
+                    console.debug('Fallback connection also failed:', fallbackError.message);
+                }
+            }
             console.error('Error fetching token balance:', error);
             return 0;
         }

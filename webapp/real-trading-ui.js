@@ -5890,9 +5890,37 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false } =
 let pumpPortalWebSocket = null;
 let pumpPortalSubscriptions = new Set(); // Track subscribed token mints
 let pumpPortalReconnectAttempts = 0;
-const PUMPPORTAL_WS_URL = 'wss://pumpportal.fun/api/data';
+const PUMPPORTAL_WS_BASE = 'wss://pumpportal.fun/api/data';
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
+
+function getPumpPortalApiKey() {
+    // Try to get API key from settings
+    try {
+        if (typeof window.settingsManager !== 'undefined' && window.settingsManager.getSettings) {
+            const settings = window.settingsManager.getSettings();
+            return settings?.pumpportal?.apiKey || '';
+        }
+        // Fallback: try localStorage
+        const stored = localStorage.getItem('chaosbot-settings');
+        if (stored) {
+            const settings = JSON.parse(stored);
+            return settings?.pumpportal?.apiKey || '';
+        }
+    } catch (error) {
+        console.debug('Failed to get PumpPortal API key from settings:', error);
+    }
+    return '';
+}
+
+function getPumpPortalWebSocketUrl() {
+    const apiKey = getPumpPortalApiKey();
+    if (apiKey) {
+        return `${PUMPPORTAL_WS_BASE}?api-key=${encodeURIComponent(apiKey)}`;
+    }
+    // Connect without API key (restricted to bonding curve trades only)
+    return PUMPPORTAL_WS_BASE;
+}
 
 function connectPumpPortalWebSocket() {
     if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.OPEN) {
@@ -5900,7 +5928,16 @@ function connectPumpPortalWebSocket() {
     }
 
     try {
-        pumpPortalWebSocket = new WebSocket(PUMPPORTAL_WS_URL);
+        const wsUrl = getPumpPortalWebSocketUrl();
+        const apiKey = getPumpPortalApiKey();
+        
+        if (apiKey) {
+            console.log('🔑 Connecting to PumpPortal WebSocket with API key');
+        } else {
+            console.log('⚠️ Connecting to PumpPortal WebSocket without API key (bonding curve trades only)');
+        }
+        
+        pumpPortalWebSocket = new WebSocket(wsUrl);
 
         pumpPortalWebSocket.onopen = () => {
             console.log('✅ PumpPortal WebSocket connected');
@@ -6142,7 +6179,7 @@ function startTokenActivityStream(mint) {
 }
 
 /**
- * Fetch trade feed from Pump.fun API
+ * Fetch trade feed from Pump.fun API with enhanced fallback
  * Note: Browser console may show "Fetch failed loading" errors for failed requests.
  * These are expected when Pump.fun APIs are down or return 404/530, and are handled gracefully.
  * The application continues to work even when these APIs fail.
@@ -6150,6 +6187,18 @@ function startTokenActivityStream(mint) {
 async function fetchPumpFunTradeFeed(mint, limit = 20) {
     if (!mint) {
         return [];
+    }
+    
+    // Use enhanced fetcher if available (has on-chain fallback)
+    if (window.enhancedTokenFetchers?.fetchPumpFunTradeFeed) {
+        try {
+            const trades = await window.enhancedTokenFetchers.fetchPumpFunTradeFeed(mint, limit);
+            if (trades && trades.length > 0) {
+                return trades;
+            }
+        } catch (error) {
+            console.warn('Enhanced trade feed fetch failed, trying original method:', error.message);
+        }
     }
 
     const normalizedLimit = Math.max(limit, 20);
@@ -6361,6 +6410,17 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
 
 async function fetchPumpFunTokenDetails(mint) {
     if (!mint) return null;
+    
+    // Use enhanced fetcher if available, otherwise fallback to API client
+    if (window.enhancedTokenFetchers?.fetchPumpFunTokenDetails) {
+        try {
+            return await window.enhancedTokenFetchers.fetchPumpFunTokenDetails(mint);
+        } catch (error) {
+            console.warn('Enhanced token details fetch failed, trying API client:', error.message);
+        }
+    }
+    
+    // Fallback to original API client method
     try {
         await ensureApiClientReady();
         const info = await window.apiClient.getPumpFunToken(mint);
@@ -6378,6 +6438,16 @@ async function fetchPumpFunTokenDetails(mint) {
 }
 
 async function fetchTokenPriceDetails(mint, { solPrice = null } = {}) {
+    // Use enhanced fetcher if available (has multiple fallbacks)
+    if (window.enhancedTokenFetchers?.fetchTokenPriceDetails) {
+        try {
+            return await window.enhancedTokenFetchers.fetchTokenPriceDetails(mint, { solPrice });
+        } catch (error) {
+            console.warn('Enhanced price fetch failed, trying API client:', error.message);
+        }
+    }
+    
+    // Fallback to original API client method
     try {
         await ensureApiClientReady();
     } catch (error) {

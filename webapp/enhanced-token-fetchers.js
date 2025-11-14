@@ -180,7 +180,8 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
         }
     }
 
-    console.error('❌ All price sources failed for:', mintAddress);
+    // Log as debug instead of error - this is expected when all external APIs are down
+    console.debug('⚠️ All price sources unavailable for:', mintAddress, '- This is normal if external APIs are down');
     return {
         priceSol: null,
         priceUsd: null,

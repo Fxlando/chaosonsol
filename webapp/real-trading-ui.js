@@ -2452,7 +2452,7 @@ async function ensureWalletGroupsLoaded() {
     tokenLaunchState.isLoadingGroups = true;
 
     try {
-        const response = await fetch('/.netlify/functions/groups', {
+        const response = await fetch('/api/groups', {
             method: 'GET',
             credentials: 'same-origin',
             cache: 'no-cache'
@@ -4861,9 +4861,10 @@ window.handleRuntimeTaskAction = handleRuntimeTaskAction;
 async function loadInstantTradingData() {
     try {
         const API_BASE = getApiBase();
-        const endpoint = API_BASE.includes('/.netlify/functions') 
-            ? `${API_BASE}/instant-trading/status` 
-            : `${API_BASE}/api/instant-trading/status`;
+        // api-server.js handles both /api/instant-trading/status and /instant-trading/status
+        const endpoint = API_BASE.startsWith('http') 
+            ? `${API_BASE}/api/instant-trading/status` 
+            : `${API_BASE}/instant-trading/status`;
         
         console.log('Loading instant trading data from:', endpoint);
         

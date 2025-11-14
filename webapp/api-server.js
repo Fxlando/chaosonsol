@@ -1292,7 +1292,7 @@ app.get('*', (req, res, next) => {
   }
 
   const requestPath = req.path || '';
-  if (requestPath.startsWith('/api') || requestPath.startsWith('/.netlify/functions')) {
+  if (requestPath.startsWith('/api')) {
     return next();
   }
 

@@ -3,9 +3,9 @@
  * Handles all wallet operations: generate, import, fund, withdraw, tag, warm, etc.
  */
 
-var API_BASE = window.location.hostname === 'localhost' 
+var API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:3000' 
-  : '/.netlify/functions';
+  : (window.__CHAOSBOT_API_BASE__ || '/api');
 
 // Global state
 let wallets = [];
@@ -107,7 +107,8 @@ async function loadWallets() {
     showToast('Loading wallets...', 'info');
     addConsoleLog('Fetching wallets from API', 'info');
     
-    const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
+    // api-server.js handles both /api/wallets and /wallets routes
+    const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/wallets` : `${API_BASE}/wallets`;
     const response = await fetch(endpoint);
     
     if (!response.ok) {
@@ -506,9 +507,10 @@ async function walletOperationsSaveRename(walletId, event) {
   }
 
   try {
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/rename`
-      : `${API_BASE}/api/wallets/rename`;
+    // api-server.js handles both /api/wallets/rename and /wallets/rename routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/rename`
+      : `${API_BASE}/wallets/rename`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1027,9 +1029,10 @@ async function executeGenerateWallets(options = {}) {
     addConsoleLog(`Starting generation of ${count} wallets`, 'info');
     
     // Call API to generate wallets
-    const endpoint = API_BASE.includes('netlify') 
-      ? `${API_BASE}/wallets/generate` 
-      : `${API_BASE}/api/wallets/generate`;
+    // api-server.js handles both /api/wallets/generate and /wallets/generate routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/generate` 
+      : `${API_BASE}/wallets/generate`;
     
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1107,9 +1110,10 @@ async function executeImportWallet() {
     showToast('Importing wallet...', 'info');
     addConsoleLog('Importing wallet from provided private key', 'info');
 
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/import`
-      : `${API_BASE}/api/wallets/import`;
+    // api-server.js handles both /api/wallets/import and /wallets/import routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/import`
+      : `${API_BASE}/wallets/import`;
 
     const payload = { privateKey: privateKeyPayload };
     if (name) payload.name = name;
@@ -1164,9 +1168,10 @@ async function exportWallets() {
       .map((wallet) => wallet.id || wallet.address || wallet.publicKey)
       .filter(Boolean);
 
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/export`
-      : `${API_BASE}/api/wallets/export`;
+    // api-server.js handles both /api/wallets/export and /wallets/export routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/export`
+      : `${API_BASE}/wallets/export`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1253,9 +1258,10 @@ async function walletOperationsSetCreatorWallet() {
 
     let privateKeyPayload = null;
     try {
-      const endpoint = API_BASE.includes('netlify')
-        ? `${API_BASE}/wallets/export`
-        : `${API_BASE}/api/wallets/export`;
+      // api-server.js handles both /api/wallets/export and /wallets/export routes
+      const endpoint = API_BASE.startsWith('http') 
+        ? `${API_BASE}/api/wallets/export`
+        : `${API_BASE}/wallets/export`;
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -1340,9 +1346,10 @@ async function deactivateWallets() {
     showToast(`Deactivating ${selectedWallets.size} wallets...`, 'info');
     addConsoleLog(`Deactivating ${selectedWallets.size} wallets`, 'info');
 
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/deactivate`
-      : `${API_BASE}/api/wallets/deactivate`;
+    // api-server.js handles both /api/wallets/deactivate and /wallets/deactivate routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/deactivate`
+      : `${API_BASE}/wallets/deactivate`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1418,9 +1425,10 @@ async function executeActivateWallets() {
     showToast(`Activating ${targetIds.length} wallets...`, 'info');
     addConsoleLog(`Activating ${targetIds.length} wallets`, 'info');
 
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/activate`
-      : `${API_BASE}/api/wallets/activate`;
+    // api-server.js handles both /api/wallets/activate and /wallets/activate routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/activate`
+      : `${API_BASE}/wallets/activate`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -1501,9 +1509,10 @@ async function executeGroupWallets() {
     showToast(`Assigning ${selectedWallets.size} wallets to ${groupName}...`, 'info');
     addConsoleLog(`Grouping wallets into ${groupName} (keep existing: ${keepExisting ? 'yes' : 'no'})`, 'info');
 
-    const endpoint = API_BASE.includes('netlify')
-      ? `${API_BASE}/wallets/group`
-      : `${API_BASE}/api/wallets/group`;
+    // api-server.js handles both /api/wallets/group and /wallets/group routes
+    const endpoint = API_BASE.startsWith('http') 
+      ? `${API_BASE}/api/wallets/group`
+      : `${API_BASE}/wallets/group`;
 
     const response = await fetch(endpoint, {
       method: 'POST',

@@ -471,7 +471,7 @@ function truncateAddress(address) {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-function getWalletEmoji(index) {
+function getWalletEmojiByIndex(index) {
     const emojis = ['🐘', '🦜', '🦈', '🐈', '🦩', '🦒', '😺', '🐰', '🐟', '🐕', '🐢', '🦊'];
     return emojis[index % emojis.length];
 }
@@ -5716,9 +5716,9 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
                 wallets = opsWallets.map(w => ({
                     id: w.id || w.address || w.publicKey,
                     address: w.address || w.publicKey || w.pubkey,
-                    name: w.name || '',
+                    name: String(w.name || w.label || w.alias || w.displayName || ''),
                     balance: w.balance || null,
-                    tags: w.tags || []
+                    tags: Array.isArray(w.tags) ? w.tags : []
                 }));
             }
         } catch (error) {
@@ -5764,12 +5764,13 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
                 solBalance = await fetchSolBalanceViaConnection(connection, address);
             }
 
+            const walletName = String(wallet.name || wallet.label || wallet.alias || wallet.displayName || '');
             return {
                 walletId: wallet.id || null,
                 address,
-                name: wallet.name || '',
-                emoji: wallet.emoji || getWalletEmoji(index),
-                tags: wallet.tags || [],
+                name: walletName,
+                emoji: wallet.emoji || getWalletEmoji(walletName || index),
+                tags: Array.isArray(wallet.tags) ? wallet.tags : [],
                 solBalance: solBalance !== null && Number.isFinite(solBalance) ? solBalance : null,
                 tokenBalance: tokenBalance !== null && Number.isFinite(tokenBalance) ? tokenBalance : null,
                 tokenMint: mint
@@ -8511,7 +8512,25 @@ async function loadSellBuybackBuyWallets() {
     }
 }
 
-function getWalletEmoji(name) {
+function getWalletEmoji(nameOrIndex) {
+    // Handle both string names and numeric indices
+    let name = '';
+    if (typeof nameOrIndex === 'string') {
+        name = nameOrIndex;
+    } else if (typeof nameOrIndex === 'number') {
+        // If it's a number, use the index-based emoji function
+        return getWalletEmojiByIndex(nameOrIndex);
+    } else if (nameOrIndex && typeof nameOrIndex === 'object' && nameOrIndex.name) {
+        name = nameOrIndex.name;
+    } else {
+        return '👛'; // Default wallet emoji
+    }
+    
+    // Ensure name is a string
+    if (typeof name !== 'string') {
+        name = String(name || '');
+    }
+    
     // Simple emoji mapping based on wallet name patterns
     const emojiMap = {
         'elephant': '🐘',
@@ -8526,8 +8545,9 @@ function getWalletEmoji(name) {
         'turtle': '🐢'
     };
     
+    const nameLower = name.toLowerCase();
     for (const [key, emoji] of Object.entries(emojiMap)) {
-        if (name.toLowerCase().includes(key)) {
+        if (nameLower.includes(key)) {
             return emoji;
         }
     }

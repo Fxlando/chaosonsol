@@ -5825,6 +5825,46 @@ async function fetchRuntimeAutomationsForMint(mint) {
         });
     }
 
+    // Add Bulk Sell task if running
+    if (bulkSellTaskConfig.running && bulkSellTaskConfig.tokenMint === mint) {
+        const walletCount = bulkSellTaskConfig.walletIds.length;
+        const statusLabel = bulkSellTaskConfig.running ? 'Running' : 'Stopped';
+        const statusClass = bulkSellTaskConfig.running 
+            ? 'bg-emerald-900/60 text-emerald-200' 
+            : 'bg-neutral-800 text-gray-300';
+        
+        const methodLabel = bulkSellTaskConfig.method === 'jito-individual' ? 'Jito (Individual)' :
+                            bulkSellTaskConfig.method === 'jito-bundle' ? 'Jito (Bundle)' :
+                            'RPC (Individual)';
+        
+        tasks.push({
+            key: bulkSellTaskConfig.taskId || `bulk-sell-${mint}`,
+            source: 'runtime',
+            type: 'bulkSell',
+            title: 'Bulk Sell',
+            subtitle: `${methodLabel} • ${bulkSellTaskConfig.sellPercentage}% from ${walletCount} wallet(s)`,
+            icon: 'rows',
+            iconBackground: 'bg-red-900/60',
+            statusLabel,
+            statusClass,
+            statusState: bulkSellTaskConfig.running ? 'running' : 'paused',
+            metadata: {
+                type: 'bulkSell',
+                tokenMint: mint,
+                config: { ...bulkSellTaskConfig }
+            },
+            actions: [
+                {
+                    type: 'stop',
+                    icon: 'square',
+                    label: 'Stop',
+                    intent: 'red',
+                    disabled: !bulkSellTaskConfig.running
+                }
+            ]
+        });
+    }
+
     // Add Sell Buyback task if running
     if (sellBuybackTaskConfig.running && sellBuybackTaskConfig.tokenMint === mint) {
         const buyWalletCount = sellBuybackTaskConfig.buyWallets.length;
@@ -6130,6 +6170,12 @@ async function handleRuntimeTaskAction(action, taskKey) {
             }
             await window.apiClient.removeSmartSellPosition(walletId, tokenMint || tokenRegistry.current.mint);
             notify('Smart Sell automation stopped.', 'success');
+        } else if (task.type === 'bulkSell') {
+            if (action === 'stop' || action === 'pause') {
+                stopBulkSellTask();
+            } else {
+                notify('Bulk Sell task can only be stopped.', 'info');
+            }
         } else if (task.type === 'sellBuyback') {
             if (action === 'stop' || action === 'pause') {
                 stopSellBuybackTask();
@@ -7362,11 +7408,444 @@ function openTokenAutomationConfigurator(taskKey) {
 registerGlobalHandler('handleTokenTaskAction', handleTokenTaskAction);
 registerGlobalHandler('openTokenAutomationConfigurator', openTokenAutomationConfigurator);
 registerGlobalHandler('showAddVolumeTask', () => openTokenAutomationConfigurator('volumeBot'));
-registerGlobalHandler('showBulkSellTask', () => openTokenAutomationConfigurator('smartSell'));
+registerGlobalHandler('showBulkSellTask', configureBulkSellTask);
+registerGlobalHandler('selectBulkSellMethod', selectBulkSellMethod);
+registerGlobalHandler('updateBulkSellWalletSelection', updateBulkSellWalletSelection);
 registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bump'));
 registerGlobalHandler('showSellBuybackTask', configureSellBuybackTask);
 registerGlobalHandler('updateSellBuybackBuyWalletSelection', updateSellBuybackBuyWalletSelection);
 registerGlobalHandler('updateSellBuybackBuyAmount', updateSellBuybackBuyAmount);
+// Bulk Sell Task Configuration and Execution
+let bulkSellTaskConfig = {
+    method: 'jito-individual', // 'jito-individual', 'jito-bundle', 'rpc-individual'
+    sellPercentage: 50,
+    slippage: null, // null means use default from settings
+    walletIds: [],
+    enabled: false,
+    running: false,
+    tokenMint: null,
+    taskId: null
+};
+
+function configureBulkSellTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before configuring Bulk Sell task.', 'warning');
+        return;
+    }
+
+    // Open configuration modal or show floating window
+    const window = document.getElementById('bulk-sell-window');
+    if (window) {
+        window.classList.remove('hidden');
+        
+        // Populate with current config
+        const sellPctInput = document.getElementById('bulk-sell-percentage');
+        const slippageInput = document.getElementById('bulk-sell-slippage');
+        
+        if (sellPctInput) sellPctInput.value = bulkSellTaskConfig.sellPercentage || 50;
+        if (slippageInput) slippageInput.value = bulkSellTaskConfig.slippage || '';
+        
+        // Set method
+        selectBulkSellMethod(bulkSellTaskConfig.method || 'jito-individual');
+        
+        // Load wallets
+        loadBulkSellWallets();
+    } else {
+        // Fallback: navigate to create token view
+        openTokenAutomationConfigurator('bulkSell');
+    }
+}
+
+function selectBulkSellMethod(method) {
+    // Remove active class from all method buttons
+    const buttons = [
+        document.getElementById('bulk-sell-method-jito-individual'),
+        document.getElementById('bulk-sell-method-jito-bundle'),
+        document.getElementById('bulk-sell-method-rpc-individual')
+    ];
+    
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // Add active class to selected button
+    let activeButton = null;
+    switch (method) {
+        case 'jito-individual':
+            activeButton = document.getElementById('bulk-sell-method-jito-individual');
+            break;
+        case 'jito-bundle':
+            activeButton = document.getElementById('bulk-sell-method-jito-bundle');
+            break;
+        case 'rpc-individual':
+            activeButton = document.getElementById('bulk-sell-method-rpc-individual');
+            break;
+    }
+    
+    if (activeButton) {
+        activeButton.classList.add('active');
+    }
+    
+    bulkSellTaskConfig.method = method;
+}
+
+async function loadBulkSellWallets() {
+    const walletList = document.getElementById('bulk-sell-wallets-list');
+    if (!walletList) return;
+    
+    try {
+        const wallets = collectBlueprintWallets();
+        if (!wallets || wallets.length === 0) {
+            walletList.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-xs text-gray-500">No wallets available. Load wallets first.</td></tr>';
+            return;
+        }
+        
+        const current = tokenRegistry.current;
+        if (!current || !current.mint) {
+            walletList.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-xs text-gray-500">Select a token first.</td></tr>';
+            return;
+        }
+        
+        // Get token balances for wallets
+        const walletsWithBalances = await Promise.all(
+            wallets.map(async (wallet) => {
+                const address = wallet.address || wallet.publicKey || '';
+                let tokenBalance = 0;
+                try {
+                    if (solanaIntegration?.getTokenBalance) {
+                        tokenBalance = await solanaIntegration.getTokenBalance(address, current.mint);
+                    } else {
+                        // Fallback: try to get balance via connection
+                        const connection = solanaIntegration?.connection || fallbackSolanaConnection;
+                        if (connection) {
+                            const { PublicKey } = await import('@solana/web3.js');
+                            const { getAssociatedTokenAddress, getAccount } = await import('@solana/spl-token');
+                            const tokenAccount = await getAssociatedTokenAddress(
+                                new PublicKey(current.mint),
+                                new PublicKey(address)
+                            );
+                            try {
+                                const accountInfo = await getAccount(connection, tokenAccount);
+                                tokenBalance = Number(accountInfo.amount) / Math.pow(10, accountInfo.mint.decimals || 9);
+                            } catch (e) {
+                                // Account doesn't exist
+                                tokenBalance = 0;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Failed to get token balance for ${address}:`, error);
+                    tokenBalance = 0;
+                }
+                return { ...wallet, tokenBalance };
+            })
+        );
+        
+        walletList.innerHTML = walletsWithBalances.map(wallet => {
+            const id = wallet.id || wallet.address || wallet.publicKey || '';
+            const name = wallet.name || 'Unnamed';
+            const address = wallet.address || wallet.publicKey || '';
+            const truncated = address.length > 20 ? `${address.substring(0, 4)}...${address.substring(address.length - 4)}` : address;
+            const tokenBalance = wallet.tokenBalance || 0;
+            const balanceDisplay = tokenBalance < 0.01 ? '<0.01' : tokenBalance.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            
+            // Check if this wallet is already selected
+            const isChecked = bulkSellTaskConfig.walletIds.includes(id) ? 'checked' : '';
+            
+            return `
+                <tr class="hover:bg-neutral-900/50 transition">
+                    <td class="py-2 px-3">
+                        <input type="checkbox" 
+                            class="bulk-sell-wallet-checkbox" 
+                            data-wallet-id="${escapeHtml(id)}"
+                            ${isChecked}
+                            onchange="updateBulkSellWalletSelection(this)"
+                        />
+                    </td>
+                    <td class="py-2 px-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${getWalletEmoji(name)}</span>
+                            <span class="text-xs font-medium text-white">${escapeHtml(name)}</span>
+                        </div>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-400 font-mono">${escapeHtml(truncated)}</span>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-300">${balanceDisplay}</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        updateBulkSellSelectedCount();
+    } catch (error) {
+        console.error('Failed to load bulk sell wallets:', error);
+        walletList.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-xs text-red-400">Failed to load wallets.</td></tr>';
+    }
+}
+
+function updateBulkSellWalletSelection(checkbox) {
+    const walletId = checkbox.dataset.walletId;
+    
+    if (checkbox.checked) {
+        if (!bulkSellTaskConfig.walletIds.includes(walletId)) {
+            bulkSellTaskConfig.walletIds.push(walletId);
+        }
+    } else {
+        bulkSellTaskConfig.walletIds = bulkSellTaskConfig.walletIds.filter(id => id !== walletId);
+    }
+    
+    updateBulkSellSelectedCount();
+}
+
+function updateBulkSellSelectedCount() {
+    const countEl = document.getElementById('bulk-sell-selected-count');
+    if (countEl) {
+        const count = bulkSellTaskConfig.walletIds.length;
+        countEl.textContent = `${count} wallet${count === 1 ? '' : 's'} selected`;
+    }
+}
+
+async function executeBulkSellTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before starting Bulk Sell task.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    // Get configuration from inputs
+    const sellPctInput = document.getElementById('bulk-sell-percentage');
+    const slippageInput = document.getElementById('bulk-sell-slippage');
+    
+    bulkSellTaskConfig.sellPercentage = Number(sellPctInput?.value) || 50;
+    bulkSellTaskConfig.slippage = slippageInput?.value ? Number(slippageInput.value) : null;
+    
+    // Get selected wallets from checkboxes
+    const selectedCheckboxes = document.querySelectorAll('.bulk-sell-wallet-checkbox:checked');
+    bulkSellTaskConfig.walletIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.walletId);
+    
+    if (bulkSellTaskConfig.walletIds.length === 0) {
+        notify('Select at least one wallet for Bulk Sell task.', 'warning');
+        return;
+    }
+
+    if (bulkSellTaskConfig.running) {
+        notify('Bulk Sell task is already running.', 'warning');
+        return;
+    }
+
+    // Validate configuration
+    if (bulkSellTaskConfig.sellPercentage < 1 || bulkSellTaskConfig.sellPercentage > 100) {
+        notify('Sell percentage must be between 1 and 100.', 'error');
+        return;
+    }
+
+    bulkSellTaskConfig.enabled = true;
+    bulkSellTaskConfig.running = true;
+    bulkSellTaskConfig.tokenMint = current.mint;
+    bulkSellTaskConfig.taskId = `bulk-sell-${Date.now()}`;
+
+    const methodLabel = bulkSellTaskConfig.method === 'jito-individual' ? 'Jito (Individual)' :
+                        bulkSellTaskConfig.method === 'jito-bundle' ? 'Jito (Bundle)' :
+                        'RPC (Individual)';
+    
+    notify('Bulk Sell task started!', 'success');
+    addConsoleLog(`🔄 Starting Bulk Sell: ${methodLabel}, ${bulkSellTaskConfig.sellPercentage}% from ${bulkSellTaskConfig.walletIds.length} wallet(s)`, 'info');
+
+    // Close the configuration window
+    closeFloatingWindow('bulk-sell-window');
+
+    // Start the task execution
+    runBulkSellTask().catch(error => {
+        console.error('Bulk Sell task failed:', error);
+        notify(`Bulk Sell task failed: ${error.message}`, 'error');
+        bulkSellTaskConfig.running = false;
+        if (tokenRegistry.current) {
+            loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+        }
+    });
+}
+
+async function runBulkSellTask() {
+    const { tokenMint, walletIds, sellPercentage, slippage, method } = bulkSellTaskConfig;
+    
+    if (!tokenMint || !walletIds || walletIds.length === 0) {
+        throw new Error('Invalid Bulk Sell configuration');
+    }
+
+    // Get wallets
+    const allWallets = collectBlueprintWallets();
+    const wallets = allWallets.filter(w => {
+        const id = w.id || w.address || w.publicKey || '';
+        return walletIds.includes(id);
+    });
+
+    if (wallets.length === 0) {
+        throw new Error('No valid wallets found for Bulk Sell task');
+    }
+
+    addConsoleLog(`📊 Bulk Sell: Processing ${wallets.length} wallets...`, 'info');
+
+    // Determine executor based on method
+    let executor = 'jito';
+    let useBundle = false;
+    
+    if (method === 'jito-bundle') {
+        executor = 'jito';
+        useBundle = true;
+    } else if (method === 'rpc-individual') {
+        executor = 'rpc';
+        useBundle = false;
+    } else {
+        executor = 'jito';
+        useBundle = false;
+    }
+
+    // Prepare sell options
+    const sellOptions = {
+        executor,
+        slippage: slippage !== null ? slippage : undefined // undefined means use default
+    };
+
+    // Execute sells
+    const sellPromises = wallets.map(async (wallet) => {
+        if (!bulkSellTaskConfig.running) {
+            return null;
+        }
+
+        try {
+            const walletId = wallet.id || wallet.address || wallet.publicKey || '';
+            const walletAddress = wallet.address || wallet.publicKey || '';
+            const walletName = wallet.name || 'Unnamed';
+            
+            // Get token balance
+            let tokenBalance = 0;
+            try {
+                if (solanaIntegration?.getTokenBalance) {
+                    tokenBalance = await solanaIntegration.getTokenBalance(walletAddress, tokenMint);
+                } else {
+                    // Fallback: try to get balance via connection
+                    const connection = solanaIntegration?.connection || fallbackSolanaConnection;
+                    if (connection) {
+                        const { PublicKey } = await import('@solana/web3.js');
+                        const { getAssociatedTokenAddress, getAccount } = await import('@solana/spl-token');
+                        const tokenAccount = await getAssociatedTokenAddress(
+                            new PublicKey(tokenMint),
+                            new PublicKey(walletAddress)
+                        );
+                        try {
+                            const accountInfo = await getAccount(connection, tokenAccount);
+                            tokenBalance = Number(accountInfo.amount) / Math.pow(10, accountInfo.mint.decimals || 9);
+                        } catch (e) {
+                            // Account doesn't exist
+                            tokenBalance = 0;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to get token balance for ${walletAddress}:`, error);
+                tokenBalance = 0;
+            }
+
+            if (!tokenBalance || tokenBalance <= 0) {
+                addConsoleLog(`⚠️ Wallet ${walletName} has no tokens to sell`, 'warning');
+                return null;
+            }
+
+            const sellAmount = tokenBalance * (sellPercentage / 100);
+
+            addConsoleLog(`💸 Selling ${sellPercentage}% (${sellAmount.toFixed(6)} tokens) from ${walletName}...`, 'info');
+
+            const sellResponse = await window.apiClient.sellToken(
+                walletId,
+                tokenMint,
+                sellAmount,
+                sellOptions
+            );
+
+            if (sellResponse?.success) {
+                addConsoleLog(`✅ Sold ${sellAmount.toFixed(6)} tokens from ${walletName}`, 'success');
+                return {
+                    walletId,
+                    walletAddress,
+                    walletName,
+                    tokensSold: sellAmount,
+                    solReceived: sellResponse.solReceived || 0,
+                    signature: sellResponse.signature
+                };
+            } else {
+                addConsoleLog(`❌ Failed to sell from ${walletName}: ${sellResponse?.error || 'Unknown error'}`, 'error');
+                return null;
+            }
+        } catch (error) {
+            console.error(`Error selling from wallet ${wallet.id || wallet.address}:`, error);
+            addConsoleLog(`❌ Error selling from wallet: ${error.message}`, 'error');
+            return null;
+        }
+    });
+
+    // Execute sells based on method
+    let sellResults = [];
+    if (useBundle && executor === 'jito') {
+        // For bundle mode, we might want to execute in batches or all at once
+        // For now, execute in parallel but note that true bundle requires backend support
+        sellResults = await Promise.all(sellPromises);
+    } else {
+        // Individual mode: execute sequentially with small delay between each
+        for (const promise of sellPromises) {
+            const result = await promise;
+            if (result) {
+                sellResults.push(result);
+            }
+            // Small delay between individual sells
+            if (sellPromises.indexOf(promise) < sellPromises.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+    }
+
+    const successfulSells = sellResults.filter(Boolean);
+    
+    if (successfulSells.length > 0) {
+        addConsoleLog(`✅ Bulk Sell task completed! ${successfulSells.length}/${wallets.length} sells successful`, 'success');
+    } else {
+        addConsoleLog(`⚠️ Bulk Sell task completed but no sells were successful`, 'warning');
+    }
+
+    bulkSellTaskConfig.running = false;
+
+    // Refresh token details
+    if (tokenRegistry.current) {
+        await loadLiveTokenDetail(tokenRegistry.current);
+    }
+}
+
+function stopBulkSellTask() {
+    if (!bulkSellTaskConfig.running) {
+        notify('Bulk Sell task is not running.', 'info');
+        return;
+    }
+
+    bulkSellTaskConfig.running = false;
+    notify('Bulk Sell task stopped.', 'success');
+    addConsoleLog('🛑 Bulk Sell task stopped by user.', 'info');
+    
+    if (tokenRegistry.current) {
+        loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+    }
+}
+
 // Sell Buyback Task Configuration and Execution
 let sellBuybackTaskConfig = {
     sellWalletId: null,
@@ -12595,7 +13074,8 @@ function handleAutomationTask(taskName, automationOptions) {
 }
 
 registerGlobalHandler('executeAddVolumeTask', () => handleAutomationTask('Volume generation', { volumeBot: true }));
-registerGlobalHandler('executeBulkSellTask', () => handleAutomationTask('Bulk sell', { smartSell: true }));
+registerGlobalHandler('executeBulkSellTask', executeBulkSellTask);
+registerGlobalHandler('stopBulkSellTask', stopBulkSellTask);
 registerGlobalHandler('executeBumpTask', () => handleAutomationTask('Bump'));
 registerGlobalHandler('executeSellBuybackTask', () => handleAutomationTask('Sell/Buyback', { smartSell: true, volumeBot: true }));
 

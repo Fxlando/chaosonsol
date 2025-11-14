@@ -4700,6 +4700,7 @@ window.collectTradingFees = collectTradingFees;
 window.collectRentFees = collectRentFees;
 window.collectCreatorFees = collectCreatorFees;
 window.collectAllCreatorFees = collectAllCreatorFees;
+window.checkCreatorFees = checkCreatorFees;
 window.toggleAutoCollect = toggleAutoCollect;
 window.generateVanity = generateVanity;
 window.stopVanityGeneration = stopVanityGeneration;

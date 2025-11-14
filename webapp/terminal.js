@@ -30,7 +30,8 @@ async function init() {
 // Fetch real data from API
 async function fetchSystemData() {
     try {
-        const statsEndpoint = IS_NETLIFY ? `${API_BASE}/stats` : `${API_BASE}/stats`;
+        // api-server.js handles both /api/stats and /stats routes
+        const statsEndpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/stats` : `${API_BASE}/stats`;
         const response = await fetch(statsEndpoint, { timeout: 5000 });
         
         if (response.ok) {

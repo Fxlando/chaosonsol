@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Check if backend API is available
 async function checkBackendConnection() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        // api-server.js handles both /api/stats and /stats routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/stats` : `${API_BASE}/stats`;
         const response = await fetch(endpoint);
         if (response.ok) {
             isBackendAvailable = true;
@@ -115,7 +116,8 @@ async function loadViewData(viewName) {
 // Dashboard
 async function loadDashboard() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+        // api-server.js handles both /api/stats and /stats routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/stats` : `${API_BASE}/stats`;
         console.log('🔄 Loading dashboard from:', endpoint);
         
         const response = await fetch(endpoint);
@@ -179,7 +181,8 @@ function setDashboardUnavailable() {
 async function updateSystemStatus() {
     try {
         // Volume status
-        const volumeEndpoint = API_BASE.includes('netlify') ? `${API_BASE}/volume-status` : `${API_BASE}/api/volume/status`;
+        // api-server.js handles volume status routes
+        const volumeEndpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/volume/status` : `${API_BASE}/volume/status`;
         const volumeResp = await fetch(volumeEndpoint);
         const volume = await volumeResp.json();
         document.getElementById('volume-status').textContent = 
@@ -192,7 +195,8 @@ async function updateSystemStatus() {
             volume.stats.totalTrades || 0;
         
         // Smart sell status
-        const smartEndpoint = API_BASE.includes('netlify') ? `${API_BASE}/smartsell-status` : `${API_BASE}/api/smartsell/status`;
+        // api-server.js handles smartsell status routes
+        const smartEndpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/smartsell/status` : `${API_BASE}/smartsell/status`;
         const smartResp = await fetch(smartEndpoint);
         const smart = await smartResp.json();
         document.getElementById('smartsell-status').textContent = 
@@ -217,7 +221,8 @@ async function updateSystemStatus() {
 // Wallets
 async function loadWallets() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/wallets` : `${API_BASE}/api/wallets`;
+        // api-server.js handles both /api/wallets and /wallets routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/wallets` : `${API_BASE}/wallets`;
         const response = await fetch(endpoint);
         wallets = await response.json();
         
@@ -291,7 +296,8 @@ function viewWallet(address) {
 // Volume Trading
 async function loadVolumeView() {
     try {
-        const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/groups` : `${API_BASE}/api/groups`;
+        // api-server.js handles both /api/groups and /groups routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/groups` : `${API_BASE}/groups`;
         const response = await fetch(endpoint);
         groups = await response.json();
         
@@ -498,7 +504,8 @@ function startAutoRefresh() {
     // Update SOL price every 5 seconds
     setInterval(async () => {
         try {
-            const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/stats` : `${API_BASE}/api/stats`;
+            // api-server.js handles both /api/stats and /stats routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/stats` : `${API_BASE}/stats`;
             const response = await fetch(endpoint);
             const data = await response.json();
             const solPriceEl = document.getElementById('sol-price');

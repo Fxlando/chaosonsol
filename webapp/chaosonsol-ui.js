@@ -157,7 +157,8 @@ function initializeWallets() {
 
 async function loadWallets() {
     try {
-        const endpoint = IS_NETLIFY ? `${API_BASE}/wallets` : `${API_BASE}/wallets`;
+        // api-server.js handles both /api/wallets and /wallets routes
+        const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/wallets` : `${API_BASE}/wallets`;
         const response = await fetch(endpoint);
         
         if (!response.ok) throw new Error('API error');

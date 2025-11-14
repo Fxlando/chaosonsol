@@ -42,7 +42,7 @@ class SettingsManager {
             rpc: {
                 mainnet: 'https://api.mainnet-beta.solana.com',
                 devnet: 'https://api.devnet.solana.com',
-                custom: 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+                custom: 'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm',
                 current: 'custom',
                 timeout: 30000,
                 commitment: 'confirmed'
@@ -50,8 +50,8 @@ class SettingsManager {
 
             // Solana Connectivity
             solana: {
-                rpcHttp: 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
-                rpcWebsocket: 'wss://rpc.ankr.com/solana/ws/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+                rpcHttp: 'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm',
+                rpcWebsocket: 'wss://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm',
                 network: 'mainnet',
                 skipPreflight: false,
                 priorityFee: 0.0005,

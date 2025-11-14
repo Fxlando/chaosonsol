@@ -5260,7 +5260,7 @@ function loadImportedTokensFromStorage() {
 const runtimeTaskRegistry = new Map();
 
 const FALLBACK_RPC_ENDPOINT =
-    'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
+    'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm';
 const FALLBACK_LAMPORTS_PER_SOL = 1_000_000_000;
 
 function getSolanaConnection() {

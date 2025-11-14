@@ -6169,6 +6169,7 @@ function startMetricsRefresh(mint, solPrice = null) {
             }
             
             // Fetch fresh price and market cap data (lightweight - just price/market cap)
+            // Uses dedicated price RPC if configured in settings
             const priceDetails = await fetchTokenPriceDetails(mint, { solPrice: currentSolPrice });
             
             if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null)) {
@@ -6397,10 +6398,17 @@ function handleShyftMessage(data) {
 
 // Solana RPC WebSocket Manager (FREE - Public RPC)
 function getSolanaRpcWebSocketUrl() {
-    // Try to get WebSocket URL from settings
+    // Try to get dedicated monitoring RPC from settings first
     try {
         if (typeof window.settingsManager !== 'undefined' && window.settingsManager.getSettings) {
             const settings = window.settingsManager.getSettings();
+            // Check for dedicated monitoring RPC (for live trade monitoring)
+            const monitoringRpc = settings?.solana?.monitoringRpc;
+            if (monitoringRpc && monitoringRpc.trim() && monitoringRpc.startsWith('wss://')) {
+                console.log('🔵 Using dedicated monitoring RPC:', monitoringRpc);
+                return monitoringRpc.trim();
+            }
+            // Fallback to main WebSocket RPC
             const wsUrl = settings?.solana?.rpcWebsocket;
             if (wsUrl && wsUrl.startsWith('wss://')) {
                 return wsUrl;

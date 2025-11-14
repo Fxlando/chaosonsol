@@ -7,10 +7,11 @@
 /**
  * Get Solana connection from settings or existing integration
  * Avoids using rate-limited default RPC
+ * @param {string} purpose - 'price' for price/market cap updates, 'monitoring' for trade monitoring, or null for general use
  */
-function getSolanaConnection() {
-    // First, try to use existing connection from solanaIntegration
-    if (window.solanaIntegration?.connection) {
+function getSolanaConnection(purpose = null) {
+    // First, try to use existing connection from solanaIntegration (unless we need a dedicated RPC)
+    if (!purpose && window.solanaIntegration?.connection) {
         return window.solanaIntegration.connection;
     }
     
@@ -21,7 +22,18 @@ function getSolanaConnection() {
         // Try to get from settings manager
         if (window.settingsManager?.getSettings) {
             const settings = window.settingsManager.getSettings();
-            rpcUrl = settings?.solana?.rpcHttp;
+            
+            // Check for dedicated RPC based on purpose
+            if (purpose === 'price' && settings?.solana?.priceRpc) {
+                rpcUrl = settings.solana.priceRpc;
+                console.log('💰 Using dedicated price RPC:', rpcUrl);
+            } else if (purpose === 'monitoring' && settings?.solana?.monitoringRpc) {
+                // For monitoring, we use WebSocket, but this is for HTTP fallback
+                rpcUrl = settings.solana.monitoringRpc.replace('wss://', 'https://').replace('ws://', 'http://');
+            } else {
+                // Use main RPC
+                rpcUrl = settings?.solana?.rpcHttp;
+            }
         }
         
         // Fallback: try localStorage
@@ -29,7 +41,11 @@ function getSolanaConnection() {
             const stored = localStorage.getItem('chaosbot_settings');
             if (stored) {
                 const settings = JSON.parse(stored);
-                rpcUrl = settings?.solana?.rpcHttp;
+                if (purpose === 'price' && settings?.solana?.priceRpc) {
+                    rpcUrl = settings.solana.priceRpc;
+                } else {
+                    rpcUrl = settings?.solana?.rpcHttp;
+                }
             }
         }
         
@@ -41,12 +57,19 @@ function getSolanaConnection() {
         console.debug('Failed to get RPC URL from settings:', error);
     }
     
-    // Only create connection if we have a valid RPC URL (not default rate-limited one)
-    if (rpcUrl && window.solanaWeb3?.Connection && !rpcUrl.includes('api.mainnet-beta.solana.com')) {
-        try {
-            return new window.solanaWeb3.Connection(rpcUrl);
-        } catch (error) {
-            console.debug('Failed to create connection:', error);
+    // Only create connection if we have a valid RPC URL
+    // For price RPC, allow public RPC (it's dedicated for this purpose)
+    if (rpcUrl && window.solanaWeb3?.Connection) {
+        // Allow public RPC if it's a dedicated price RPC
+        const isDedicatedPriceRpc = purpose === 'price';
+        const isRateLimited = rpcUrl.includes('api.mainnet-beta.solana.com');
+        
+        if (isDedicatedPriceRpc || !isRateLimited) {
+            try {
+                return new window.solanaWeb3.Connection(rpcUrl);
+            } catch (error) {
+                console.debug('Failed to create connection:', error);
+            }
         }
     }
     
@@ -98,8 +121,9 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
     }
 
     // Try on-chain calculation as last resort (only if we have valid RPC)
+    // Use dedicated price RPC if available
     try {
-        const connection = getSolanaConnection();
+        const connection = getSolanaConnection('price');
         if (connection) {
             const onChainData = await calculateOnChainPrice(mintAddress);
             if (onChainData && onChainData.priceSol) {

@@ -3933,6 +3933,42 @@
                             </div>
                         </div>
 
+                        <div class="mt-6">
+                            <h3 class="text-sm font-semibold mb-3 text-gray-300">Dedicated RPCs (Optional)</h3>
+                            <p class="text-xs text-gray-500 mb-4">
+                                Use separate RPCs for different purposes to balance load and avoid rate limits. 
+                                Leave empty to use main RPC for all operations.
+                            </p>
+                            
+                            <div class="grid grid-cols-2 gap-6 mb-4">
+                                <div>
+                                    <label class="block mb-2 text-sm font-medium">Live Trade Monitoring RPC (WebSocket)</label>
+                                    <input
+                                        type="text"
+                                        id="solana-monitoring-rpc"
+                                        placeholder="wss://api.mainnet-beta.solana.com (or leave empty)"
+                                        class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                    />
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        WebSocket endpoint for live trade transaction monitoring. Free public RPC works great here.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label class="block mb-2 text-sm font-medium">Price/Market Cap RPC (HTTP)</label>
+                                    <input
+                                        type="text"
+                                        id="solana-price-rpc"
+                                        placeholder="https://api.mainnet-beta.solana.com (or leave empty)"
+                                        class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
+                                    />
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        HTTP endpoint for frequent price and market cap updates. Can use free public RPC.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="mt-6 flex items-center gap-3">
                             <input
                                 type="checkbox"

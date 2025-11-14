@@ -5,6 +5,8 @@
     const SOLANA_FIELDS = {
         rpcHttp: 'solana-rpc-http',
         rpcWebsocket: 'solana-rpc-ws',
+        monitoringRpc: 'solana-monitoring-rpc',
+        priceRpc: 'solana-price-rpc',
         skipPreflight: 'skipPreflight',
         priorityFee: 'solana-priority-fee'
     };
@@ -107,6 +109,8 @@
         const solana = {
             rpcHttp: get(SOLANA_FIELDS.rpcHttp)?.value.trim(),
             rpcWebsocket: get(SOLANA_FIELDS.rpcWebsocket)?.value.trim(),
+            monitoringRpc: get(SOLANA_FIELDS.monitoringRpc)?.value.trim() || '',
+            priceRpc: get(SOLANA_FIELDS.priceRpc)?.value.trim() || '',
             skipPreflight: get(SOLANA_FIELDS.skipPreflight)?.checked || false,
             priorityFee: parseNumber(get(SOLANA_FIELDS.priorityFee)?.value, 0),
             network: 'custom'

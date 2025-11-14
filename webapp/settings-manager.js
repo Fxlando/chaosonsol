@@ -55,7 +55,10 @@ class SettingsManager {
                 network: 'mainnet',
                 skipPreflight: false,
                 priorityFee: 0.0005,
-                commitment: 'confirmed'
+                commitment: 'confirmed',
+                // Dedicated RPCs for specific purposes (optional - falls back to main RPC if not set)
+                monitoringRpc: '', // For live trade transaction monitoring (WebSocket)
+                priceRpc: '' // For market cap/price updates (HTTP)
             },
 
             // Jito Settings

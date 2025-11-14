@@ -6537,6 +6537,19 @@ function handleShyftMessage(data) {
 
 // Solana RPC WebSocket Manager (FREE - Public RPC)
 function getSolanaRpcWebSocketUrl() {
+    // Use RPC Pool Manager if available (intelligent rotation & failover)
+    if (window.rpcPoolManager) {
+        try {
+            const wsUrl = window.rpcPoolManager.getWebSocketUrl();
+            if (wsUrl) {
+                return wsUrl;
+            }
+        } catch (error) {
+            console.debug('RPC Pool Manager WebSocket failed, falling back to legacy method:', error);
+        }
+    }
+    
+    // Fallback to legacy method
     // Try to get dedicated monitoring RPC from settings first
     try {
         if (typeof window.settingsManager !== 'undefined' && window.settingsManager.getSettings) {

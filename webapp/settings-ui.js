@@ -180,6 +180,15 @@
             addConsoleLog?.(`❌ Failed to update RPC: ${rpcResult.error}`, 'error');
             return;
         }
+        
+        // Log Solana settings to verify all RPCs are saved
+        const verifySolanaSettings = window.settingsManager.getSettings();
+        console.log('✅ Solana settings saved:', {
+            rpcHttp: verifySolanaSettings?.solana?.rpcHttp,
+            rpcWebsocket: verifySolanaSettings?.solana?.rpcWebsocket,
+            monitoringRpc: verifySolanaSettings?.solana?.monitoringRpc,
+            priceRpc: verifySolanaSettings?.solana?.priceRpc
+        });
 
         window.settingsManager.updateCustomization(customization);
         

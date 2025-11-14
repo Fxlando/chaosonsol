@@ -1,7 +1,7 @@
 // Real On-Chain Trading UI - Uses live on-chain data only
 // 100% Solana Blockchain Integration
 
-let solana;
+let solanaIntegration;
 let fallbackSolanaConnection = null;
 let cachedTokenProgramId = null;
 let rtSelectedWallets = new Set();
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Try to initialize Solana integration (don't let errors block navigation)
     try {
         if (typeof SolanaIntegration !== 'undefined') {
-            solana = new SolanaIntegration();
+            solanaIntegration = new SolanaIntegration();
         }
     } catch (error) {
         console.warn('Solana integration not available:', error);
@@ -148,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeSettings();
     initializeCollectFeesView();
     loadArchivedImportedTokens();
+    loadImportedTokensFromStorage();
     loadTokenDraftsFromStorage();
     loadVanityLaunchesFromStorage();
     loadVanityKeysFromStorage();
@@ -161,11 +162,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadRealData() {
     try {
         // Load real SOL price
-        const solPrice = await solana.getSolPrice();
+        const solPrice = await solanaIntegration.getSolPrice();
         updateSOLPrice(solPrice);
         
         // Load saved wallets with real balances
-        const wallets = await solana.getAllWalletsWithBalances();
+        const wallets = await solanaIntegration.getAllWalletsWithBalances();
         renderWallets(wallets);
         updateTotalBalance(wallets);
         syncCreatorWalletFromWallets(wallets, {
@@ -174,7 +175,7 @@ async function loadRealData() {
         });
         
         // Check RPC health
-        const rpcHealth = await solana.checkRPCHealth();
+        const rpcHealth = await solanaIntegration.checkRPCHealth();
         updateRPCStatus(rpcHealth);
         
         addConsoleLog(`✅ Loaded ${wallets.length} wallets with real balances`, 'info');
@@ -193,7 +194,7 @@ async function loadRealData() {
 async function connectWalletHandler() {
     addConsoleLog('🔗 Connecting wallet...', 'info');
     
-    const result = await solana.connectWallet();
+    const result = await solanaIntegration.connectWallet();
     
     if (result.success) {
         addConsoleLog(`✅ Wallet connected: ${result.publicKey}`, 'success');
@@ -212,7 +213,7 @@ async function createNewWallet() {
     try {
         addConsoleLog('🔑 Generating new wallet...', 'info');
         
-        const wallet = solana.createWallet();
+        const wallet = solanaIntegration.createWallet();
         
         // Show the user their new wallet details
         showNewWalletModal(wallet);
@@ -228,11 +229,11 @@ async function importWalletHandler(privateKey, name) {
     try {
         addConsoleLog('📥 Importing wallet...', 'info');
         
-        const result = solana.importWallet(privateKey);
+        const result = solanaIntegration.importWallet(privateKey);
         
         if (result.success) {
             // Get real balance
-            const balance = await solana.getBalance(result.publicKey);
+            const balance = await solanaIntegration.getBalance(result.publicKey);
             
             const wallet = {
                 name: name || `Wallet-${Date.now()}`,
@@ -242,7 +243,7 @@ async function importWalletHandler(privateKey, name) {
                 timestamp: Date.now()
             };
             
-            solana.saveWallet(wallet);
+            solanaIntegration.saveWallet(wallet);
             
             addConsoleLog(`✅ Wallet imported: ${result.publicKey}`, 'success');
             addConsoleLog(`💰 Balance: ${balance.toFixed(4)} SOL`, 'info');
@@ -262,7 +263,7 @@ async function transferSOLHandler(fromPrivateKey, toPublicKey, amount) {
     try {
         addConsoleLog(`💸 Transferring ${amount} SOL...`, 'info');
         
-        const result = await solana.transferSOL(fromPrivateKey, toPublicKey, amount);
+        const result = await solanaIntegration.transferSOL(fromPrivateKey, toPublicKey, amount);
         
         if (result.success) {
             addConsoleLog(`✅ Transfer successful!`, 'success');
@@ -429,7 +430,7 @@ async function refreshWalletBalance(publicKey) {
     try {
         addConsoleLog(`🔄 Refreshing balance for ${truncateAddress(publicKey)}...`, 'info');
         
-        const balance = await solana.getBalance(publicKey);
+        const balance = await solanaIntegration.getBalance(publicKey);
         
         addConsoleLog(`✅ Balance: ${balance.toFixed(4)} SOL`, 'success');
         
@@ -445,7 +446,7 @@ function startRealTimeUpdates() {
     // Update SOL price every 30 seconds
     setInterval(async () => {
         try {
-            const price = await solana.getSolPrice();
+            const price = await solanaIntegration.getSolPrice();
             updateSOLPrice(price);
             updateTopbarSyncTimestamp(Date.now());
         } catch (error) {
@@ -456,7 +457,7 @@ function startRealTimeUpdates() {
     // Check RPC health every 60 seconds
     setInterval(async () => {
         try {
-            const health = await solana.checkRPCHealth();
+            const health = await solanaIntegration.checkRPCHealth();
             updateRPCStatus(health);
         } catch (error) {
             console.error('Error checking RPC:', error);
@@ -736,7 +737,6 @@ function updateTopbarSyncTimestamp(timestamp = Date.now()) {
         second: '2-digit'
     });
 }
-
 function setupMobileNavigation() {
     const toggle = document.getElementById('mobile-nav-toggle');
     const backdrop = document.getElementById('mobile-nav-backdrop');
@@ -857,6 +857,11 @@ function switchView(viewName) {
         return;
     }
     
+    const previousView = rtCurrentView;
+    if (previousView === 'token-detail' && viewName !== 'token-detail') {
+        stopTokenActivityStream();
+    }
+    
     rtCurrentView = viewName;
     
     // Hide ALL views and pages
@@ -960,7 +965,9 @@ function switchView(viewName) {
     }
 
     if (viewName === 'blueprint') {
-        renderBlueprintList();
+        renderBlueprintList().catch((error) => {
+            console.error('Failed to render blueprint list:', error);
+        });
     }
 
     if (viewName === 'vanities') {
@@ -974,6 +981,15 @@ function switchView(viewName) {
     if (viewName === 'settings') {
         initializeSettings();
         document.dispatchEvent(new Event('chaosSettingsViewOpened'));
+    }
+
+    // Update selected wallet counts for wallet operation pages
+    if (['withdraw', 'warm', 'redistribute', 'tag', 'fund'].includes(viewName)) {
+        const selectedCount = getSelectedWalletIds().length;
+        const countElement = document.getElementById(`${viewName}-selected-count`);
+        if (countElement) {
+            countElement.textContent = selectedCount;
+        }
     }
 
     // Re-initialize Lucide icons for the new view
@@ -998,6 +1014,7 @@ const tokenLaunchState = {
     selectedWalletId: '',
     isUploading: false,
     isSavingDraft: false,
+    isLaunching: false,
     launchConfig: createDefaultLaunchConfig(),
     launchControlsReady: false,
     walletGroups: [],
@@ -1030,6 +1047,7 @@ const tokenLaunchState = {
 function resetLaunchConfigState() {
     tokenLaunchState.launchConfig = createDefaultLaunchConfig();
     refreshLaunchWalletDependencies();
+    renderLaunchBlueprintSummary();
 }
 
 const blueprintFormState = {
@@ -1041,18 +1059,20 @@ const EMBED_IMAGE_MAX_BYTES = 2 * 1024 * 1024; // Embed directly only if <= 2 MB
 
 // Initialize PumpFun Trading
 function initializePumpFun() {
-    if (!pumpFunTrading && solana) {
+    if (!pumpFunTrading && solanaIntegration) {
         const settingsProvider = () => window.settingsManager?.getSettings();
-        pumpFunTrading = new PumpFunTrading(solana, settingsProvider);
+        pumpFunTrading = new PumpFunTrading(solanaIntegration, settingsProvider);
         console.log('✅ PumpFun Trading initialized');
     }
 }
 
 // Initialize Multi-Wallet Manager
 function initializeMultiWallet() {
-    if (!multiWalletManager && solana) {
-        multiWalletManager = new MultiWalletManager(solana);
-        multiWalletManager.loadBlueprints();
+    if (!multiWalletManager && solanaIntegration) {
+        multiWalletManager = new MultiWalletManager(solanaIntegration);
+        blueprintService.fetchList(true).catch((error) => {
+            console.warn('Failed to preload blueprint list:', error);
+        });
         console.log('✅ Multi-Wallet Manager initialized');
     }
 }
@@ -1067,14 +1087,14 @@ function initializeVanity() {
 
 // Initialize Settings Manager
 function initializeSettings(force = false) {
-    if (!solana) {
+    if (!solanaIntegration) {
         console.warn('Solana integration not ready for settings initialization');
         return;
     }
 
     if (!settingsManager || force) {
         if (!settingsManager) {
-            settingsManager = new SettingsManager(solana);
+            settingsManager = new SettingsManager(solanaIntegration);
             console.log('✅ Settings Manager initialized');
         } else if (force) {
             settingsManager.applySettings();
@@ -1527,7 +1547,6 @@ function readFileAsDataURL(file) {
         reader.readAsDataURL(file);
     });
 }
-
 async function ensureTokenImageUploaded() {
     if (!tokenLaunchState.image.base64 || tokenLaunchState.image.uri) {
         return tokenLaunchState.image.uri || null;
@@ -2183,6 +2202,7 @@ async function prepareLaunchTokenView(options = {}) {
     updateBlockZeroModeUI();
     renderBlockZeroWalletList();
     updateBlockZeroSummary();
+    renderLaunchBlueprintSummary();
 }
 
 function handleLaunchAutomationModeChange(type, mode) {
@@ -2327,7 +2347,6 @@ function resolveLaunchAutomationSelection(type, creatorWalletId) {
 
     return selection;
 }
-
 function getWalletGroupById(groupId) {
     if (!groupId) {
         return null;
@@ -2359,6 +2378,164 @@ function validateAutomationSelection(label, selection) {
     }
 
     return { valid: true };
+}
+
+function collectLaunchAutomations(creatorWalletId, options = {}) {
+    const { onWarning } = options || {};
+    const warnings = [];
+    const automationsPayload = {};
+    let smartSellConfig = null;
+    let volumeBotConfig = null;
+
+    const emitWarning = (type, message) => {
+        warnings.push({ type, message });
+        if (typeof onWarning === 'function') {
+            try {
+                onWarning(type, message);
+            } catch (error) {
+                console.warn('Automation warning handler failed:', error);
+            }
+        }
+    };
+
+    const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
+    if (enableSmartSell) {
+        const selection = resolveLaunchAutomationSelection('smartSell', creatorWalletId);
+        const validation = validateAutomationSelection('Smart Sell', selection);
+        if (!validation.valid) {
+            emitWarning('smartSell', validation.message);
+        } else {
+            const config = {
+                enabled: true,
+                walletSelector: selection,
+                walletMode: selection.mode,
+                walletIds: selection.mode !== 'group' ? selection.walletIds : undefined,
+                walletGroupId: selection.mode === 'group' ? selection.groupId : undefined,
+                walletGroupName:
+                    selection.mode === 'group'
+                        ? getWalletGroupById(selection.groupId)?.name || null
+                        : null,
+                profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
+                stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
+                trailingStop: parseFloat(
+                    document.getElementById('smart-sell-trailing')?.value || '10'
+                ),
+                partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
+                sellPercentages: [25, 25, 25, 25]
+            };
+
+            if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                delete config.walletIds;
+            }
+            if (!config.walletGroupId) {
+                delete config.walletGroupId;
+            }
+            if (!config.walletGroupName) {
+                delete config.walletGroupName;
+            }
+
+            smartSellConfig = config;
+            automationsPayload.smartSell = config;
+        }
+    }
+
+    const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
+    if (enableVolumeBot) {
+        const selection = resolveLaunchAutomationSelection('volumeBot', creatorWalletId);
+        const validation = validateAutomationSelection('Volume Bot', selection);
+        if (!validation.valid) {
+            emitWarning('volumeBot', validation.message);
+        } else {
+            const readNumber = (id) => {
+                const value = parseFloat(document.getElementById(id)?.value ?? '');
+                return Number.isFinite(value) ? value : null;
+            };
+
+            const config = {
+                enabled: true,
+                walletSelector: selection,
+                walletMode: selection.mode,
+                walletIds: selection.mode !== 'group' ? selection.walletIds : undefined,
+                walletGroupId: selection.mode === 'group' ? selection.groupId : undefined,
+                walletGroupName:
+                    selection.mode === 'group'
+                        ? getWalletGroupById(selection.groupId)?.name || null
+                        : null,
+                buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
+                sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
+                cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
+                randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
+                randomizeDelay: Boolean(
+                    document.getElementById('volume-bot-randomize-delay')?.checked
+                )
+            };
+
+            const minAmount = readNumber('volume-bot-min-amount');
+            const maxAmount = readNumber('volume-bot-max-amount');
+            if (minAmount !== null) config.minAmount = minAmount;
+            if (maxAmount !== null) config.maxAmount = maxAmount;
+
+            const buyInterval = readNumber('volume-bot-buy-interval');
+            const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
+            const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
+            if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
+            if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
+            if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
+
+            const sellInterval = readNumber('volume-bot-sell-interval');
+            const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
+            const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
+            if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
+            if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
+            if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
+
+            const sellPercentMin = readNumber('volume-bot-sell-percent-min');
+            const sellPercentMax = readNumber('volume-bot-sell-percent-max');
+            if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
+            if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
+
+            const guardrailToggle = document.getElementById('volume-bot-guardrails-enabled');
+            const guardrailsEnabled = Boolean(guardrailToggle?.checked);
+            const guardrails = {
+                enabled: guardrailsEnabled,
+                realizedProfitTarget: readNumber('volume-bot-profit-target'),
+                realizedLossLimit: readNumber('volume-bot-loss-limit')
+            };
+            if (guardrails.realizedProfitTarget === null) {
+                delete guardrails.realizedProfitTarget;
+            }
+            if (guardrails.realizedLossLimit === null) {
+                delete guardrails.realizedLossLimit;
+            }
+
+            config.guardrails = guardrails;
+
+            if (config.buyAmount && config.minAmount === undefined && config.maxAmount === undefined) {
+                config.minAmount = config.buyAmount;
+                config.maxAmount = config.buyAmount;
+            }
+
+            if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
+                delete config.walletIds;
+            }
+            if (!config.walletGroupId) {
+                delete config.walletGroupId;
+            }
+            if (!config.walletGroupName) {
+                delete config.walletGroupName;
+            }
+
+            volumeBotConfig = config;
+            automationsPayload.volumeBot = config;
+        }
+    }
+
+    return {
+        automationsPayload,
+        smartSellConfig,
+        volumeBotConfig,
+        warnings
+    };
 }
 
 function openLaunchLinks(tokenMint) {
@@ -2437,140 +2614,17 @@ async function executeSaveTokenDraft() {
         setSaveTokenButtonLoading(true, 'Saving...');
         addConsoleLog('💾 Saving token configuration as draft...', 'info');
 
-        const enableSmartSell = document.getElementById('enable-smart-sell')?.checked || false;
-        const enableVolumeBot = document.getElementById('enable-volume-bot')?.checked || false;
-
-        const smartSellSelection = resolveLaunchAutomationSelection('smartSell', creatorWalletId);
-        const volumeSelection = resolveLaunchAutomationSelection('volumeBot', creatorWalletId);
-
-        let smartSellConfig = null;
-        if (enableSmartSell) {
-            const validation = validateAutomationSelection('Smart Sell', smartSellSelection);
-            if (!validation.valid) {
-                notify(`${validation.message} Draft saved without Smart Sell.`, 'warning');
-                addConsoleLog(`⚠️ Smart Sell disabled for draft: ${validation.message}`, 'warning');
-            } else {
-                smartSellConfig = (() => {
-                  const config = {
-                      enabled: true,
-                      walletSelector: smartSellSelection,
-                      walletMode: smartSellSelection.mode,
-                      walletIds: smartSellSelection.mode !== 'group' ? smartSellSelection.walletIds : undefined,
-                      walletGroupId: smartSellSelection.mode === 'group' ? smartSellSelection.groupId : undefined,
-                      walletGroupName:
-                          smartSellSelection.mode === 'group'
-                              ? getWalletGroupById(smartSellSelection.groupId)?.name || null
-                              : null,
-                      profitTarget: parseFloat(document.getElementById('smart-sell-profit')?.value || '30'),
-                      stopLoss: parseFloat(document.getElementById('smart-sell-stoploss')?.value || '-15'),
-                      trailingStop: parseFloat(document.getElementById('smart-sell-trailing')?.value || '10'),
-                      partialSells: Boolean(document.getElementById('smart-sell-partial')?.checked),
-                      sellPercentages: [25, 25, 25, 25]
-                  };
-
-                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                      delete config.walletIds;
-                  }
-                  if (!config.walletGroupId) {
-                      delete config.walletGroupId;
-                  }
-                  if (!config.walletGroupName) {
-                      delete config.walletGroupName;
-                  }
-
-                  return config;
-                })();
+        const automationResult = collectLaunchAutomations(creatorWalletId, {
+            onWarning: (type, message) => {
+                const label = type === 'smartSell' ? 'Smart Sell' : 'Volume Bot';
+                notify(`${message} Draft saved without ${label}.`, 'warning');
+                addConsoleLog(`⚠️ ${label} disabled for draft: ${message}`, 'warning');
             }
-        }
+        });
 
-        let volumeBotConfig = null;
-        if (enableVolumeBot) {
-            const validation = validateAutomationSelection('Volume Bot', volumeSelection);
-            if (!validation.valid) {
-                notify(`${validation.message} Draft saved without Volume Bot.`, 'warning');
-                addConsoleLog(`⚠️ Volume Bot disabled for draft: ${validation.message}`, 'warning');
-            } else {
-                volumeBotConfig = (() => {
-                  const readNumber = (id) => {
-                      const value = parseFloat(document.getElementById(id)?.value ?? '');
-                      return Number.isFinite(value) ? value : null;
-                  };
-
-                  const config = {
-                      enabled: true,
-                      walletSelector: volumeSelection,
-                      walletMode: volumeSelection.mode,
-                      walletIds: volumeSelection.mode !== 'group' ? volumeSelection.walletIds : undefined,
-                      walletGroupId: volumeSelection.mode === 'group' ? volumeSelection.groupId : undefined,
-                      walletGroupName:
-                          volumeSelection.mode === 'group'
-                              ? getWalletGroupById(volumeSelection.groupId)?.name || null
-                              : null,
-                      buyAmount: parseFloat(document.getElementById('volume-bot-amount')?.value || '0.01'),
-                      sellDelay: parseInt(document.getElementById('volume-bot-delay')?.value || '30', 10),
-                      cycles: parseInt(document.getElementById('volume-bot-cycles')?.value || '10', 10),
-                      randomizeAmounts: Boolean(document.getElementById('volume-bot-randomize')?.checked),
-                      randomizeDelay: Boolean(document.getElementById('volume-bot-randomize-delay')?.checked)
-                  };
-
-                  const minAmount = readNumber('volume-bot-min-amount');
-                  const maxAmount = readNumber('volume-bot-max-amount');
-                  if (minAmount !== null) config.minAmount = minAmount;
-                  if (maxAmount !== null) config.maxAmount = maxAmount;
-
-                  const buyInterval = readNumber('volume-bot-buy-interval');
-                  const buyIntervalMin = readNumber('volume-bot-buy-interval-min');
-                  const buyIntervalMax = readNumber('volume-bot-buy-interval-max');
-                  if (buyInterval !== null) config.buyIntervalSeconds = buyInterval;
-                  if (buyIntervalMin !== null) config.buyIntervalMinSeconds = buyIntervalMin;
-                  if (buyIntervalMax !== null) config.buyIntervalMaxSeconds = buyIntervalMax;
-
-                  const sellInterval = readNumber('volume-bot-sell-interval');
-                  const sellIntervalMin = readNumber('volume-bot-sell-interval-min');
-                  const sellIntervalMax = readNumber('volume-bot-sell-interval-max');
-                  if (sellInterval !== null) config.sellIntervalSeconds = sellInterval;
-                  if (sellIntervalMin !== null) config.sellIntervalMinSeconds = sellIntervalMin;
-                  if (sellIntervalMax !== null) config.sellIntervalMaxSeconds = sellIntervalMax;
-
-                  const sellPercentMin = readNumber('volume-bot-sell-percent-min');
-                  const sellPercentMax = readNumber('volume-bot-sell-percent-max');
-                  if (sellPercentMin !== null) config.sellPercentageMin = sellPercentMin;
-                  if (sellPercentMax !== null) config.sellPercentageMax = sellPercentMax;
-
-                  const guardrailsEnabled = Boolean(document.getElementById('volume-bot-guardrails-enabled')?.checked);
-                  const guardrails = {
-                      enabled: guardrailsEnabled,
-                      realizedProfitTarget: readNumber('volume-bot-profit-target'),
-                      realizedLossLimit: readNumber('volume-bot-loss-limit')
-                  };
-
-                  if (guardrails.realizedProfitTarget === null) {
-                      delete guardrails.realizedProfitTarget;
-                  }
-                  if (guardrails.realizedLossLimit === null) {
-                      delete guardrails.realizedLossLimit;
-                  }
-
-                  config.guardrails = guardrails;
-
-                  if (!Array.isArray(config.walletIds) || config.walletIds.length === 0) {
-                      delete config.walletIds;
-                  }
-                  if (!config.walletGroupId) {
-                      delete config.walletGroupId;
-                  }
-                  if (!config.walletGroupName) {
-                      delete config.walletGroupName;
-                  }
-
-                  return config;
-                })();
-            }
-        }
-
-        const automationsPayload = {};
-        if (smartSellConfig) automationsPayload.smartSell = smartSellConfig;
-        if (volumeBotConfig) automationsPayload.volumeBot = volumeBotConfig;
+        const automationsPayload = automationResult.automationsPayload;
+        const smartSellConfig = automationResult.smartSellConfig;
+        const volumeBotConfig = automationResult.volumeBotConfig;
 
         const imageUri = await ensureTokenImageUploaded();
         const gatewayImage = tokenLaunchState.image.gatewayUrl || null;
@@ -2653,6 +2707,201 @@ async function executeSaveTokenDraft() {
     }
 }
 
+async function executeLaunchToken() {
+    if (tokenLaunchState.isLaunching) {
+        notify('Launch already in progress...', 'warning');
+        return;
+    }
+
+    const launchButtonId = 'launch-token-submit';
+    const labelForAutomation = (type) => (type === 'smartSell' ? 'Smart Sell' : 'Volume Bot');
+
+    try {
+        tokenLaunchState.isLaunching = true;
+        setButtonLoading(launchButtonId, true, 'Launching...');
+        addConsoleLog('🚀 Launch sequence initiated...', 'info');
+
+        const activeDraftId =
+            tokenLaunchState.activeLaunchDraftId ||
+            tokenLaunchState.pendingDraftId ||
+            (tokenRegistry.current?.type === 'draft' ? tokenRegistry.current.id : null);
+
+        const draft = activeDraftId ? tokenRegistry.drafts.get(activeDraftId) : null;
+        if (!draft) {
+            throw new Error('Load or save a token draft before launching.');
+        }
+
+        const platform = draft.platform || uiHelperState.tokenPlatform || 'pumpfun';
+        if (platform !== 'pumpfun') {
+            throw new Error(`Platform ${platform} is not supported yet.`);
+        }
+
+        const creatorWalletId =
+            tokenLaunchState.launchConfig?.devWalletId ||
+            tokenLaunchState.selectedWalletId ||
+            draft.creatorWalletId ||
+            draft.creatorWallet ||
+            '';
+
+        if (!creatorWalletId) {
+            throw new Error('Select a creator wallet before launching.');
+        }
+
+        const creatorWalletDetails = resolveCreatorWalletDetails(creatorWalletId) || {};
+
+        const name = draft.name || draft.metadata?.name || '';
+        const symbol = draft.symbol || draft.metadata?.symbol || '';
+        if (!name || !symbol) {
+            throw new Error('Draft is missing token name or symbol.');
+        }
+
+        const description = draft.description || draft.metadata?.description || '';
+        const website = draft.website || draft.metadata?.website || draft.metadata?.external_url || '';
+        const twitter = draft.twitter || draft.metadata?.twitter || '';
+        const telegram = draft.telegram || draft.metadata?.telegram || '';
+
+        const draftImageUrl = resolveImageUrl(
+            draft.imageUri || draft.image || draft.metadata?.image || ''
+        );
+        if (draft.imageBase64 && !tokenLaunchState.image.base64) {
+            tokenLaunchState.image.base64 = draft.imageBase64;
+        }
+        if (draftImageUrl) {
+            tokenLaunchState.image.uri = tokenLaunchState.image.uri || draftImageUrl;
+            tokenLaunchState.image.gatewayUrl = tokenLaunchState.image.gatewayUrl || draftImageUrl;
+        }
+
+        const imageUri = await ensureTokenImageUploaded();
+        const metadata = {
+            name,
+            symbol,
+            description,
+            image: imageUri || draftImageUrl || undefined,
+            twitter: twitter || undefined,
+            telegram: telegram || undefined,
+            website: website || undefined
+        };
+
+        const initialBuyFromState = safeNumber(tokenLaunchState.launchConfig?.devBuyAmount);
+        const initialBuy =
+            (Number.isFinite(initialBuyFromState) && initialBuyFromState >= 0
+                ? initialBuyFromState
+                : null) ??
+            (Number.isFinite(draft.initialBuyAmount) && draft.initialBuyAmount >= 0
+                ? draft.initialBuyAmount
+                : 0);
+
+        const automationResult = collectLaunchAutomations(creatorWalletId, {
+            onWarning: (type, message) => {
+                const label = labelForAutomation(type);
+                notify(`${label} disabled: ${message}`, 'warning');
+                addConsoleLog(`⚠️ ${label} disabled for launch: ${message}`, 'warning');
+            }
+        });
+
+        const launchConfig = serializeLaunchConfig(tokenLaunchState.launchConfig);
+        const options = {
+            platform,
+            useVanity: Boolean(draft.useVanity),
+            blockZero: launchConfig.blockZero,
+            automations: automationResult.automationsPayload,
+            metadataUri: draft.metadataUri || null,
+            draftId: draft.id,
+            appliedBlueprint: launchConfig.appliedBlueprint || null
+        };
+
+        notify('Submitting launch transaction...', 'info');
+        addConsoleLog(
+            `🚀 Launching ${name} (${symbol}) using creator wallet ${creatorWalletId}...`,
+            'info'
+        );
+
+        const launchResponse = await window.apiClient.launchToken(
+            creatorWalletId,
+            metadata,
+            Number(initialBuy) || 0,
+            options
+        );
+
+        if (!launchResponse?.success) {
+            throw new Error(launchResponse?.error || launchResponse?.message || 'Launch failed');
+        }
+
+        notify('Token launched successfully!', 'success');
+        addConsoleLog(`✅ Token launched: ${launchResponse.tokenMint}`, 'success');
+
+        const launchRecord = {
+            tokenMint: launchResponse.tokenMint,
+            name,
+            symbol,
+            platform,
+            logo: metadata.image || draftImageUrl || null,
+            metadataUri: launchResponse.metadataUri || draft.metadataUri || null,
+            creatorWalletId,
+            creatorWallet: creatorWalletDetails.address || draft.creatorWallet || '',
+            creatorWalletLabel: creatorWalletDetails.name || draft.creatorWalletLabel || '',
+            initialBuyAmount: Number(initialBuy) || 0,
+            launchedAt: Date.now(),
+            appliedBlueprint: launchConfig.appliedBlueprint || null
+        };
+
+        await recordTokenLaunch(launchRecord);
+        registerImportedToken({
+            mint: launchResponse.tokenMint,
+            name,
+            symbol,
+            description: metadata.description || draft.description || '',
+            image: launchRecord.logo || metadata.image || draftImageUrl,
+            metadataUri: launchResponse.metadataUri || draft.metadataUri || null,
+            twitter: metadata.twitter || draft.twitter,
+            telegram: metadata.telegram || draft.telegram,
+            website: metadata.website || draft.website,
+            platform,
+            creatorWalletId,
+            creatorWallet: launchRecord.creatorWallet,
+            creatorWalletLabel: launchRecord.creatorWalletLabel,
+            initialBuyAmount: Number(initialBuy) || 0,
+            status: 'Launched',
+            type: 'imported',
+            launchedAt: Date.now()
+        });
+
+        if (draft.id) {
+            removeTokenDraft(draft.id);
+        }
+
+        tokenLaunchState.pendingDraftId = null;
+        tokenLaunchState.activeLaunchDraftId = null;
+        resetLaunchConfigState();
+        if (typeof updateCreatorWalletSummary === 'function') {
+            updateCreatorWalletSummary();
+        }
+
+        openLaunchLinks(launchResponse.tokenMint);
+
+        try {
+            await loadCreatorWallets();
+        } catch (walletError) {
+            console.warn('Unable to refresh creator wallets after launch:', walletError);
+        }
+
+        if (typeof window.walletOperations?.loadWallets === 'function') {
+            try {
+                await window.walletOperations.loadWallets();
+            } catch (opsError) {
+                console.warn('Unable to refresh wallet operations after launch:', opsError);
+            }
+        }
+    } catch (error) {
+        console.error('Token launch failed:', error);
+        notify(`Launch failed: ${error.message}`, 'error');
+        addConsoleLog(`❌ Token launch failed: ${error.message}`, 'error');
+    } finally {
+        setButtonLoading(launchButtonId, false);
+        tokenLaunchState.isLaunching = false;
+    }
+}
+
 async function executeCopyToken() {
     const button = document.getElementById('copy-token-submit');
     try {
@@ -2675,7 +2924,7 @@ async function executeCopyToken() {
         }
 
         if (platform !== 'pumpfun') {
-            notify(`Copying via ${platform} isn’t supported yet. Choose Pump.fun.`, 'warning');
+            notify(`Copying via ${platform} isn't supported yet. Choose Pump.fun.`, 'warning');
             return;
         }
 
@@ -2696,36 +2945,65 @@ async function executeCopyToken() {
             throw new Error(response?.error || 'Copy request failed');
         }
 
-        const record = {
-            mint: response.tokenMint,
-            name: response.copiedMetadata?.name || response.metadata?.name || 'Copied Token',
-            symbol: response.copiedMetadata?.symbol || response.metadata?.symbol || '',
-            description: response.copiedMetadata?.description || '',
-            image: response.copiedMetadata?.image || '',
-            status: 'Copied',
-            type: 'copy',
+        const copiedMetadata = response.copiedMetadata || {};
+        const template = response.draftTemplate || {};
+        const walletDetails = resolveCreatorWalletDetails(walletId) || {};
+        const now = Date.now();
+        const draftId = template.id || `draft-${now}-${Math.random().toString(36).slice(2, 8)}`;
+        const rawImage = copiedMetadata.image || template.image || '';
+        const normalizedImage = resolveImageUrl(rawImage) || rawImage || null;
+        const metadataUri =
+            response.metadataUri ||
+            template.metadataUri ||
+            copiedMetadata.metadataUri ||
+            '';
+
+        const draftRecord = {
+            id: draftId,
+            type: 'draft',
+            status: 'PRE-LAUNCH',
+            name: copiedMetadata.name || template.name || '',
+            symbol: copiedMetadata.symbol || template.symbol || '',
+            description: copiedMetadata.description || template.description || '',
+            website: template.website || copiedMetadata.website || '',
+            twitter: template.twitter || copiedMetadata.twitter || '',
+            telegram: template.telegram || copiedMetadata.telegram || '',
+            image: normalizedImage,
+            imageUri: rawImage || null,
+            platform,
             launchpad: 'Pump.fun',
             sourceMint: mintAddress,
-            metadataUri: response.metadataUri || response.copiedMetadata?.metadataUri || '',
-            signature: response.signature,
-            explorerUrl: response.viewOnExplorer,
-            website: response.copiedMetadata?.website,
-            twitter: response.copiedMetadata?.twitter,
-            telegram: response.copiedMetadata?.telegram
+            creatorWalletId: walletId || '',
+            creatorWallet: walletDetails.address || '',
+            creatorWalletLabel: walletDetails.name || '',
+            createdAt: now,
+            updatedAt: now,
+            metadata: copiedMetadata,
+            metadataUri,
+            useVanity: Boolean(useVanity),
+            automations: {},
+            automationsEnabled: {},
+            initialBuyAmount: null
         };
 
-        registerImportedToken(record);
+        registerTokenDraft(draftRecord);
+        tokenLaunchState.pendingDraftId = draftRecord.id;
+        tokenLaunchState.activeLaunchDraftId = draftRecord.id;
+        tokenLaunchState.launchConfig = cloneLaunchConfig({
+            devWalletId: walletId || '',
+            devBuyAmount: null,
+            blockZero: {}
+        });
+        tokenLaunchState.selectedWalletId = walletId || tokenLaunchState.selectedWalletId || '';
 
-        addConsoleLog(`✅ Token copied successfully. New mint: ${response.tokenMint}`, 'success');
-        notify(`Token copied! New mint: ${response.tokenMint}`, 'success');
+        populateTokenDetailView(draftRecord);
 
-        if (response.viewOnExplorer) {
-            window.open(response.viewOnExplorer, '_blank', 'noopener');
-        } else if (response.tokenMint) {
-            openLaunchLinks(response.tokenMint);
-        }
+        addConsoleLog(
+            `✅ Token metadata copied into draft ${draftRecord.name || draftRecord.symbol || draftRecord.id}`,
+            'success'
+        );
+        notify('Token metadata copied into your drafts. Configure it from the Tokens tab.', 'success');
 
-        renderTokensTable();
         navigateToPage('tokens');
     } catch (error) {
         console.error('Copy token error:', error);
@@ -2752,6 +3030,17 @@ async function executeImportToken() {
         if (!validateMintAddress(mintAddress)) {
             notify('That mint address is not valid. Please double-check it.', 'error');
             mintInput?.focus();
+            return;
+        }
+
+        // First, check if token is already in our registry (launched through this app)
+        const existingToken = tokenRegistry.imported.get(mintAddress);
+        if (existingToken && existingToken.name && existingToken.symbol) {
+            addConsoleLog(`✅ Found existing token data for ${mintAddress}`, 'info');
+            notify(`Token already imported: ${existingToken.name || existingToken.symbol}`, 'info');
+            populateTokenDetailView(existingToken);
+            renderTokensTable();
+            navigateToPage('token-detail');
             return;
         }
 
@@ -2839,6 +3128,120 @@ function stopAutomation(botId) {
 
 // ==================== BLUEPRINT FUNCTIONS ====================
 
+let blueprintWalletLoadPromise = null;
+let blueprintWalletLoadAttempts = 0;
+
+function enableSimpleMultiSelect(selectEl) {
+    if (!selectEl || selectEl.dataset.simpleMultiSelect === 'true') {
+        return;
+    }
+
+    selectEl.addEventListener('mousedown', (event) => {
+        const option = event.target;
+        if (!option || option.tagName !== 'OPTION') {
+            return;
+        }
+
+        event.preventDefault();
+        option.selected = !option.selected;
+
+        const changeEvent = new Event('change', { bubbles: true });
+        selectEl.dispatchEvent(changeEvent);
+    });
+
+    selectEl.dataset.simpleMultiSelect = 'true';
+}
+function collectBlueprintWallets() {
+    const walletMap = new Map();
+
+    const addWallets = (list) => {
+        if (!Array.isArray(list)) {
+            return;
+        }
+        list.forEach((wallet) => {
+            const identifier = getWalletIdentifier(wallet);
+            if (!identifier) {
+                return;
+            }
+            const key = identifier.toString().toLowerCase();
+            if (!walletMap.has(key)) {
+                walletMap.set(key, { ...wallet });
+            }
+        });
+    };
+
+    try {
+        if (typeof window.walletOperations?.getWallets === 'function') {
+            addWallets(window.walletOperations.getWallets());
+        }
+    } catch (error) {
+        console.warn('Unable to read wallet operations cache for blueprints:', error);
+    }
+
+    addWallets(tokenLaunchState?.wallets);
+    addWallets(Array.isArray(solanaIntegration?.wallets) ? solanaIntegration.wallets : null);
+    addWallets(Array.isArray(window.solana?.wallets) ? window.solana.wallets : null);
+
+    const wallets = Array.from(walletMap.values());
+
+    wallets.sort((a, b) => {
+        const nameA = (a?.name || '').toLowerCase();
+        const nameB = (b?.name || '').toLowerCase();
+        if (nameA && nameB && nameA !== nameB) {
+            return nameA.localeCompare(nameB);
+        }
+        if (nameA && !nameB) {
+            return -1;
+        }
+        if (!nameA && nameB) {
+            return 1;
+        }
+        const addrA = (a?.publicKey || a?.address || a?.id || '').toLowerCase();
+        const addrB = (b?.publicKey || b?.address || b?.id || '').toLowerCase();
+        return addrA.localeCompare(addrB);
+    });
+
+    return wallets;
+}
+
+function scheduleBlueprintWalletReload() {
+    if (
+        blueprintWalletLoadPromise ||
+        blueprintWalletLoadAttempts > 2 ||
+        typeof window.walletOperations?.loadWallets !== 'function'
+    ) {
+        return;
+    }
+
+    try {
+        blueprintWalletLoadAttempts += 1;
+        const result = window.walletOperations.loadWallets();
+        if (result && typeof result.then === 'function') {
+            blueprintWalletLoadPromise = result
+                .catch((error) => {
+                    console.warn('Failed to load wallets for blueprint selector:', error);
+                })
+                .finally(() => {
+                    blueprintWalletLoadPromise = null;
+                    populateBlueprintAutomationWalletOptions();
+                });
+        } else {
+            blueprintWalletLoadPromise = Promise.resolve()
+                .finally(() => {
+                    blueprintWalletLoadPromise = null;
+                    populateBlueprintAutomationWalletOptions();
+                });
+        }
+    } catch (error) {
+        console.warn('Wallet reload threw for blueprint selector:', error);
+        blueprintWalletLoadPromise = null;
+    }
+}
+
+function getBlueprintWalletPayload() {
+    return collectBlueprintWallets();
+}
+
 function getBlueprintAutomationSelectors(prefix) {
     return {
         mode: `${prefix}-wallet-mode`,
@@ -2863,7 +3266,13 @@ function toggleBlueprintAutomationWrappers(prefix, mode) {
 }
 
 function populateBlueprintAutomationWalletOptions() {
-    const wallets = Array.isArray(solana?.wallets) ? solana.wallets : [];
+    const wallets = collectBlueprintWallets();
+    const placeholdersNeeded = wallets.length === 0;
+
+    if (placeholdersNeeded) {
+        scheduleBlueprintWalletReload();
+    }
+
     const prefixes = ['blueprint-smart-sell', 'blueprint-volume'];
 
     prefixes.forEach((prefix) => {
@@ -2874,6 +3283,14 @@ function populateBlueprintAutomationWalletOptions() {
         const previousValues = new Set(getSelectValues(selectEl).map((value) => value.toLowerCase()));
         selectEl.innerHTML = '';
 
+        if (placeholdersNeeded) {
+            const placeholder = document.createElement('option');
+            placeholder.textContent = blueprintWalletLoadPromise ? 'Loading wallets...' : 'No wallets available';
+            placeholder.disabled = true;
+            selectEl.appendChild(placeholder);
+            return;
+        }
+
         wallets.forEach((wallet) => {
             const value = getWalletIdentifier(wallet);
             if (!value) return;
@@ -2883,6 +3300,8 @@ function populateBlueprintAutomationWalletOptions() {
             option.selected = previousValues.has(value.toLowerCase());
             selectEl.appendChild(option);
         });
+
+        enableSimpleMultiSelect(selectEl);
     });
 }
 
@@ -3024,7 +3443,7 @@ function describeAutomationSelector(automationConfig) {
             return count > 0 ? `${count} wallet${count === 1 ? '' : 's'} selected` : 'Specific wallets (none selected)';
         }
         case 'group': {
-            if (selector.groupId || selector.walletGroupId || automationConfig.walletGroupId) {
+            if (selector.groupId || selector.walletGroupId || automationConfig.walletGroupName || automationConfig.walletGroupId) {
                 const groupLabel =
                     automationConfig.walletGroupName ||
                     selector.walletGroupName ||
@@ -3050,22 +3469,33 @@ async function createBlueprint(type) {
     const name = prompt('Blueprint Name:');
     if (!name) return;
     
-    const blueprint = multiWalletManager.createBlueprint({
-        name,
-        type,
-        wallets: solana.wallets || [],
-        settings: {
-            // Default settings based on type
-            tokenMint: '',
-            buyAmount: 0.01,
-            slippage: 1,
-            cycles: 10,
-            sellDelay: 30
-        }
-    });
-    
-    addConsoleLog(`✅ Blueprint created: ${blueprint.name}`, 'success');
-    alert(`Blueprint "${name}" created successfully!`);
+    try {
+        const templateConfig = blueprintTemplates[type] || blueprintTemplates.custom;
+        const payload = buildBlueprintApiPayload({
+            name,
+            type: templateConfig.type || type,
+            template: type,
+            description: templateConfig.description,
+            notes: templateConfig.notes,
+            wallets: getBlueprintWalletPayload(),
+            settings: {
+                launch: templateConfig.launch
+                    ? JSON.parse(JSON.stringify(templateConfig.launch))
+                    : {},
+                automations: templateConfig.automations
+                    ? JSON.parse(JSON.stringify(templateConfig.automations))
+                    : {}
+            }
+        });
+
+        const blueprint = await blueprintService.create(payload);
+        addConsoleLog(`✅ Blueprint created: ${blueprint?.name || name}`, 'success');
+        notify(`Blueprint "${blueprint?.name || name}" created successfully.`, 'success');
+        await renderBlueprintList(true);
+    } catch (error) {
+        console.error('Blueprint creation failed:', error);
+        notify(`Failed to create blueprint: ${error.message}`, 'error');
+    }
 }
 
 // Execute blueprint
@@ -3074,12 +3504,14 @@ async function executeBlueprint(blueprintId) {
     
     addConsoleLog(`🚀 Executing blueprint: ${blueprintId}`, 'info');
     
-    const result = await multiWalletManager.executeBlueprint(blueprintId);
-    
-    if (result.success) {
-        addConsoleLog(`✅ ${result.message}`, 'success');
-    } else {
-        addConsoleLog(`❌ Blueprint failed: ${result.error}`, 'error');
+    try {
+        const run = await blueprintService.execute(blueprintId);
+        addConsoleLog(`✅ Blueprint run queued (ID: ${run?.id || 'unknown'})`, 'success');
+        notify('Blueprint execution started. Monitor blueprint runs for progress.', 'success');
+        await renderBlueprintList(true);
+    } catch (error) {
+        addConsoleLog(`❌ Blueprint failed: ${error.message}`, 'error');
+        notify(`Blueprint execution failed: ${error.message}`, 'error');
     }
 }
 
@@ -3125,7 +3557,7 @@ async function refreshCollectFeesView(options = {}) {
         return;
     }
 
-    if (!solana) {
+    if (!solanaIntegration) {
         console.warn('Solana integration not ready for fee refresh');
         return;
     }
@@ -3146,7 +3578,7 @@ async function refreshCollectFeesView(options = {}) {
     try {
         initializeMultiWallet();
 
-        const walletsWithBalances = await solana.getAllWalletsWithBalances();
+        const walletsWithBalances = await solanaIntegration.getAllWalletsWithBalances();
         const metrics = await calculateCollectFeesMetrics(walletsWithBalances);
 
         if (multiWalletManager?.getFeeHistory) {
@@ -3184,7 +3616,7 @@ async function calculateCollectFeesMetrics(wallets = []) {
     };
 
     try {
-        metrics.solPrice = await solana.getSolPrice();
+        metrics.solPrice = await solanaIntegration.getSolPrice();
     } catch (error) {
         console.warn('Unable to fetch SOL price for fee dashboard:', error);
     }
@@ -3221,7 +3653,7 @@ async function calculateCollectFeesMetrics(wallets = []) {
 }
 
 async function estimateRentReclaimForWallet(publicKeyString) {
-    if (!solana?.connection || !window.solanaWeb3?.PublicKey) {
+    if (!solanaIntegration?.connection || !window.solanaWeb3?.PublicKey) {
         return { rentLamports: 0, closableAccounts: 0 };
     }
 
@@ -3231,7 +3663,7 @@ async function estimateRentReclaimForWallet(publicKeyString) {
         }
 
         const owner = new window.solanaWeb3.PublicKey(publicKeyString);
-        const response = await solana.connection.getParsedTokenAccountsByOwner(owner, {
+        const response = await solanaIntegration.connection.getParsedTokenAccountsByOwner(owner, {
             programId: window.__CHAOSBOT_TOKEN_PROGRAM
         });
 
@@ -3451,12 +3883,11 @@ function updateAutoCollectLabel() {
         label.className = 'text-sm font-mono text-gray-400';
     }
 }
-
 // Collect all fees
 async function collectAllFees(options = {}) {
     initializeMultiWallet();
     
-    if (!solana.wallets || solana.wallets.length === 0) {
+    if (!solanaIntegration.wallets || solanaIntegration.wallets.length === 0) {
         addConsoleLog('❌ No wallets found!', 'error');
         alert('No wallets to collect from. Add wallets first.');
         return;
@@ -3479,7 +3910,7 @@ async function collectAllFees(options = {}) {
     if (!targetWallet) return;
     
     // Confirm
-    const walletCount = config.walletIds ? config.walletIds.length : solana.wallets.length;
+    const walletCount = config.walletIds ? config.walletIds.length : solanaIntegration.wallets.length;
     const confirm = window.confirm(
         config.confirmMessage
             || `Collect SOL from ${walletCount} wallet${walletCount === 1 ? '' : 's'} to ${targetWallet}?\n\nThis will transfer all available SOL (minus rent) to the target wallet.`
@@ -3521,7 +3952,6 @@ async function collectAllFees(options = {}) {
         setCollectFeesLoading(false);
     }
 }
-
 // Collect trading fees
 async function collectTradingFees() {
     addConsoleLog('💰 Collecting trading fees...', 'info');
@@ -3597,7 +4027,7 @@ async function generateVanity() {
         const saveName = prompt(`Vanity address found!\n\n${result.vanity.publicKey}\n\nSave as wallet? Enter name:`);
         if (saveName) {
             const wallet = vanityGenerator.saveVanityAsWallet(result.vanity, saveName);
-            solana.saveWallet(wallet);
+            solanaIntegration.saveWallet(wallet);
             addConsoleLog(`✅ Saved as wallet: ${saveName}`, 'success');
             await loadRealData();
         }
@@ -3920,6 +4350,7 @@ function createDefaultLaunchConfig() {
     return {
         devWalletId: '',
         devBuyAmount: null,
+        appliedBlueprint: null,
         blockZero: {
             enabled: false,
             mode: 'quick',
@@ -3985,6 +4416,19 @@ function cloneLaunchConfig(source = {}) {
     }
     base.blockZero.selections = selections;
 
+    if (source.appliedBlueprint && typeof source.appliedBlueprint === 'object') {
+        const applied = source.appliedBlueprint;
+        const id = applied.id || applied.blueprintId || '';
+        if (id) {
+            base.appliedBlueprint = {
+                id,
+                name: applied.name || applied.title || '',
+                type: applied.type || applied.template || 'custom',
+                appliedAt: applied.appliedAt || Date.now()
+            };
+        }
+    }
+
     return base;
 }
 
@@ -3997,9 +4441,19 @@ function serializeLaunchConfig(config = {}) {
             amount: safeNumber(entry?.amount)
         };
     });
+    const appliedBlueprint =
+        clone.appliedBlueprint && clone.appliedBlueprint.id
+            ? {
+                  id: clone.appliedBlueprint.id,
+                  name: clone.appliedBlueprint.name || '',
+                  type: clone.appliedBlueprint.type || 'custom',
+                  appliedAt: clone.appliedBlueprint.appliedAt || Date.now()
+              }
+            : null;
     return {
         devWalletId: clone.devWalletId || '',
         devBuyAmount: safeNumber(clone.devBuyAmount),
+        appliedBlueprint,
         blockZero: {
             enabled: Boolean(clone.blockZero.enabled),
             mode: clone.blockZero.mode || 'quick',
@@ -4040,14 +4494,17 @@ const tokenRegistry = {
     currentSource: null
 };
 
+const IMPORTED_TOKEN_STORAGE_KEY = 'chaosbot_imported_tokens_v1';
+const IMPORTED_TOKEN_ARCHIVE_STORAGE_KEY = 'chaosbot_imported_archives_v1';
+
 const tokenDetailViewState = {
     currentKey: null,
     loading: false,
     lastRuntime: null,
-    holdingsSource: 'jito'
+    holdingsSource: 'jito',
+    activityIntervalId: null
 };
 
-const IMPORTED_TOKEN_ARCHIVE_STORAGE_KEY = 'chaosbot_imported_archives_v1';
 let archivedImportedTokens = new Set();
 
 function loadArchivedImportedTokens() {
@@ -4097,6 +4554,78 @@ function setImportedTokenArchivedState(mint, archived) {
     persistArchivedImportedTokens();
 }
 
+function persistImportedTokens() {
+    try {
+        const payload = Array.from(tokenRegistry.imported.values()).map((record) => ({
+            mint: record.mint,
+            name: record.name || '',
+            symbol: record.symbol || '',
+            image: record.image || null,
+            platform: record.platform || '',
+            creatorWalletId: record.creatorWalletId || '',
+            creatorWallet: record.creatorWallet || '',
+            creatorWalletLabel: record.creatorWalletLabel || '',
+            status: record.status || '',
+            type: record.type || 'imported',
+            addedAt: record.addedAt || Date.now(),
+            updatedAt: record.updatedAt || record.addedAt || Date.now(),
+            metadataUri: record.metadataUri || '',
+            description: record.description || '',
+            notes: record.notes || '',
+            balance: record.balance ?? null,
+            realizedProfit: record.realizedProfit ?? null,
+            archived: Boolean(record.archived)
+        }));
+
+        localStorage.setItem(IMPORTED_TOKEN_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.error('Error persisting imported tokens:', error);
+    }
+}
+
+function loadImportedTokensFromStorage() {
+    tokenRegistry.imported.clear();
+
+    try {
+        const raw = localStorage.getItem(IMPORTED_TOKEN_STORAGE_KEY);
+        if (!raw) {
+            renderTokensTable();
+            return;
+        }
+
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+            renderTokensTable();
+            return;
+        }
+
+        parsed.forEach((entry) => {
+            if (!entry) return;
+            const mint = typeof entry.mint === 'string' ? entry.mint.trim() : '';
+            if (!mint) return;
+
+            const normalizedMint = mint;
+            const archived = entry.archived ?? archivedImportedTokens.has(normalizedMint.toLowerCase());
+
+            tokenRegistry.imported.set(normalizedMint, {
+                ...entry,
+                mint: normalizedMint,
+                id: normalizedMint,
+                type: entry.type || 'imported',
+                image: entry.image ? resolveImageUrl(entry.image) : null,
+                addedAt: entry.addedAt || Date.now(),
+                updatedAt: entry.updatedAt || entry.addedAt || Date.now(),
+                archived: Boolean(archived)
+            });
+        });
+    } catch (error) {
+        console.error('Error loading imported tokens:', error);
+        tokenRegistry.imported.clear();
+    }
+
+    renderTokensTable();
+}
+
 const runtimeTaskRegistry = new Map();
 
 const FALLBACK_RPC_ENDPOINT =
@@ -4104,13 +4633,13 @@ const FALLBACK_RPC_ENDPOINT =
 const FALLBACK_LAMPORTS_PER_SOL = 1_000_000_000;
 
 function getSolanaConnection() {
-    if (solana?.connection) {
-        return solana.connection;
+    if (solanaIntegration?.connection) {
+        return solanaIntegration.connection;
     }
 
     if (!fallbackSolanaConnection && window.solanaWeb3?.Connection) {
         fallbackSolanaConnection = new window.solanaWeb3.Connection(
-            solana?.rpcEndpoint || FALLBACK_RPC_ENDPOINT,
+            solanaIntegration?.rpcEndpoint || FALLBACK_RPC_ENDPOINT,
             'confirmed'
         );
     }
@@ -4211,7 +4740,6 @@ function resetTokenMetrics() {
         bar.style.width = '0%';
     }
 }
-
 function updateTokenMetrics({
     priceSol = null,
     priceUsd = null,
@@ -4357,7 +4885,7 @@ function resetHoldingsTable({ message = 'Holdings will populate once the token i
     }
 }
 
-function renderLaunchBlueprintList() {
+async function renderLaunchBlueprintList() {
     const listEl = getElement('launch-blueprint-list');
     const emptyEl = getElement('launch-blueprint-empty');
     if (!listEl || !emptyEl) {
@@ -4365,7 +4893,16 @@ function renderLaunchBlueprintList() {
     }
 
     const ready = ensureMultiWalletReady();
-    const blueprints = ready ? multiWalletManager.getBlueprints() || [] : [];
+    let blueprints = [];
+
+    if (ready) {
+        try {
+            blueprints = await blueprintService.fetchList();
+        } catch (error) {
+            console.warn('Unable to load blueprint list:', error);
+            notify(`Unable to load blueprints: ${error.message}`, 'error');
+        }
+    }
 
     if (!ready || blueprints.length === 0) {
         listEl.innerHTML = '';
@@ -4377,6 +4914,8 @@ function renderLaunchBlueprintList() {
     emptyEl.classList.add('hidden');
     listEl.classList.remove('hidden');
 
+    const appliedBlueprintId = tokenLaunchState.launchConfig?.appliedBlueprint?.id || null;
+
     const cards = blueprints
         .slice()
         .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
@@ -4384,6 +4923,7 @@ function renderLaunchBlueprintList() {
             const launch = blueprint.settings?.launch || {};
             const automations = blueprint.settings?.automations || {};
             const launchDetails = [];
+            const isApplied = appliedBlueprintId && appliedBlueprintId === blueprint.id;
 
             if (launch.devBuyAmount !== undefined) {
                 launchDetails.push(`Dev buy ${formatSol(launch.devBuyAmount)}`);
@@ -4403,10 +4943,17 @@ function renderLaunchBlueprintList() {
                 : 'No launch notes provided';
 
             return `
-                <div class="bg-neutral-800 border border-neutral-700 rounded-lg px-5 py-4">
+                <div class="bg-neutral-800 border ${isApplied ? 'border-purple-500/50' : 'border-neutral-700'} rounded-lg px-5 py-4">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <div class="text-sm font-semibold text-white">${escapeHtml(blueprint.name || 'Untitled Blueprint')}</div>
+                            <div class="text-sm font-semibold text-white flex items-center gap-2">
+                                ${escapeHtml(blueprint.name || 'Untitled Blueprint')}
+                                ${
+                                    isApplied
+                                        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide bg-purple-700/30 text-purple-200">Applied</span>'
+                                        : ''
+                                }
+                            </div>
                             <div class="text-xs text-gray-500 mt-1">${escapeHtml(blueprint.description || 'No description')}</div>
                         </div>
                         <span class="text-[11px] text-gray-500">${formatRelativeTime(blueprint.updatedAt || blueprint.createdAt || Date.now())}</span>
@@ -4415,7 +4962,7 @@ function renderLaunchBlueprintList() {
                     <div class="mt-4 flex items-center justify-end gap-2">
                         <button class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded transition"
                             onclick="applyBlueprintToLaunchFromSelector('${blueprint.id}')">
-                            Apply
+                            ${isApplied ? 'Reapply' : 'Apply'}
                         </button>
                         <button class="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-gray-200 text-xs rounded transition"
                             onclick="navigateToPage('blueprint'); closeModal('launch-blueprint-modal')">
@@ -4434,8 +4981,13 @@ function openLaunchBlueprintModal() {
     if (!ensureMultiWalletReady()) {
         notify('Load wallets before applying a blueprint.', 'warning');
     }
-    renderLaunchBlueprintList();
-    window.openModal('launch-blueprint-modal');
+    renderLaunchBlueprintList()
+        .catch((error) => {
+            console.error('Failed to render launch blueprint list:', error);
+        })
+        .finally(() => {
+            window.openModal('launch-blueprint-modal');
+        });
 }
 
 async function applyBlueprintToLaunchFromSelector(blueprintId) {
@@ -4443,7 +4995,14 @@ async function applyBlueprintToLaunchFromSelector(blueprintId) {
         return;
     }
 
-    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    try {
+        await blueprintService.fetchList();
+    } catch (error) {
+        notify(`Unable to load blueprints: ${error.message}`, 'error');
+        return;
+    }
+
+    const blueprint = blueprintService.getById(blueprintId);
     if (!blueprint) {
         notify('Blueprint not found.', 'error');
         return;
@@ -4662,23 +5221,63 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false } =
     tbody.innerHTML = rows;
 }
 
-async function fetchPumpFunTradeFeed(mint, limit = 20) {
-    try {
-        const response = await fetch(`${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${mint}`);
-        if (!response.ok) {
-            throw new Error(`Pump.fun responded with ${response.status}`);
-        }
-        const data = await response.json();
-        const candidateArrays = [
-            data?.trades,
-            data?.recent_trades,
-            data?.recentTrades,
-            data?.latest_transactions,
-            data?.transactions
-        ].filter(Array.isArray);
+function stopTokenActivityStream() {
+    if (tokenDetailViewState.activityIntervalId) {
+        clearInterval(tokenDetailViewState.activityIntervalId);
+        tokenDetailViewState.activityIntervalId = null;
+    }
+}
 
-        const entries = [];
-        candidateArrays.forEach((collection) => {
+function startTokenActivityStream(mint) {
+    stopTokenActivityStream();
+    if (!mint) {
+        return;
+    }
+
+    tokenDetailViewState.activityIntervalId = setInterval(async () => {
+        if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
+            stopTokenActivityStream();
+            return;
+        }
+
+        try {
+            const latest = await fetchPumpFunTradeFeed(mint, 20);
+            renderTokenActivity(latest, { isLive: true });
+        } catch (error) {
+            console.warn(`Live trade refresh failed for ${mint}:`, error.message || error);
+        }
+    }, 15000);
+}
+
+async function fetchPumpFunTradeFeed(mint, limit = 20) {
+    if (!mint) {
+        return [];
+    }
+
+    const normalizedLimit = Math.max(limit, 20);
+    const endpoints = [
+        `${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${mint}`,
+        `${VANITY_LAUNCH_STATS_ENDPOINT_BASE}/coins/${mint}/trades`,
+        `https://pump.fun/api/trades/${mint}?offset=0&limit=${normalizedLimit}`,
+        `https://pump.fun/api/recent-trades?mint=${mint}&limit=${normalizedLimit}`
+    ];
+
+    const collectedEntries = [];
+
+    const collectFromPayload = (payload) => {
+        if (!payload) return;
+        const collections = [];
+        if (Array.isArray(payload)) {
+            collections.push(payload);
+        } else if (typeof payload === 'object') {
+            Object.values(payload).forEach((value) => {
+                if (Array.isArray(value)) {
+                    collections.push(value);
+                }
+            });
+        }
+
+        collections.forEach((collection) => {
             collection.forEach((item) => {
                 const rawType = String(
                     item?.type ||
@@ -4686,6 +5285,7 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                         item?.side ||
                         item?.event_type ||
                         item?.transaction_type ||
+                        item?.trade_type ||
                         ''
                 ).toLowerCase();
 
@@ -4702,7 +5302,8 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                             item?.time ||
                             item?.blockTime ||
                             item?.block_timestamp ||
-                            item?.created_at
+                            item?.created_at ||
+                            item?.ts
                     ) || null;
 
                 const amountSol = safeNumber(
@@ -4710,14 +5311,19 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                         item?.solAmount ||
                         item?.amountSol ||
                         item?.amount_sol ||
-                        item?.sol
+                        item?.sol ||
+                        item?.in_sol ||
+                        item?.sol_value
                 );
+
                 const amountTokens = safeNumber(
                     item?.token_amount ||
                         item?.tokenAmount ||
                         item?.amountTokens ||
-                        item?.token_quantity
+                        item?.token_quantity ||
+                        item?.quantity_tokens
                 );
+
                 const wallet =
                     item?.wallet ||
                     item?.owner ||
@@ -4725,27 +5331,82 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                     item?.buyer ||
                     item?.seller ||
                     item?.user ||
+                    item?.authority ||
+                    item?.address ||
                     item?.signature ||
-                    '';
+                    null;
 
-                entries.push({
-                    timestamp,
-                    wallet,
+                if (!timestamp && !wallet && amountSol === null && amountTokens === null) {
+                    return;
+                }
+
+                collectedEntries.push({
+                    timestamp: timestamp || Date.now(),
+                    wallet: wallet || '',
                     type,
                     amountSol: amountSol !== null ? amountSol : null,
                     amountTokens: amountTokens !== null ? amountTokens : null
                 });
             });
         });
+    };
 
-        return entries
-            .filter((entry) => entry.timestamp)
-            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-            .slice(0, limit);
-    } catch (error) {
-        console.warn(`Pump.fun trade feed unavailable for ${mint}:`, error.message || error);
+    for (const endpoint of endpoints) {
+        try {
+            const response = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json'
+                }
+            });
+            if (!response.ok) {
+                continue;
+            }
+
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                const payload = await response.json();
+                collectFromPayload(payload);
+            } else {
+                const text = await response.text();
+                try {
+                    const payload = JSON.parse(text);
+                    collectFromPayload(payload);
+                } catch (error) {
+                    console.warn(`Pump.fun trade feed returned non-JSON (${endpoint}):`, error.message || error);
+                }
+            }
+
+            if (collectedEntries.length >= normalizedLimit) {
+                break;
+            }
+        } catch (error) {
+            console.warn(`Pump.fun trade feed unavailable at ${endpoint}:`, error.message || error);
+        }
+    }
+
+    if (!collectedEntries.length) {
         return [];
     }
+
+    const deduped = new Map();
+    collectedEntries.forEach((entry) => {
+        const key = [
+            entry.timestamp || 0,
+            entry.wallet || '',
+            entry.type || '',
+            entry.amountSol !== null ? entry.amountSol.toFixed(9) : '',
+            entry.amountTokens !== null ? entry.amountTokens.toFixed(9) : ''
+        ].join('|');
+
+        if (!deduped.has(key)) {
+            deduped.set(key, entry);
+        }
+    });
+
+    return Array.from(deduped.values())
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .slice(0, limit);
 }
 
 async function fetchPumpFunTokenDetails(mint) {
@@ -4856,7 +5517,6 @@ async function fetchSolBalanceViaConnection(connection, walletAddress) {
         return null;
     }
 }
-
 async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jito' } = {}) {
     const connection = getSolanaConnection();
     const wallets = getKnownWallets();
@@ -4874,11 +5534,11 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
             }
 
             let tokenBalance = null;
-            if (!useRpcOnly && solana?.getTokenBalance) {
+            if (!useRpcOnly && solanaIntegration?.getTokenBalance) {
                 try {
-                    tokenBalance = await solana.getTokenBalance(address, mint);
+                    tokenBalance = await solanaIntegration.getTokenBalance(address, mint);
                 } catch (error) {
-                    console.warn(`Token balance via solana integration failed (${address}):`, error.message || error);
+                    console.warn(`Token balance via Solana integration failed (${address}):`, error.message || error);
                 }
             }
             if (tokenBalance === null) {
@@ -4886,11 +5546,11 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
             }
 
             let solBalance = typeof wallet.balance === 'number' ? wallet.balance : null;
-            if (solBalance === null && !useRpcOnly && solana?.getBalance) {
+            if (solBalance === null && !useRpcOnly && solanaIntegration?.getBalance) {
                 try {
-                    solBalance = await solana.getBalance(address);
+                    solBalance = await solanaIntegration.getBalance(address);
                 } catch (error) {
-                    console.warn(`SOL balance via solana integration failed (${address}):`, error.message || error);
+                    console.warn(`SOL balance via Solana integration failed (${address}):`, error.message || error);
                 }
             }
             if (solBalance === null) {
@@ -4927,7 +5587,6 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
 
     return { holdings, summary };
 }
-
 async function fetchRuntimeAutomationsForMint(mint) {
     const tasks = [];
     const stats = {
@@ -5113,7 +5772,7 @@ async function loadLiveTokenDetail(record) {
     renderTokenActivity([], { loading: true, isLive: true });
 
     try {
-        const solPrice = await (solana?.getSolPrice?.() || Promise.resolve(null));
+        const solPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
         const holdingsSource = tokenDetailViewState.holdingsSource || 'jito';
 
         const [pumpFunInfo, priceDetails, runtimeAutomations, holdingsResult, activity] = await Promise.all([
@@ -5175,6 +5834,7 @@ async function loadLiveTokenDetail(record) {
         });
 
         renderTokenActivity(activity, { isLive: true });
+        startTokenActivityStream(record.mint);
 
         tokenDetailViewState.lastRuntime = Date.now();
         updateTokenLastRuntime(tokenDetailViewState.lastRuntime);
@@ -5471,6 +6131,7 @@ function registerImportedToken(record = {}) {
     }
 
     tokenRegistry.imported.set(normalizedMint, merged);
+    persistImportedTokens();
     renderTokensTable();
 }
 
@@ -5624,7 +6285,6 @@ function updateTokenDetailLinks(record = {}) {
     setLink(telegramLink, record.telegram);
     setLink(metadataLink, record.metadataUri ? resolveMetadataUri(record.metadataUri) : null);
 }
-
 function deriveAutomationState(config) {
     if (!config) {
         return { mode: 'creator', walletIds: [], groupId: '' };
@@ -5661,7 +6321,6 @@ function deriveAutomationState(config) {
             ''
     };
 }
-
 function hydrateCreateTokenFormFromDraft(record) {
     if (!record) {
         return;
@@ -5929,6 +6588,7 @@ function handleTokenArchive() {
         };
         tokenRegistry.imported.set(mint, updatedRecord);
         setImportedTokenArchivedState(mint, nextState);
+        persistImportedTokens();
     }
 
     tokenRegistry.current = updatedRecord;
@@ -5954,6 +6614,7 @@ function handleTokenArchive() {
 
 function populateTokenDetailView(record) {
     if (!record) return;
+    stopTokenActivityStream();
     tokenRegistry.current = record;
     tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
     tokenDetailViewState.currentKey = record.mint || record.id || null;
@@ -6060,6 +6721,15 @@ function populateTokenDetailView(record) {
         }
         archiveButton.setAttribute('aria-pressed', isArchived ? 'true' : 'false');
         archiveButton.title = isArchived ? 'Restore token to Active' : 'Archive token';
+    }
+
+    const collectFeesButton = getElement('token-collect-fees-btn');
+    if (collectFeesButton) {
+        if (isDraft) {
+            collectFeesButton.classList.add('hidden');
+        } else {
+            collectFeesButton.classList.remove('hidden');
+        }
     }
 
     setTokenHoldingsSource(tokenDetailViewState.holdingsSource || 'jito', {
@@ -6290,7 +6960,6 @@ function buildAutomationTaskEntries(record = {}, runtimeTasks = []) {
 
     return tasks;
 }
-
 function renderTokenTaskList(record, options = {}) {
     const body = getElement('token-tasks-body');
     const emptyState = getElement('token-tasks-empty');
@@ -6417,7 +7086,6 @@ function renderTokenTaskList(record, options = {}) {
         lucide.createIcons();
     }
 }
-
 function handleTokenTaskAction(action, taskKey) {
     if (!taskKey) {
         notify('Select a task to manage.', 'warning');
@@ -6897,6 +7565,326 @@ const blueprintTemplates = {
     }
 };
 
+const blueprintService = (() => {
+    const state = {
+        list: [],
+        lastFetched: 0,
+        promise: null
+    };
+
+    const request = async (path, options = {}) => {
+        const fetchFn = typeof fetch === 'function' ? fetch : window.fetch;
+        const url = `${getApiBase()}${path}`;
+        const init = {
+            method: options.method || 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+            },
+            credentials: 'same-origin'
+        };
+
+        if (options.body !== undefined) {
+            init.body = options.body;
+        }
+
+        const response = await fetchFn(url, init);
+        let payload = null;
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = null;
+        }
+
+        if (!response.ok || (payload && payload.success === false)) {
+            const message =
+                payload?.error ||
+                payload?.message ||
+                `Blueprint request failed (${response.status})`;
+            throw new Error(message);
+        }
+
+        return payload || {};
+    };
+
+    const fetchList = async (force = false) => {
+        const now = Date.now();
+        if (
+            !force &&
+            state.list.length &&
+            now - state.lastFetched < 5000
+        ) {
+            return state.list;
+        }
+
+        if (state.promise) {
+            return state.promise;
+        }
+
+        state.promise = request('/blueprints')
+            .then((data) => {
+                state.list = Array.isArray(data.blueprints)
+                    ? data.blueprints
+                    : [];
+                state.lastFetched = Date.now();
+                return state.list;
+            })
+            .finally(() => {
+                state.promise = null;
+            });
+
+        return state.promise;
+    };
+
+    const create = async (payload) => {
+        const response = await request('/blueprints', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        await fetchList(true);
+        return response.blueprint;
+    };
+
+    const remove = async (blueprintId) => {
+        await request(`/blueprints/${blueprintId}`, {
+            method: 'DELETE'
+        });
+        await fetchList(true);
+        return true;
+    };
+
+    const execute = async (blueprintId) => {
+        const response = await request(`/blueprints/${blueprintId}/execute`, {
+            method: 'POST',
+            body: JSON.stringify({
+                requestedBy: 'ui'
+            })
+        });
+        await fetchList(true);
+        return response.run;
+    };
+
+    const getById = (blueprintId) =>
+        state.list.find((entry) => entry.id === blueprintId) || null;
+
+    return {
+        state,
+        fetchList,
+        create,
+        remove,
+        execute,
+        getById,
+        markApplied: async (blueprintId) => {
+            await request(`/blueprints/${blueprintId}/applied`, {
+                method: 'POST'
+            });
+            await fetchList(true);
+        },
+        fetchRuns: async (blueprintId, limit = 25) => {
+            const params = new URLSearchParams({
+                limit: String(limit || 25)
+            });
+            const response = await request(`/blueprints/${blueprintId}/runs?${params.toString()}`);
+            return Array.isArray(response.runs) ? response.runs : [];
+        }
+    };
+})();
+
+function buildBlueprintApiPayload(raw = {}) {
+    const settingsClone = raw.settings
+        ? JSON.parse(JSON.stringify(raw.settings))
+        : {};
+
+    return {
+        name: raw.name || 'Unnamed Blueprint',
+        type: raw.type || raw.template || 'custom',
+        template: raw.template || raw.type || 'custom',
+        description: raw.description || '',
+        notes: raw.notes || '',
+        settings: settingsClone,
+        automations: settingsClone.automations
+            ? JSON.parse(JSON.stringify(settingsClone.automations))
+            : {},
+        wallets: Array.isArray(raw.wallets) ? raw.wallets : [],
+        status: raw.status || 'inactive'
+    };
+}
+
+const blueprintRunsState = {
+    blueprintId: null,
+    runs: [],
+    loading: false
+};
+async function openBlueprintRunsModal(blueprintId) {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    blueprintRunsState.blueprintId = blueprintId;
+    blueprintRunsState.loading = true;
+    blueprintRunsState.runs = [];
+
+    const bodyEl = getElement('blueprint-runs-body');
+    const titleEl = getElement('blueprint-runs-title');
+    if (bodyEl) {
+        bodyEl.innerHTML = `
+            <div class="flex items-center justify-center gap-2 text-sm text-gray-400 py-6">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                <span>Loading run history...</span>
+            </div>
+        `;
+    }
+
+    let blueprint = blueprintService.getById(blueprintId);
+    if (!blueprint) {
+        try {
+            await blueprintService.fetchList(true);
+            blueprint = blueprintService.getById(blueprintId);
+        } catch (error) {
+            notify(`Unable to load blueprint: ${error.message}`, 'error');
+            return;
+        }
+    }
+
+    if (titleEl && blueprint) {
+        titleEl.textContent = `${blueprint.name} • Run History`;
+    }
+
+    window.openModal('blueprint-runs-modal');
+
+    try {
+        const runs = await blueprintService.fetchRuns(blueprintId, 50);
+        blueprintRunsState.runs = runs;
+        blueprintRunsState.loading = false;
+        renderBlueprintRunsModal(blueprint, runs);
+    } catch (error) {
+        console.error('Failed to load blueprint runs:', error);
+        if (bodyEl) {
+            bodyEl.innerHTML = `
+                <div class="text-sm text-red-400 py-6 text-center">
+                    Unable to load run history: ${escapeHtml(error.message || 'Unknown error')}
+                </div>
+            `;
+        }
+    } finally {
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+}
+function renderBlueprintRunsModal(blueprint, runs = []) {
+    const bodyEl = getElement('blueprint-runs-body');
+    if (!bodyEl) {
+        return;
+    }
+
+    if (!Array.isArray(runs) || runs.length === 0) {
+        bodyEl.innerHTML = `
+            <div class="text-sm text-gray-400 py-6 text-center">
+                No runs recorded yet. Execute this blueprint to populate history.
+            </div>
+        `;
+        return;
+    }
+
+    const rows = runs
+        .map((run) => {
+            const started = run.startedAt ? formatTimestamp(run.startedAt) : '—';
+            const completed = run.completedAt ? formatTimestamp(run.completedAt) : '—';
+            const status = formatRunStatus(run.status);
+            const summary = run.summary || {};
+            const totalOps = summary.totalOperations ?? (summary.success || 0) + (summary.failed || 0);
+            const successOps = summary.success ?? 0;
+            const failedOps = summary.failed ?? 0;
+            const error = run.error || summary.error || '';
+            const operations = run.operations || [];
+            const operationDetails = operations
+                .map((op) => {
+                    const label = op.action || 'operation';
+                    const opStatus = op.success ? '✅' : '❌';
+                    const metaParts = [];
+                    if (op.walletId) {
+                        metaParts.push(escapeHtml(op.walletId));
+                    }
+                    if (Array.isArray(op.walletIds) && op.walletIds.length > 0) {
+                        metaParts.push(`${op.walletIds.length} wallet(s)`);
+                    }
+                    if (op.params?.tokenMint) {
+                        metaParts.push(escapeHtml(op.params.tokenMint));
+                    }
+                    if (op.params?.solAmount) {
+                        const sol = Number(op.params.solAmount);
+                        if (!Number.isNaN(sol)) {
+                            metaParts.push(`${sol.toFixed(4)} SOL`);
+                        }
+                    }
+                    const meta =
+                        metaParts.length > 0
+                            ? `<span class="block text-[11px] text-gray-500">${metaParts.join(' • ')}</span>`
+                            : '';
+                    const sigLink = op.signature
+                        ? `<a href="https://solscan.io/tx/${op.signature}" target="_blank" rel="noopener" class="text-purple-300 hover:text-purple-200">${op.signature.slice(0, 12)}...</a>`
+                        : '';
+                    return `<div class="flex flex-col gap-1 text-xs text-gray-400 border border-neutral-800/60 rounded px-3 py-2 bg-neutral-900/60">
+                        <div class="flex items-center justify-between gap-3">
+                            <span>${opStatus} ${label}</span>
+                            <span class="text-right">${sigLink}</span>
+                        </div>
+                        ${meta}
+                    </div>`;
+                })
+                .join('');
+
+            const errorRow = error
+                ? `<div class="mt-2 text-xs text-red-400 border border-red-500/40 bg-red-500/10 rounded px-3 py-2">${escapeHtml(error)}</div>`
+                : '';
+
+            return `
+                <tr class="border-b border-neutral-800">
+                    <td class="px-4 py-3 align-top">
+                        <div class="font-medium text-sm text-white">${status}</div>
+                        <div class="text-xs text-gray-500">Run ID: ${escapeHtml(run.id)}</div>
+                        <div class="text-xs text-gray-500">Requested: ${formatTimestamp(run.requestedAt)}</div>
+                        <div class="text-xs text-gray-500">Started: ${started}</div>
+                        <div class="text-xs text-gray-500">Completed: ${completed}</div>
+                    </td>
+                    <td class="px-4 py-3 align-top text-sm text-gray-300">
+                        <div>Total ops: ${totalOps}</div>
+                        <div>Success: ${successOps}</div>
+                        <div>Failed: ${failedOps}</div>
+                        ${errorRow}
+                    </td>
+                    <td class="px-4 py-3 align-top">
+                        <div class="space-y-1">
+                            ${operationDetails || '<div class="text-xs text-gray-500">No operation details recorded.</div>'}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        })
+        .join('');
+
+    bodyEl.innerHTML = `
+        <div class="max-h-96 overflow-y-auto">
+            <table class="w-full text-left">
+                <thead class="text-xs uppercase tracking-wide text-gray-500 border-b border-neutral-800">
+                    <tr>
+                        <th class="px-4 py-2">Timeline</th>
+                        <th class="px-4 py-2">Summary</th>
+                        <th class="px-4 py-2">Operations</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm">
+                    ${rows}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
 function ensureMultiWalletReady() {
     initializeMultiWallet();
     if (!multiWalletManager) {
@@ -7091,11 +8079,11 @@ function resetCreatorWalletForm() {
 
 async function refreshCreatorWalletBalance(options = {}) {
     const address = options.address || creatorWalletState.address;
-    if (!address || !solana || typeof solana.getBalance !== 'function') {
+    if (!address || !solanaIntegration || typeof solanaIntegration.getBalance !== 'function') {
         return null;
     }
     try {
-        const balance = await solana.getBalance(address);
+        const balance = await solanaIntegration.getBalance(address);
         applyCreatorWalletState({ balance }, { skipPersist: options.skipPersist, skipUI: options.skipUI });
         return balance;
     } catch (error) {
@@ -7295,6 +8283,72 @@ async function syncCreatorWalletFromBackend(options = {}) {
     }
 }
 
+registerGlobalHandler('setCreatorWalletFromSelection', async (payload = {}) => {
+    const wallet = payload.wallet || null;
+    if (!wallet) {
+        notify('No wallet provided for creator assignment.', 'error');
+        throw new Error('Missing wallet payload');
+    }
+
+    const address = wallet.publicKey || wallet.address || wallet.pubkey || '';
+    if (!address) {
+        notify('Selected wallet does not have a public key.', 'error');
+        throw new Error('Wallet missing public key');
+    }
+
+    const walletId = wallet.id || address;
+    const name = wallet.name || 'Creator Wallet';
+    const balance = typeof wallet.balance === 'number' ? wallet.balance : creatorWalletState.balance;
+    const existingTags = Array.isArray(wallet.tags) ? wallet.tags : [];
+    const mergedTags = Array.from(new Set([...existingTags, 'creator']));
+
+    try {
+        applyCreatorWalletState(
+            {
+                id: walletId,
+                address,
+                name,
+                balance,
+                tags: mergedTags,
+                lastSynced: Date.now()
+            },
+            { skipPersist: false }
+        );
+
+        tokenLaunchState.selectedWalletId = walletId;
+        tokenLaunchState.launchConfig = tokenLaunchState.launchConfig || {};
+        tokenLaunchState.launchConfig.devWalletId = walletId;
+
+        const privateKeyPayload =
+            payload.privateKeyBase58 ||
+            payload.privateKeyArray ||
+            payload.privateKey ||
+            null;
+        if (privateKeyPayload) {
+            ensureVanityHasCreatorKey(address, privateKeyPayload, name);
+        }
+
+        if (window.apiClient?.updateWalletTags) {
+            try {
+                await window.apiClient.updateWalletTags(walletId, mergedTags);
+            } catch (tagError) {
+                console.warn('Unable to persist creator tag on wallet:', tagError);
+            }
+        }
+
+        await refreshCreatorWalletBalance({ address, skipPersist: false });
+        await loadCreatorWallets();
+        await syncCreatorWalletFromBackend({ silent: true, preferredId: walletId, fallbackAddress: address });
+
+        notify(`Creator wallet set to ${name}`, 'success');
+        return { id: walletId, tags: mergedTags };
+    } catch (error) {
+        console.error('setCreatorWalletFromSelection error:', error);
+        notify(error.message || 'Failed to assign creator wallet.', 'error');
+        throw error;
+    }
+});
+
 function ensureVanityHasCreatorKey(address, privateKey, label) {
     if (!address || !privateKey) {
         return;
@@ -7448,7 +8502,6 @@ function getSelectValues(selectEl) {
     }
     return Array.from(selectEl.selectedOptions || []).map((option) => option.value).filter(Boolean);
 }
-
 registerGlobalHandler('navigateToPage', (page) => {
     if (!page) return;
 
@@ -7508,7 +8561,6 @@ registerGlobalHandler('closeModal', (modalId) => {
         });
     }
 });
-
 registerGlobalHandler('executeGenerate', async () => {
     const modal = getElement('generate-modal');
     if (!modal) {
@@ -7532,10 +8584,7 @@ registerGlobalHandler('executeGenerate', async () => {
     }
 });
 
-registerGlobalHandler('executeTokenLaunch', () => {
-    navigateToPage('launch-token');
-    notify('Prepare token launch configuration below.', 'info');
-});
+registerGlobalHandler('executeTokenLaunch', () => executeLaunchToken());
 
 function applyToggleClasses(primaryId, secondaryId, isPrimaryActive) {
     const primary = getElement(primaryId);
@@ -7583,7 +8632,6 @@ registerGlobalHandler('toggleTag', (tag) => {
     }
     notify(`Tag filter updated: ${Array.from(uiHelperState.tagFilters).join(', ') || 'none'}`, 'info');
 });
-
 registerGlobalHandler('executeTagWallets', async () => {
     try {
         const walletIds = getSelectedWalletIds();
@@ -7866,6 +8914,450 @@ function getSelectedWalletIds() {
     return [];
 }
 
+// Withdraw Wallets Implementation
+registerGlobalHandler('executeWithdrawWallets', async () => {
+    const button = document.querySelector('#withdraw-page button[onclick="executeWithdrawWallets()"]');
+    try {
+        const walletIds = getSelectedWalletIds();
+        if (!walletIds.length) {
+            notify('Select at least one wallet from the table before withdrawing.', 'warning');
+            return;
+        }
+
+        const destinationInput = document.getElementById('withdraw-destination');
+        if (!destinationInput || !destinationInput.value.trim()) {
+            notify('Enter a destination wallet address.', 'error');
+            return;
+        }
+
+        const destinationAddress = destinationInput.value.trim();
+        
+        // Validate Solana address format
+        try {
+            if (window.solanaWeb3 && window.solanaWeb3.PublicKey) {
+                new window.solanaWeb3.PublicKey(destinationAddress);
+            }
+        } catch (error) {
+            notify('Invalid destination wallet address. Please check and try again.', 'error');
+            return;
+        }
+
+        const method = document.querySelector('input[name="withdraw-method"]:checked')?.value || 'uniform-percentage';
+        const percentageInput = document.getElementById('withdraw-percentage');
+        const percentage = percentageInput ? parseFloat(percentageInput.value) : 100;
+
+        if (method.includes('percentage') && (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100)) {
+            notify('Enter a valid percentage between 1 and 100.', 'error');
+            return;
+        }
+
+        notify(`Withdrawing from ${walletIds.length} wallet(s) to ${destinationAddress.substring(0, 8)}...`, 'info');
+        addConsoleLog(`Starting withdraw: ${walletIds.length} wallet(s) -> ${destinationAddress}`, 'info');
+
+        if (button) {
+            setButtonLoading(button, true, 'Withdrawing...');
+        }
+
+        // Get wallet details
+        const wallets = typeof window.walletOperations?.getWallets === 'function' 
+            ? window.walletOperations.getWallets()
+            : [];
+
+        const results = [];
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const walletId of walletIds) {
+            const wallet = wallets.find(w => {
+                const id = w.id || w.address || w.publicKey || w.pubkey;
+                return id === walletId;
+            });
+
+            if (!wallet) {
+                results.push({ walletId, success: false, error: 'Wallet not found' });
+                failCount++;
+                continue;
+            }
+
+            try {
+                // Get current balance
+                const balance = wallet.balance || 0;
+                if (balance <= 0.001) {
+                    results.push({ walletId, success: false, error: 'Insufficient balance (minimum 0.001 SOL required)' });
+                    failCount++;
+                    continue;
+                }
+
+                // Calculate withdraw amount
+                let withdrawAmount;
+                if (method.includes('percentage')) {
+                    withdrawAmount = (balance * percentage) / 100;
+                } else {
+                    // For uniform-amount or specific-amount, use percentage input as fixed amount
+                    withdrawAmount = percentage;
+                }
+
+                // Reserve 0.001 SOL for rent
+                const availableAmount = balance - 0.001;
+                if (withdrawAmount > availableAmount) {
+                    withdrawAmount = availableAmount;
+                }
+
+                if (withdrawAmount <= 0) {
+                    results.push({ walletId, success: false, error: 'No withdrawable balance after rent reserve' });
+                    failCount++;
+                    continue;
+                }
+
+                // Get wallet private key for transfer
+                let privateKey = wallet.privateKey || wallet.privateKeyArray;
+                
+                // If private key not available, fetch from API
+                if (!privateKey && window.apiClient) {
+                    try {
+                        const exportResult = await window.apiClient.request('/wallets/export', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                walletIds: [walletId],
+                                includePrivateKey: true
+                            })
+                        });
+                        
+                        if (exportResult.success && exportResult.wallets && exportResult.wallets[0]) {
+                            privateKey = exportResult.wallets[0].privateKeyArray || exportResult.wallets[0].privateKey;
+                        }
+                    } catch (exportError) {
+                        console.warn('Failed to fetch private key from API:', exportError);
+                    }
+                }
+                
+                if (!privateKey) {
+                    results.push({ walletId, success: false, error: 'Private key not available. Wallet may need to be re-imported.' });
+                    failCount++;
+                    continue;
+                }
+
+                // Convert private key to format needed
+                let privateKeyString;
+                if (Array.isArray(privateKey)) {
+                    privateKeyString = JSON.stringify(privateKey);
+                } else if (typeof privateKey === 'string') {
+                    // Check if it's base58 or JSON string
+                    try {
+                        JSON.parse(privateKey);
+                        privateKeyString = privateKey; // Already JSON string
+                    } catch {
+                        // Assume base58, convert to array format for solana integration
+                        if (window.bs58) {
+                            const decoded = window.bs58.decode(privateKey);
+                            privateKeyString = JSON.stringify(Array.from(decoded));
+                        } else {
+                            privateKeyString = privateKey; // Try as-is
+                        }
+                    }
+                } else {
+                    results.push({ walletId, success: false, error: 'Invalid private key format' });
+                    failCount++;
+                    continue;
+                }
+
+                // Execute transfer using Solana integration
+                if (solanaIntegration && typeof solanaIntegration.transferSOL === 'function') {
+                    const transferResult = await solanaIntegration.transferSOL(
+                        privateKeyString,
+                        destinationAddress,
+                        withdrawAmount
+                    );
+
+                    if (transferResult.success) {
+                        results.push({
+                            walletId,
+                            success: true,
+                            amount: withdrawAmount,
+                            signature: transferResult.signature
+                        });
+                        successCount++;
+                        addConsoleLog(
+                            `✅ Withdrew ${withdrawAmount.toFixed(4)} SOL from ${wallet.name || walletId} | tx: ${transferResult.signature.substring(0, 10)}...`,
+                            'success'
+                        );
+                    } else {
+                        results.push({ walletId, success: false, error: transferResult.error || 'Transfer failed' });
+                        failCount++;
+                        addConsoleLog(`❌ Withdraw failed for ${wallet.name || walletId}: ${transferResult.error}`, 'error');
+                    }
+                } else {
+                    throw new Error('Solana integration not available');
+                }
+
+                // Small delay between transfers
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+                results.push({ walletId, success: false, error: error.message });
+                failCount++;
+                addConsoleLog(`❌ Withdraw error for ${wallet.name || walletId}: ${error.message}`, 'error');
+            }
+        }
+
+        notify(
+            `Withdraw complete: ${successCount} successful, ${failCount} failed.`,
+            failCount ? 'warning' : 'success'
+        );
+
+        // Reload wallets to update balances
+        if (typeof window.loadWallets === 'function') {
+            await window.loadWallets();
+        }
+    } catch (error) {
+        console.error('executeWithdrawWallets error:', error);
+        notify(error.message || 'Withdraw failed. Check console for details.', 'error');
+        addConsoleLog(`❌ Withdraw failed: ${error.message || error}`, 'error');
+    } finally {
+        if (button) {
+            setButtonLoading(button, false);
+        }
+    }
+});
+
+// Redistribute Wallets Implementation
+registerGlobalHandler('executeRedistributeWallets', async () => {
+    const button = document.querySelector('#redistribute-page button[onclick="executeRedistributeWallets()"]');
+    try {
+        const walletIds = getSelectedWalletIds();
+        if (walletIds.length < 2) {
+            notify('Select at least 2 wallets to redistribute balances.', 'warning');
+            return;
+        }
+
+        const mode = document.getElementById('redistribute-standard-mode')?.classList.contains('border-white')
+            ? 'standard'
+            : 'mixer';
+
+        notify(`Redistributing balances across ${walletIds.length} wallet(s) (${mode} mode)...`, 'info');
+        addConsoleLog(`Starting redistribution: ${walletIds.length} wallet(s) | Mode: ${mode}`, 'info');
+
+        if (button) {
+            setButtonLoading(button, true, 'Redistributing...');
+        }
+
+        // Get wallet details
+        const wallets = typeof window.walletOperations?.getWallets === 'function' 
+            ? window.walletOperations.getWallets()
+            : [];
+
+        const selectedWallets = walletIds.map(walletId => {
+            return wallets.find(w => {
+                const id = w.id || w.address || w.publicKey || w.pubkey;
+                return id === walletId;
+            });
+        }).filter(Boolean);
+
+        if (selectedWallets.length < 2) {
+            throw new Error('Could not find at least 2 wallets');
+        }
+
+        // Calculate total balance and target per wallet
+        const totalBalance = selectedWallets.reduce((sum, w) => sum + (w.balance || 0), 0);
+        const targetBalance = totalBalance / selectedWallets.length;
+        const minBalance = 0.001; // Reserve for rent
+
+        // Calculate transfers needed
+        const transfers = [];
+        const receivers = [];
+        const senders = [];
+
+        selectedWallets.forEach(wallet => {
+            const balance = wallet.balance || 0;
+            const difference = balance - targetBalance;
+
+            if (difference > minBalance) {
+                // This wallet has excess, needs to send
+                senders.push({
+                    wallet,
+                    excess: difference,
+                    amount: difference - minBalance // Leave some for fees
+                });
+            } else if (difference < -minBalance) {
+                // This wallet needs funds
+                receivers.push({
+                    wallet,
+                    needed: Math.abs(difference)
+                });
+            }
+        });
+
+        // Match senders to receivers
+        let senderIndex = 0;
+        let receiverIndex = 0;
+        const results = [];
+        let successCount = 0;
+        let failCount = 0;
+
+        while (senderIndex < senders.length && receiverIndex < receivers.length) {
+            const sender = senders[senderIndex];
+            const receiver = receivers[receiverIndex];
+
+            const transferAmount = Math.min(sender.amount, receiver.needed);
+
+            if (transferAmount < 0.001) {
+                // Too small to transfer
+                if (sender.amount <= receiver.needed) {
+                    senderIndex++;
+                } else {
+                    receiverIndex++;
+                }
+                continue;
+            }
+
+            try {
+                let privateKey = sender.wallet.privateKey || sender.wallet.privateKeyArray;
+                
+                // If private key not available, fetch from API
+                if (!privateKey && window.apiClient) {
+                    try {
+                        const senderWalletId = sender.wallet.id || sender.wallet.address || sender.wallet.publicKey;
+                        const exportResult = await window.apiClient.request('/wallets/export', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                walletIds: [senderWalletId],
+                                includePrivateKey: true
+                            })
+                        });
+                        
+                        if (exportResult.success && exportResult.wallets && exportResult.wallets[0]) {
+                            privateKey = exportResult.wallets[0].privateKeyArray || exportResult.wallets[0].privateKey;
+                        }
+                    } catch (exportError) {
+                        console.warn('Failed to fetch private key from API:', exportError);
+                    }
+                }
+                
+                if (!privateKey) {
+                    results.push({
+                        from: sender.wallet.id || sender.wallet.publicKey,
+                        to: receiver.wallet.id || receiver.wallet.publicKey,
+                        success: false,
+                        error: 'Private key not available. Wallet may need to be re-imported.'
+                    });
+                    failCount++;
+                    senderIndex++;
+                    continue;
+                }
+
+                let privateKeyString;
+                if (Array.isArray(privateKey)) {
+                    privateKeyString = JSON.stringify(privateKey);
+                } else if (typeof privateKey === 'string') {
+                    // Check if it's base58 or JSON string
+                    try {
+                        JSON.parse(privateKey);
+                        privateKeyString = privateKey; // Already JSON string
+                    } catch {
+                        // Assume base58, convert to array format for solana integration
+                        if (window.bs58) {
+                            const decoded = window.bs58.decode(privateKey);
+                            privateKeyString = JSON.stringify(Array.from(decoded));
+                        } else {
+                            privateKeyString = privateKey; // Try as-is
+                        }
+                    }
+                } else {
+                    results.push({
+                        from: sender.wallet.id || sender.wallet.publicKey,
+                        to: receiver.wallet.id || receiver.wallet.publicKey,
+                        success: false,
+                        error: 'Invalid private key format'
+                    });
+                    failCount++;
+                    senderIndex++;
+                    continue;
+                }
+
+                const receiverAddress = receiver.wallet.address || receiver.wallet.publicKey || receiver.wallet.pubkey;
+
+                if (solanaIntegration && typeof solanaIntegration.transferSOL === 'function') {
+                    const transferResult = await solanaIntegration.transferSOL(
+                        privateKeyString,
+                        receiverAddress,
+                        transferAmount
+                    );
+
+                    if (transferResult.success) {
+                        results.push({
+                            from: sender.wallet.id || sender.wallet.publicKey,
+                            to: receiver.wallet.id || receiver.wallet.publicKey,
+                            success: true,
+                            amount: transferAmount,
+                            signature: transferResult.signature
+                        });
+                        successCount++;
+                        addConsoleLog(
+                            `✅ Redistributed ${transferAmount.toFixed(4)} SOL | ${sender.wallet.name || 'Wallet'} -> ${receiver.wallet.name || 'Wallet'} | tx: ${transferResult.signature.substring(0, 10)}...`,
+                            'success'
+                        );
+
+                        // Update amounts
+                        sender.amount -= transferAmount;
+                        receiver.needed -= transferAmount;
+
+                        if (sender.amount < 0.001) {
+                            senderIndex++;
+                        }
+                        if (receiver.needed < 0.001) {
+                            receiverIndex++;
+                        }
+                    } else {
+                        results.push({
+                            from: sender.wallet.id || sender.wallet.publicKey,
+                            to: receiver.wallet.id || receiver.wallet.publicKey,
+                            success: false,
+                            error: transferResult.error || 'Transfer failed'
+                        });
+                        failCount++;
+                        senderIndex++;
+                    }
+                } else {
+                    throw new Error('Solana integration not available');
+                }
+
+                // Delay between transfers (longer for mixer mode)
+                const delay = mode === 'mixer' ? 2000 + Math.random() * 3000 : 500;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } catch (error) {
+                results.push({
+                    from: sender.wallet.id || sender.wallet.publicKey,
+                    to: receiver.wallet.id || receiver.wallet.publicKey,
+                    success: false,
+                    error: error.message
+                });
+                failCount++;
+                senderIndex++;
+                addConsoleLog(`❌ Redistribution error: ${error.message}`, 'error');
+            }
+        }
+
+        notify(
+            `Redistribution complete: ${successCount} successful transfer${successCount === 1 ? '' : 's'}, ${failCount} failed.`,
+            failCount ? 'warning' : 'success'
+        );
+
+        // Reload wallets to update balances
+        if (typeof window.loadWallets === 'function') {
+            await window.loadWallets();
+        }
+    } catch (error) {
+        console.error('executeRedistributeWallets error:', error);
+        notify(error.message || 'Redistribution failed. Check console for details.', 'error');
+        addConsoleLog(`❌ Redistribution failed: ${error.message || error}`, 'error');
+    } finally {
+        if (button) {
+            setButtonLoading(button, false);
+        }
+    }
+});
+
 function parseCustomMintList() {
     const textarea = document.getElementById('tag-custom-mints');
     if (!textarea) return [];
@@ -8016,6 +9508,9 @@ registerGlobalHandler('openCreateBlueprintModal', openCreateBlueprintModal);
 registerGlobalHandler('submitBlueprintForm', submitBlueprintForm);
 registerGlobalHandler('applyBlueprint', applyBlueprint);
 registerGlobalHandler('deleteBlueprint', deleteBlueprint);
+registerGlobalHandler('openAutomationBlueprintModal', openAutomationBlueprintModal);
+registerGlobalHandler('runAutomationBlueprint', runAutomationBlueprint);
+registerGlobalHandler('runAutomationBlueprintFromButton', runAutomationBlueprintFromButton);
 registerGlobalHandler('saveVanityKeys', saveVanityKeys);
 registerGlobalHandler('clearVanityInput', clearVanityInput);
 registerGlobalHandler('scrollToVanityForm', scrollToVanityForm);
@@ -8194,6 +9689,17 @@ function registerTokenDraft(record = {}) {
     renderTokensTable();
 }
 
+function removeTokenDraft(draftId) {
+    if (!draftId) {
+        return;
+    }
+
+    if (tokenRegistry.drafts.delete(draftId)) {
+        persistTokenDrafts();
+        renderTokensTable();
+    }
+}
+
 function persistVanityLaunchStore() {
     try {
         localStorage.setItem(VANITY_LAUNCH_STORAGE_KEY, JSON.stringify(vanityLaunchStore));
@@ -8237,7 +9743,6 @@ function loadVanityLaunchesFromStorage() {
 
     renderVanityLaunchList();
 }
-
 function renderVanityLaunchList() {
     const container = getElement('vanity-launches-container');
     const countEl = getElement('vanity-launches-count');
@@ -8989,7 +10494,6 @@ function setVanityFilter(filter) {
 
     renderVanityList();
 }
-
 function renderVanityList() {
     const container = getElement('vanity-table-container');
     const titleEl = getElement('vanity-list-title');
@@ -9281,7 +10785,7 @@ function resetBlueprintForm() {
     resetBlueprintAutomationSelectors();
 }
 
-function submitBlueprintForm() {
+async function submitBlueprintForm() {
     if (!ensureMultiWalletReady()) {
         return;
     }
@@ -9294,22 +10798,27 @@ function submitBlueprintForm() {
         return;
     }
 
-    const blueprint = multiWalletManager.createBlueprint({
+    const payload = buildBlueprintApiPayload({
         name: formData.name,
         type: formData.type,
         template: formData.template,
         description: formData.description,
         notes: formData.notes,
-        wallets: solana?.wallets || [],
+        wallets: getBlueprintWalletPayload(),
         settings: formData.settings
     });
 
-    addConsoleLog(`✅ Blueprint created: ${blueprint.name}`, 'success');
-    notify(`Blueprint "${blueprint.name}" saved.`, 'success');
-
-    closeModal('create-blueprint-modal');
-    resetBlueprintForm();
-    renderBlueprintList();
+    try {
+        const blueprint = await blueprintService.create(payload);
+        addConsoleLog(`✅ Blueprint created: ${blueprint?.name || formData.name}`, 'success');
+        notify(`Blueprint "${blueprint?.name || formData.name}" saved.`, 'success');
+        closeModal('create-blueprint-modal');
+        resetBlueprintForm();
+        await renderBlueprintList(true);
+    } catch (error) {
+        console.error('Blueprint creation failed:', error);
+        notify(`Failed to save blueprint: ${error.message}`, 'error');
+    }
 }
 
 function formatTimestamp(value) {
@@ -9321,9 +10830,18 @@ function formatTimestamp(value) {
     }
 }
 
+function formatRunStatus(value) {
+    if (!value) return '—';
+    const normalized = String(value).toLowerCase();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function buildBlueprintCard(blueprint) {
     const card = document.createElement('div');
     card.className = 'bg-neutral-900 border border-neutral-800 rounded-lg p-4';
+
+    const isApplied =
+        tokenLaunchState.launchConfig?.appliedBlueprint?.id === blueprint.id;
 
     const header = document.createElement('div');
     header.className = 'flex items-start justify-between gap-3';
@@ -9336,12 +10854,22 @@ function buildBlueprintCard(blueprint) {
     meta.className = 'text-right text-xs text-gray-500 space-y-1';
     meta.innerHTML = `
         <div>Created: ${formatTimestamp(blueprint.createdAt)}</div>
-        <div>Last used: ${formatTimestamp(blueprint.lastApplied)}</div>
-        <div>Applied ${blueprint.stats?.appliedCount || 0} time(s)</div>
+        <div>Last run: ${formatTimestamp(blueprint.lastRun)}</div>
+        <div>Runs: ${blueprint.stats?.totalRuns || 0}</div>
+        <div>Applied: ${blueprint.stats?.appliedCount || 0}</div>
     `;
 
     header.appendChild(title);
     header.appendChild(meta);
+
+    if (isApplied) {
+        card.classList.add('ring-2', 'ring-purple-500/60');
+        const badge = document.createElement('span');
+        badge.className =
+            'ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide bg-purple-700/20 text-purple-200';
+        badge.innerHTML = `<i data-lucide="stars" class="w-3 h-3"></i><span>Applied</span>`;
+        title.querySelector('h4')?.appendChild(badge);
+    }
 
     const body = document.createElement('div');
     body.className = 'mt-4 space-y-3 text-sm text-gray-300';
@@ -9368,6 +10896,22 @@ function buildBlueprintCard(blueprint) {
         Smart Sell ${automationSettings.smartSell?.enabled ? '✅' : '❌'} • Volume Bot ${automationSettings.volumeBot?.enabled ? '✅' : '❌'}
     `;
     body.appendChild(automationSummary);
+
+    const lastRunSummary = blueprint.lastRunSummary || {};
+    const runSummary = document.createElement('div');
+    runSummary.className = 'text-xs text-gray-400';
+    const totalOps = lastRunSummary.totalOperations ?? 0;
+    const successOps = lastRunSummary.success ?? 0;
+    const failedOps = lastRunSummary.failed ?? 0;
+    runSummary.textContent = `Last run status: ${formatRunStatus(blueprint.lastRunStatus)} • Operations: ${totalOps} (✅ ${successOps} / ❌ ${failedOps})`;
+    body.appendChild(runSummary);
+
+    if (blueprint.lastRunError) {
+        const errorLine = document.createElement('div');
+        errorLine.className = 'text-xs text-red-400';
+        errorLine.textContent = `Last run error: ${blueprint.lastRunError}`;
+        body.appendChild(errorLine);
+    }
 
     const walletSummary = document.createElement('div');
     walletSummary.className = 'text-xs text-gray-400 space-y-1';
@@ -9398,9 +10942,19 @@ function buildBlueprintCard(blueprint) {
     const actions = document.createElement('div');
     actions.className = 'mt-4 flex items-center gap-3 justify-end';
 
+    const runBtn = document.createElement('button');
+    runBtn.className = 'bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-2 rounded transition';
+    runBtn.textContent = 'Run Now';
+    runBtn.onclick = () => executeBlueprint(blueprint.id);
+
+    const runsBtn = document.createElement('button');
+    runsBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-gray-200 text-xs px-3 py-2 rounded transition';
+    runsBtn.textContent = 'Runs';
+    runsBtn.onclick = () => openBlueprintRunsModal(blueprint.id);
+
     const applyBtn = document.createElement('button');
     applyBtn.className = 'bg-purple-700 hover:bg-purple-600 text-white text-xs px-3 py-2 rounded transition';
-    applyBtn.textContent = 'Apply to Launch';
+    applyBtn.textContent = isApplied ? 'Reapply' : 'Apply to Launch';
     applyBtn.onclick = () => applyBlueprint(blueprint.id);
 
     const deleteBtn = document.createElement('button');
@@ -9408,6 +10962,8 @@ function buildBlueprintCard(blueprint) {
     deleteBtn.textContent = 'Delete';
     deleteBtn.onclick = () => deleteBlueprint(blueprint.id);
 
+    actions.appendChild(runBtn);
+    actions.appendChild(runsBtn);
     actions.appendChild(applyBtn);
     actions.appendChild(deleteBtn);
 
@@ -9418,7 +10974,116 @@ function buildBlueprintCard(blueprint) {
     return card;
 }
 
-function renderBlueprintList() {
+function renderLaunchBlueprintSummary() {
+    const container = getElement('launch-blueprint-summary');
+    if (!container) {
+        return;
+    }
+
+    const applied = tokenLaunchState.launchConfig?.appliedBlueprint;
+    if (!applied || !applied.id) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    const blueprint = blueprintService.getById(applied.id);
+    const name = applied.name || blueprint?.name || 'Launch Blueprint';
+    const typeLabel = (applied.type || blueprint?.type || blueprint?.template || 'custom')
+        .toString()
+        .replace(/-/g, ' ');
+    const appliedRelative = formatRelativeTime(applied.appliedAt);
+    const description = blueprint?.description || '';
+
+    const automations = blueprint?.settings?.automations || {};
+    const smartSellSettings = automations.smartSell || {};
+    const volumeSettings = automations.volumeBot || {};
+
+    const smartSellSummary = smartSellSettings.enabled
+        ? `Enabled (TP ${smartSellSettings.profitTarget ?? '—'}% • SL ${smartSellSettings.stopLoss ?? '—'}%)`
+        : 'Disabled';
+
+    const volumeSummary = volumeSettings.enabled
+        ? `Enabled (${volumeSettings.cycles ?? '—'} cycles • Buy ${volumeSettings.buyAmount ?? '—'} SOL)`
+        : 'Disabled';
+
+    const devBuyDisplay = formatSol(tokenLaunchState.launchConfig?.devBuyAmount);
+
+    const blockZeroState = tokenLaunchState.launchConfig?.blockZero || {};
+    const blockZeroSummary = blockZeroState.enabled
+        ? `${Object.keys(blockZeroState.selections || {}).length}/${BLOCK_ZERO_MAX_SELECTIONS} wallets`
+        : 'Off';
+
+    container.innerHTML = `
+        <div class="bg-purple-900/20 border border-purple-700/40 text-purple-100 rounded-lg p-4 space-y-4">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div>
+                    <div class="text-sm font-semibold text-white">${escapeHtml(name)}</div>
+                    <div class="text-xs uppercase tracking-wide text-purple-200/80">${escapeHtml(typeLabel)}</div>
+                </div>
+                <div class="text-xs text-purple-200/60">Applied ${escapeHtml(appliedRelative)}</div>
+            </div>
+            ${description ? `<div class="text-xs text-purple-100/80 leading-relaxed">${escapeHtml(description)}</div>` : ''}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-purple-100/80">
+                <div class="bg-neutral-900/40 border border-purple-700/20 rounded-lg px-3 py-2">
+                    <div class="text-[11px] uppercase text-purple-300/80">Dev Buy</div>
+                    <div class="mt-1 font-medium">${escapeHtml(devBuyDisplay)}</div>
+                </div>
+                <div class="bg-neutral-900/40 border border-purple-700/20 rounded-lg px-3 py-2">
+                    <div class="text-[11px] uppercase text-purple-300/80">Smart Sell</div>
+                    <div class="mt-1 font-medium">${escapeHtml(smartSellSummary)}</div>
+                </div>
+                <div class="bg-neutral-900/40 border border-purple-700/20 rounded-lg px-3 py-2">
+                    <div class="text-[11px] uppercase text-purple-300/80">Volume Bot</div>
+                    <div class="mt-1 font-medium">${escapeHtml(volumeSummary)}</div>
+                </div>
+                <div class="bg-neutral-900/40 border border-purple-700/20 rounded-lg px-3 py-2">
+                    <div class="text-[11px] uppercase text-purple-300/80">Block Zero</div>
+                    <div class="mt-1 font-medium">${escapeHtml(blockZeroSummary)}</div>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="px-3 py-2 bg-purple-700/70 hover:bg-purple-600 text-white text-xs rounded transition" data-blueprint-action="runs">
+                    View run history
+                </button>
+                <button type="button" class="px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-purple-100 text-xs rounded transition" data-blueprint-action="view">
+                    Open blueprint
+                </button>
+                <button type="button" class="px-3 py-2 bg-transparent border border-purple-500/60 hover:border-purple-400 text-purple-200 text-xs rounded transition" data-blueprint-action="remove">
+                    Remove
+                </button>
+            </div>
+        </div>
+    `;
+
+    const runsButton = container.querySelector('[data-blueprint-action="runs"]');
+    runsButton?.addEventListener('click', () => openBlueprintRunsModal(applied.id));
+
+    const viewButton = container.querySelector('[data-blueprint-action="view"]');
+    viewButton?.addEventListener('click', () => navigateToPage('blueprint'));
+
+    const removeButton = container.querySelector('[data-blueprint-action="remove"]');
+    removeButton?.addEventListener('click', clearAppliedLaunchBlueprint);
+
+    container.classList.remove('hidden');
+}
+
+function clearAppliedLaunchBlueprint() {
+    if (!tokenLaunchState.launchConfig?.appliedBlueprint) {
+        return;
+    }
+
+    tokenLaunchState.launchConfig.appliedBlueprint = null;
+    renderLaunchBlueprintSummary();
+
+    renderBlueprintList(true).catch((error) => {
+        console.warn('Unable to refresh blueprints after clearing:', error);
+    });
+
+    notify('Launch blueprint removed from configuration.', 'info');
+}
+
+async function renderBlueprintList(force = false) {
     if (!ensureMultiWalletReady()) {
         return;
     }
@@ -9429,7 +11094,14 @@ function renderBlueprintList() {
         return;
     }
 
-    const blueprints = multiWalletManager.getBlueprints() || [];
+    let blueprints = [];
+    try {
+        blueprints = await blueprintService.fetchList(force);
+    } catch (error) {
+        console.error('Failed to load blueprints:', error);
+        notify(`Unable to load blueprints: ${error.message}`, 'error');
+        blueprints = [];
+    }
     listEl.innerHTML = '';
 
     if (blueprints.length === 0) {
@@ -9441,20 +11113,215 @@ function renderBlueprintList() {
     emptyEl.classList.add('hidden');
     listEl.classList.remove('hidden');
 
+    const appliedId = tokenLaunchState.launchConfig?.appliedBlueprint?.id || null;
+
     blueprints
         .slice()
         .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
-        .forEach(blueprint => {
-            listEl.appendChild(buildBlueprintCard(blueprint));
+        .forEach((blueprint) => {
+            const card = buildBlueprintCard(blueprint);
+            if (appliedId && blueprint.id === appliedId) {
+                card.classList.add('ring-2', 'ring-purple-500/60');
+            }
+            listEl.appendChild(card);
         });
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+
+    renderLaunchBlueprintSummary();
+
+    renderLaunchBlueprintList().catch(() => {
+        // Non-critical: launch blueprint modal can refresh later.
+    });
+
+    if (document.getElementById('automation-blueprint-modal')?.classList.contains('hidden') === false) {
+        renderAutomationBlueprintList().catch(() => {
+            // Non-critical: automation modal can refresh later.
+        });
+    }
 }
 
-function deleteBlueprint(blueprintId) {
+function openAutomationBlueprintModal() {
     if (!ensureMultiWalletReady()) {
         return;
     }
 
-    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    const listEl = getElement('automation-blueprint-list');
+    const emptyEl = getElement('automation-blueprint-empty');
+
+    if (listEl) {
+        listEl.innerHTML = `
+            <div class="flex items-center justify-center gap-2 text-sm text-gray-400 py-6">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                <span>Loading blueprints...</span>
+            </div>
+        `;
+        listEl.classList.remove('hidden');
+    }
+    if (emptyEl) {
+        emptyEl.classList.add('hidden');
+    }
+
+    window.openModal('automation-blueprint-modal');
+
+    renderAutomationBlueprintList()
+        .catch((error) => {
+            console.error('Unable to load automation blueprints:', error);
+            notify(`Unable to load blueprints: ${error.message}`, 'error');
+            if (listEl) {
+                listEl.classList.add('hidden');
+            }
+            if (emptyEl) {
+                emptyEl.classList.remove('hidden');
+            }
+        })
+        .finally(() => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
+}
+
+async function renderAutomationBlueprintList(force = false) {
+    const listEl = getElement('automation-blueprint-list');
+    const emptyEl = getElement('automation-blueprint-empty');
+    if (!listEl || !emptyEl) {
+        return;
+    }
+
+    let blueprints = [];
+    try {
+        blueprints = await blueprintService.fetchList(force);
+    } catch (error) {
+        listEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        throw error;
+    }
+
+    if (!Array.isArray(blueprints) || blueprints.length === 0) {
+        listEl.innerHTML = '';
+        listEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    const cards = blueprints
+        .slice()
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+        .map((blueprint) => {
+            const launch = blueprint.settings?.launch || {};
+            const automations = blueprint.settings?.automations || {};
+            const detailParts = [];
+
+            if (launch.devBuyAmount !== undefined) {
+                detailParts.push(`Dev buy ${formatSol(launch.devBuyAmount)}`);
+            }
+            if (automations.smartSell?.enabled) {
+                detailParts.push('Smart Sell enabled');
+            }
+            if (automations.volumeBot?.enabled) {
+                detailParts.push('Volume Bot enabled');
+            }
+
+            const summary =
+                detailParts.length > 0
+                    ? detailParts.join(' • ')
+                    : 'No automation notes provided';
+
+            const lastRunDisplay = blueprint.lastRun
+                ? `Last run ${formatRelativeTime(blueprint.lastRun)}`
+                : 'Never run';
+
+            return `
+                <div class="bg-neutral-900/70 border border-neutral-800 rounded-lg p-4 space-y-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-semibold text-white">${escapeHtml(blueprint.name || 'Blueprint')}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml((blueprint.template || blueprint.type || 'custom').replace(/-/g, ' '))}</div>
+                        </div>
+                        <span class="text-[11px] text-gray-500">${escapeHtml(lastRunDisplay)}</span>
+                    </div>
+                    <div class="text-xs text-gray-400">${escapeHtml(summary)}</div>
+                    <div class="flex items-center justify-end gap-2">
+                        <button class="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded transition" data-run-blueprint="${escapeHtml(blueprint.id)}" onclick="runAutomationBlueprintFromButton(this)">
+                            Run Blueprint
+                        </button>
+                        <button class="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-gray-200 text-xs rounded transition" onclick="navigateToPage('blueprint'); closeModal('automation-blueprint-modal')">
+                            Manage
+                        </button>
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    listEl.innerHTML = cards;
+    listEl.classList.remove('hidden');
+    emptyEl.classList.add('hidden');
+
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+async function runAutomationBlueprint(blueprintId, triggerButton = null) {
+    if (!blueprintId) {
+        return;
+    }
+
+    const blueprint = blueprintService.getById(blueprintId);
+    const label = blueprint?.name || 'Blueprint';
+    const selector = triggerButton ? null : `[data-run-blueprint="${CSS?.escape ? CSS.escape(blueprintId) : blueprintId}"]`;
+    const button = triggerButton || (selector ? document.querySelector(selector) : null);
+
+    try {
+        if (button) {
+            setButtonLoading(button, true, 'Running…');
+        }
+
+        await blueprintService.execute(blueprintId);
+
+        notify(`Blueprint "${label}" queued for execution.`, 'success');
+        addConsoleLog(`⚙️ Blueprint queued: ${label}`, 'info');
+
+        closeModal('automation-blueprint-modal');
+
+        await renderBlueprintList(true);
+
+        if (tokenRegistry.current && tokenRegistry.current.type !== 'draft') {
+            setTimeout(() => {
+                loadLiveTokenDetail(tokenRegistry.current);
+            }, 1500);
+        }
+    } catch (error) {
+        console.error('Blueprint execution failed:', error);
+        notify(`Failed to run blueprint: ${error.message}`, 'error');
+    } finally {
+        if (button) {
+            setButtonLoading(button, false);
+        }
+    }
+}
+
+function runAutomationBlueprintFromButton(button) {
+    if (!button) {
+        return;
+    }
+    const blueprintId = button.dataset.runBlueprint;
+    runAutomationBlueprint(blueprintId, button);
+}
+
+async function deleteBlueprint(blueprintId) {
+    if (!ensureMultiWalletReady()) {
+        return;
+    }
+
+    await blueprintService.fetchList();
+    const blueprint = blueprintService.getById(blueprintId);
     if (!blueprint) {
         notify('Blueprint not found.', 'error');
         return;
@@ -9464,18 +11331,24 @@ function deleteBlueprint(blueprintId) {
         return;
     }
 
-    multiWalletManager.deleteBlueprint(blueprintId);
-    notify(`Blueprint "${blueprint.name}" deleted.`, 'success');
-    addConsoleLog(`🗑️ Blueprint deleted: ${blueprint.name}`, 'info');
-    renderBlueprintList();
+    try {
+        await blueprintService.remove(blueprintId);
+        notify(`Blueprint "${blueprint.name}" deleted.`, 'success');
+        addConsoleLog(`🗑️ Blueprint deleted: ${blueprint.name}`, 'info');
+        await renderBlueprintList(true);
+    } catch (error) {
+        console.error('Failed to delete blueprint:', error);
+        notify(`Failed to delete blueprint: ${error.message}`, 'error');
+    }
 }
 
-function applyBlueprint(blueprintId) {
+async function applyBlueprint(blueprintId) {
     if (!ensureMultiWalletReady()) {
         return;
     }
 
-    const blueprint = multiWalletManager.getBlueprintById(blueprintId);
+    await blueprintService.fetchList();
+    const blueprint = blueprintService.getById(blueprintId);
     if (!blueprint) {
         notify('Blueprint not found.', 'error');
         return;
@@ -9485,14 +11358,49 @@ function applyBlueprint(blueprintId) {
 
     setTimeout(() => {
         applyBlueprintToLaunch(blueprint);
-        multiWalletManager.recordBlueprintUsage(blueprintId);
-        renderBlueprintList();
     }, 200);
+
+    blueprintService
+        .markApplied(blueprintId)
+        .then(() => renderBlueprintList(true))
+        .catch((error) => {
+            console.warn('Unable to record blueprint usage:', error);
+        });
 }
 
 function applyBlueprintToLaunch(blueprint) {
     const launch = blueprint.settings?.launch || {};
     const automations = blueprint.settings?.automations || {};
+
+    tokenLaunchState.launchConfig.appliedBlueprint = {
+        id: blueprint.id,
+        name: blueprint.name || '',
+        type: blueprint.type || blueprint.template || 'custom',
+        appliedAt: Date.now()
+    };
+
+    if (launch.devWalletId) {
+        tokenLaunchState.launchConfig.devWalletId = String(launch.devWalletId);
+        tokenLaunchState.selectedWalletId = tokenLaunchState.launchConfig.devWalletId;
+    }
+
+    if (launch.devBuyAmount !== undefined) {
+        const devBuyValue = safeNumber(launch.devBuyAmount);
+        tokenLaunchState.launchConfig.devBuyAmount = devBuyValue !== null ? devBuyValue : null;
+    } else {
+        tokenLaunchState.launchConfig.devBuyAmount = null;
+    }
+
+    if (launch.blockZero && typeof launch.blockZero === 'object') {
+        const clonedBlockZero = cloneLaunchConfig({ blockZero: launch.blockZero });
+        tokenLaunchState.launchConfig.blockZero = clonedBlockZero.blockZero;
+    } else {
+        tokenLaunchState.launchConfig.blockZero = {
+            enabled: false,
+            mode: 'quick',
+            selections: {}
+        };
+    }
 
     const devBuyInput = getElement('dev-buy-amount');
     if (devBuyInput && launch.devBuyAmount !== undefined) {
@@ -9666,6 +11574,9 @@ function applyBlueprintToLaunch(blueprint) {
     reflectLaunchAutomationState('smartSell');
     reflectLaunchAutomationState('volumeBot');
 
+    renderLaunchBlueprintSummary();
+    refreshLaunchWalletDependencies();
+
     if (blueprint.notes) {
         notify(blueprint.notes, 'info');
     }
@@ -9762,4 +11673,3 @@ document.addEventListener('DOMContentLoaded', () => {
     window.selectCopyPlatform?.(uiHelperState.copyPlatform);
     window.selectBlockZeroMode?.(uiHelperState.blockZeroMode);
 });
-

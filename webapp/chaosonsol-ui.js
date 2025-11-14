@@ -117,16 +117,32 @@ function initializeWallets() {
     // Bulk action buttons
     document.getElementById('fund-btn').addEventListener('click', () => openModal('fund-modal'));
     document.getElementById('withdraw-btn').addEventListener('click', () => {
-        showToast('Withdraw feature coming soon!', 'info');
+        if (typeof navigateToPage === 'function') {
+            navigateToPage('withdraw');
+        } else {
+            showToast('Withdraw feature ready! Navigate to Withdraw page.', 'info');
+        }
     });
     document.getElementById('tag-btn').addEventListener('click', () => {
-        showToast('Tag wallets feature coming soon!', 'info');
+        if (typeof navigateToPage === 'function') {
+            navigateToPage('tag');
+        } else {
+            showToast('Tag wallets feature ready! Navigate to Tag page.', 'info');
+        }
     });
     document.getElementById('warm-btn').addEventListener('click', () => {
-        showToast('Warm wallets feature coming soon!', 'info');
+        if (typeof navigateToPage === 'function') {
+            navigateToPage('warm');
+        } else {
+            showToast('Warm wallets feature ready! Navigate to Warm page.', 'info');
+        }
     });
     document.getElementById('redistribute-btn').addEventListener('click', () => {
-        showToast('Redistribute feature coming soon!', 'info');
+        if (typeof navigateToPage === 'function') {
+            navigateToPage('redistribute');
+        } else {
+            showToast('Redistribute feature ready! Navigate to Redistribute page.', 'info');
+        }
     });
     document.getElementById('reclaim-btn').addEventListener('click', () => {
         showToast('Reclaim rent feature coming soon!', 'info');
@@ -163,40 +179,6 @@ async function loadWallets() {
         renderWalletTable();
         updateTotalBalance();
     }
-}
-
-function generateDemoWallets() {
-    const wallets = [];
-    const groups = ['Volume', 'Pump.fun'];
-    const tags = ['Photon', 'BullX', 'GMGN', 'Trojan'];
-    
-    for (let i = 1; i <= 40; i++) {
-        const group = i <= 20 ? 'Volume' : 'Pump.fun';
-        const name = i <= 20 ? `Volume_${i}` : `Pump_${i-20}`;
-        
-        wallets.push({
-            name: name,
-            publicKey: generateRandomAddress(),
-            groupName: group,
-            balance: Math.random() * 0.5,
-            usdValue: 0,
-            status: 'active',
-            tokens: Math.floor(Math.random() * 5),
-            rent: 0.002 * Math.floor(Math.random() * 3),
-            tags: Math.random() > 0.5 ? [tags[Math.floor(Math.random() * tags.length)]] : []
-        });
-    }
-    
-    return wallets;
-}
-
-function generateRandomAddress() {
-    const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-    let address = '';
-    for (let i = 0; i < 44; i++) {
-        address += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return address;
 }
 
 function filterWallets() {

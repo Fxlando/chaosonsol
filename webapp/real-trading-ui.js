@@ -9888,7 +9888,7 @@ registerGlobalHandler('handleTokenEdit', handleTokenEdit);
 registerGlobalHandler('handleTokenArchive', handleTokenArchive);
 registerGlobalHandler('setTokenHoldingsSource', setTokenHoldingsSource);
 
-function viewTokenDetails(identifier, source = 'imported') {
+async function viewTokenDetails(identifier, source = 'imported') {
     if (!identifier) return;
 
     let record = null;
@@ -9901,6 +9901,54 @@ function viewTokenDetails(identifier, source = 'imported') {
     if (!record) {
         notify('Token not found in registry.', 'warning');
         return;
+    }
+
+    // Check if token metadata looks incomplete (generic name/symbol)
+    const hasGenericName = !record.name || 
+        record.name === 'Imported Token' || 
+        record.name === 'Token' || 
+        record.name.startsWith('Token ') ||
+        record.name === identifier.slice(0, 8) ||
+        record.name === identifier.slice(0, 9);
+    const hasGenericSymbol = !record.symbol || 
+        record.symbol === 'TOKEN' || 
+        record.symbol === 'UNK' ||
+        record.symbol === '';
+    const hasIncompleteMetadata = hasGenericName || hasGenericSymbol || !record.image || !record.description;
+
+    // If metadata is incomplete and it's an imported token (not a draft), refresh it
+    if (hasIncompleteMetadata && record.type !== 'draft' && record.mint) {
+        try {
+            await ensureApiClientReady();
+            const response = await window.apiClient.importToken(record.mint, { platform: 'pumpfun' });
+            
+            if (response?.success && response.token) {
+                const info = response.token;
+                
+                // Update record with fresh metadata
+                const updatedRecord = {
+                    ...record,
+                    name: info.name || record.name,
+                    symbol: info.symbol || record.symbol,
+                    description: info.description || record.description,
+                    image: info.image || record.image,
+                    website: info.website || response.source?.website || record.website,
+                    twitter: info.twitter || response.source?.twitter || record.twitter,
+                    telegram: info.telegram || response.source?.telegram || record.telegram,
+                    metadataUri: info.metadataUri || response.source?.metadataUri || record.metadataUri,
+                    updatedAt: Date.now()
+                };
+                
+                // Update registry
+                registerImportedToken(updatedRecord);
+                
+                // Use updated record
+                record = updatedRecord;
+            }
+        } catch (error) {
+            console.warn('Failed to refresh token metadata:', error);
+            // Continue with existing record even if refresh fails
+        }
     }
 
     populateTokenDetailView(record);

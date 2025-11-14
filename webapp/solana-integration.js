@@ -37,6 +37,13 @@ class SolanaIntegration {
     }
 
     /**
+     * Reinitialize Helius connection when settings are updated
+     */
+    reinitHeliusConnection() {
+        this.initHeliusConnection();
+    }
+
+    /**
      * Initialize Helius RPC connection for indexed RPC methods
      * getParsedTokenAccountsByOwner requires indexed methods which Shyft free tier doesn't support
      */

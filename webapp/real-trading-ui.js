@@ -5911,7 +5911,7 @@ function getPumpPortalApiKey() {
             return settings?.pumpportal?.apiKey || '';
         }
         // Fallback: try localStorage
-        const stored = localStorage.getItem('chaosbot-settings');
+        const stored = localStorage.getItem('chaosbot_settings');
         if (stored) {
             const settings = JSON.parse(stored);
             return settings?.pumpportal?.apiKey || '';

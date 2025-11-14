@@ -380,10 +380,35 @@ class SettingsManager {
     }
 
     updateShyft(config = {}) {
+        // Ensure shyft object exists
+        if (!this.settings.shyft) {
+            this.settings.shyft = {};
+        }
+        
+        // Deep merge the config
         this.settings.shyft = this.deepMerge(this.settings.shyft, config);
-        this.saveSettings();
+        
+        // Force save to localStorage
+        const saved = this.saveSettings();
+        if (!saved) {
+            console.error('❌ Failed to save Shyft settings to localStorage');
+            return false;
+        }
+        
+        // Verify it was saved
+        try {
+            const verify = localStorage.getItem(this.storageKey);
+            if (verify) {
+                const parsed = JSON.parse(verify);
+                console.log('✅ Shyft settings verified in localStorage:', parsed?.shyft);
+            }
+        } catch (error) {
+            console.error('Failed to verify Shyft settings:', error);
+        }
+        
         this.applySettings();
-        console.log('✅ Shyft RPC settings updated');
+        this.publish(); // Notify other components
+        console.log('✅ Shyft RPC settings updated and saved');
         return true;
     }
 

@@ -165,15 +165,23 @@
 
         window.settingsManager.updateCustomization(customization);
         
-        // Save Shyft settings
+        // Save Shyft settings - ensure it's saved properly
         if (window.settingsManager.updateShyft) {
             window.settingsManager.updateShyft(shyft);
         } else {
-            // Fallback: update full settings
+            // Fallback: manually update and save
             const currentSettings = window.settingsManager.getSettings();
-            currentSettings.shyft = shyft;
-            window.settingsManager.saveSettings(currentSettings);
+            currentSettings.shyft = {
+                ...(currentSettings.shyft || {}),
+                ...shyft
+            };
+            window.settingsManager.settings = currentSettings;
+            window.settingsManager.saveSettings();
         }
+        
+        // Force a re-read to verify it was saved
+        const verifySettings = window.settingsManager.getSettings();
+        console.log('✅ Shyft settings saved:', verifySettings?.shyft);
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');
@@ -193,11 +201,33 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-        const snapshot = window.settingsManager?.getSettings();
+        // Wait a bit for settingsManager to initialize
+        setTimeout(() => {
+            const snapshot = window.settingsManager?.getSettings();
+            if (snapshot) {
+                populateSettingsForm(snapshot);
+            } else {
+                // Try loading directly from localStorage as fallback
+                try {
+                    const stored = localStorage.getItem('chaosbot_settings');
+                    if (stored) {
+                        const settings = JSON.parse(stored);
+                        populateSettingsForm(settings);
+                    }
+                } catch (error) {
+                    console.debug('Failed to load settings from localStorage:', error);
+                }
+            }
+        }, 100);
+    });
+    
+    // Also try to populate immediately if settingsManager is already ready
+    if (window.settingsManager) {
+        const snapshot = window.settingsManager.getSettings();
         if (snapshot) {
             populateSettingsForm(snapshot);
         }
-    });
+    }
 
     window.saveSettings = handleSave;
     window.settingsUI = {

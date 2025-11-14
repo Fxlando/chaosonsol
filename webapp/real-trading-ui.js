@@ -7116,8 +7116,12 @@ function tokenAvatar(record) {
     const defaultIcon = '<span class="text-2xl">🪙</span>';
     const pumpFunLogo = 'https://pump.fun/logo.png';
     
-    if (!record?.image) {
-        // Use pump.fun logo as fallback for tokens without images
+    // Check if image is missing, null, undefined, or empty string
+    // This applies to ALL tokens: imported, launched, drafts, etc.
+    const hasImage = record?.image && typeof record.image === 'string' && record.image.trim().length > 0;
+    
+    if (!hasImage) {
+        // Use pump.fun logo as fallback for tokens without images (including imported tokens)
         return `
             <div class="w-10 h-10 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
                 <img src="${pumpFunLogo}" alt="Token" class="w-full h-full object-cover" loading="lazy" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-2xl\\'>🪙</span>';" />

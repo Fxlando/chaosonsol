@@ -3005,9 +3005,9 @@
         let tokens = []; // Store loaded tokens
         
         // API Configuration
-        var API_BASE = window.location.hostname === 'localhost' 
+        var API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:3000' 
-            : '/.netlify/functions';
+            : (window.__CHAOSBOT_API_BASE__ || '/api');
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -4419,7 +4419,7 @@
                 // Determine API base URL
                 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'http://localhost:3000/api'
-                    : '/.netlify/functions/api';
+                    : '/api';
                 
                 // Call the API to create the token
                 const response = await fetch(`${API_BASE}/tokens/launch`, {
@@ -4492,7 +4492,7 @@
             try {
                 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                     ? 'http://localhost:3000/api'
-                    : '/.netlify/functions/api';
+                    : '/api';
                 
                 const response = await fetch(`${API_BASE}/wallets`);
                 if (!response.ok) {

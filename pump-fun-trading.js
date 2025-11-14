@@ -23,8 +23,8 @@ class PumpFunTrading {
       // Use RPC_URL (Shyft) as primary, with proper fallback order
       rpcUrl: process.env.RPC_URL || 
         process.env.RPC_URL_2 || 
-        'https://api.mainnet-beta.solana.com' || 
-        'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+        process.env.RPC_URL_3 || 
+        'https://api.mainnet-beta.solana.com',
       ...config
     };
   }

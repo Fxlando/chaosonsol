@@ -126,7 +126,7 @@ export class PumpFunClient {
           name: response.data.name || 'Unknown',
           symbol: response.data.symbol || 'UNK',
           description: response.data.description || (response.data.metadata && response.data.metadata.description) || '',
-          image: response.data.image_uri || response.data.imageUri || '',
+          image: response.data.image_uri || response.data.imageUri || response.data.image || response.data.imageUrl || response.data.image_url || '',
           metadataUri,
           twitter: unpackSocial('twitter'),
           telegram: unpackSocial('telegram'),
@@ -309,8 +309,40 @@ export class PumpFunClient {
       });
 
       if (response.data && typeof response.data === 'object') {
-        this.cache.set(cacheKey, { data: response.data, timestamp: Date.now() });
-        return response.data;
+        // Extract image from various possible field names
+        const metadata = response.data;
+        let image = null;
+        
+        // Try common image field names
+        if (metadata.image) {
+          image = metadata.image;
+        } else if (metadata.imageUri) {
+          image = metadata.imageUri;
+        } else if (metadata.image_uri) {
+          image = metadata.image_uri;
+        } else if (metadata.imageUrl) {
+          image = metadata.imageUrl;
+        } else if (metadata.image_url) {
+          image = metadata.image_url;
+        } else if (metadata.properties?.image) {
+          image = metadata.properties.image;
+        } else if (metadata.properties?.files && Array.isArray(metadata.properties.files)) {
+          // Try to find image in files array
+          const imageFile = metadata.properties.files.find(f => 
+            f.type && f.type.startsWith('image/')
+          );
+          if (imageFile && imageFile.uri) {
+            image = imageFile.uri;
+          }
+        }
+        
+        // If image found, add it to metadata
+        if (image) {
+          metadata.image = image;
+        }
+        
+        this.cache.set(cacheKey, { data: metadata, timestamp: Date.now() });
+        return metadata;
       }
     } catch (error) {
       logger.warn(`Failed to fetch metadata URI ${normalized}:`, error.message);

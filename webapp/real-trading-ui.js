@@ -12887,10 +12887,58 @@ function resolveImageUrl(value) {
     if (!value || typeof value !== 'string') {
         return null;
     }
-    if (value.startsWith('ipfs://')) {
-        return `https://ipfs.io/ipfs/${value.replace('ipfs://', '')}`;
+    
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return null;
     }
-    return value;
+    
+    // Handle IPFS URLs
+    if (trimmed.startsWith('ipfs://')) {
+        const ipfsHash = trimmed.replace(/^ipfs:\/\//, '').replace(/^\/+/, '');
+        return `https://ipfs.io/ipfs/${ipfsHash}`;
+    }
+    
+    // Handle IPFS hash without protocol (Qm... or bafy...)
+    if (/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-z0-9]+)$/.test(trimmed)) {
+        return `https://ipfs.io/ipfs/${trimmed}`;
+    }
+    
+    // Handle Arweave URLs
+    if (trimmed.startsWith('ar://')) {
+        const arweaveId = trimmed.replace(/^ar:\/\//, '');
+        return `https://arweave.net/${arweaveId}`;
+    }
+    
+    // Handle Arweave ID directly (43 characters, base64url)
+    if (/^[A-Za-z0-9_-]{43}$/.test(trimmed) && trimmed.length === 43) {
+        return `https://arweave.net/${trimmed}`;
+    }
+    
+    // Handle HTTP/HTTPS URLs - validate and return as-is
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        try {
+            // Validate URL format
+            new URL(trimmed);
+            return trimmed;
+        } catch (e) {
+            // Invalid URL, return null
+            return null;
+        }
+    }
+    
+    // Handle data URIs (base64 images)
+    if (trimmed.startsWith('data:image/')) {
+        return trimmed;
+    }
+    
+    // If it looks like a valid URL but missing protocol, try adding https://
+    if (/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/.test(trimmed)) {
+        return `https://${trimmed}`;
+    }
+    
+    // Return as-is for any other format (might be a relative path or other format)
+    return trimmed;
 }
 
 function formatUSD(value) {

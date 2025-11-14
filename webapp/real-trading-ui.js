@@ -5875,7 +5875,10 @@ function connectPumpPortalWebSocket() {
         };
 
         pumpPortalWebSocket.onclose = () => {
-            console.log('PumpPortal WebSocket closed');
+            // Only log if we have active subscriptions (connection was intentional)
+            if (pumpPortalSubscriptions.size > 0) {
+                console.debug('PumpPortal WebSocket closed');
+            }
             pumpPortalWebSocket = null;
             
             // Attempt to reconnect if we have active subscriptions
@@ -5895,20 +5898,39 @@ function connectPumpPortalWebSocket() {
 function subscribeToTokenTrades(mint) {
     if (!mint) return;
     
+    // Add to subscriptions first (will be subscribed when connection is ready)
+    pumpPortalSubscriptions.add(mint);
+    
     if (!pumpPortalWebSocket || pumpPortalWebSocket.readyState !== WebSocket.OPEN) {
-        connectPumpPortalWebSocket();
-        // Wait for connection, then subscribe
-        if (pumpPortalWebSocket) {
+        // If connection is in progress (CONNECTING), wait for it
+        if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.CONNECTING) {
             pumpPortalWebSocket.addEventListener('open', () => {
                 sendPumpPortalSubscribe('subscribeTokenTrade', [mint]);
-                pumpPortalSubscriptions.add(mint);
             }, { once: true });
+            return;
         }
+        
+        // Start new connection
+        connectPumpPortalWebSocket();
+        
+        // Wait for connection to open, then subscribe
+        const checkConnection = setInterval(() => {
+            if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.OPEN) {
+                clearInterval(checkConnection);
+                sendPumpPortalSubscribe('subscribeTokenTrade', [mint]);
+            } else if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.CLOSED) {
+                clearInterval(checkConnection);
+                // Connection failed, will retry on next attempt
+            }
+        }, 100);
+        
+        // Timeout after 5 seconds
+        setTimeout(() => clearInterval(checkConnection), 5000);
         return;
     }
 
+    // Connection is ready, subscribe immediately
     sendPumpPortalSubscribe('subscribeTokenTrade', [mint]);
-    pumpPortalSubscriptions.add(mint);
 }
 
 function unsubscribeFromTokenTrades(mint) {
@@ -5929,7 +5951,7 @@ function unsubscribeFromTokenTrades(mint) {
 
 function sendPumpPortalSubscribe(method, keys) {
     if (!pumpPortalWebSocket || pumpPortalWebSocket.readyState !== WebSocket.OPEN) {
-        console.warn('PumpPortal WebSocket not ready for subscription');
+        // Silently skip if not ready - will retry when connection is established
         return;
     }
 
@@ -6170,18 +6192,46 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
 
     for (const endpoint of endpoints) {
         try {
+            // Suppress console errors for expected API failures
             const response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
                     Accept: 'application/json'
+                },
+                // Add signal to allow cancellation if needed
+                signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : null
+            }).catch(error => {
+                // Silently handle network errors and expected API failures
+                const errorMessage = error.message || String(error);
+                const isExpectedError = errorMessage.includes('530') || 
+                                     errorMessage.includes('503') || 
+                                     errorMessage.includes('502') ||
+                                     errorMessage.includes('504') ||
+                                     errorMessage.includes('404') ||
+                                     errorMessage.includes('Failed to fetch') ||
+                                     errorMessage.includes('NetworkError') ||
+                                     errorMessage.includes('aborted');
+                // Return null for expected errors, re-throw unexpected ones
+                if (isExpectedError) {
+                    return null;
                 }
+                throw error;
             });
+            
+            // If fetch returned null (expected error), skip this endpoint
+            if (!response) {
+                continue;
+            }
             
             // Silently handle 5xx errors (API downtime) and 404s (endpoint not available)
             if (!response.ok) {
                 const status = response.status;
+                // Silently skip 404 and 5xx errors - these are expected API issues
+                if (status === 404 || status >= 500) {
+                    continue;
+                }
                 // Only log non-5xx, non-404 errors as they might indicate a real issue
-                if (status !== 404 && status < 500) {
+                if (status < 500) {
                     console.debug(`Trade feed endpoint returned ${status} (${endpoint})`);
                 }
                 continue;
@@ -6212,9 +6262,12 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                              errorMessage.includes('503') || 
                              errorMessage.includes('502') ||
                              errorMessage.includes('504') ||
+                             errorMessage.includes('404') ||
                              errorMessage.includes('Failed to fetch') ||
-                             errorMessage.includes('NetworkError');
+                             errorMessage.includes('NetworkError') ||
+                             errorMessage.includes('aborted');
             
+            // Only log unexpected errors - all expected API failures are silent
             if (!isApiDown) {
                 console.debug(`Trade feed fetch error (${endpoint}):`, errorMessage);
             }

@@ -5698,9 +5698,9 @@ async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jit
                 wallets = response.wallets.map(w => ({
                     id: w.id || w.address || w.publicKey,
                     address: w.address || w.publicKey,
-                    name: w.name || '',
+                    name: String(w.name || w.label || w.alias || w.displayName || ''),
                     balance: w.balance || null,
-                    tags: w.tags || []
+                    tags: Array.isArray(w.tags) ? w.tags : []
                 }));
             }
         } catch (error) {

@@ -4826,7 +4826,7 @@ function getKnownWallets() {
                 key,
             address: key,
             name: wallet.name || wallet.label || wallet.alias || wallet.displayName || '',
-            emoji: wallet.emoji || getWalletEmoji(sourceIndex || collection.length),
+            emoji: wallet.emoji || getWalletEmoji(wallet.name || wallet.label || wallet.alias || wallet.displayName || sourceIndex || collection.length),
             balance: typeof wallet.balance === 'number' ? wallet.balance : null,
             tags: Array.isArray(wallet.tags) ? wallet.tags : []
         });

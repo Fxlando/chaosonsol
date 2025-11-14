@@ -6137,6 +6137,7 @@ function stopTokenActivityStream() {
     if (currentMint) {
         unsubscribeFromTokenTrades(currentMint);
         unsubscribeFromShyftTokenAccount(currentMint);
+        unsubscribeFromSolanaRpcTokenAccount(currentMint);
     }
     
     // Also clear any polling interval (fallback)
@@ -6201,6 +6202,13 @@ let shyftSubscriptions = new Map(); // Map of mint -> subscription ID
 let shyftReconnectAttempts = 0;
 const SHYFT_MAX_RECONNECT_ATTEMPTS = 5;
 const SHYFT_RECONNECT_DELAY_MS = 3000;
+
+// Solana RPC WebSocket Manager for Live Trade Monitoring (fallback/alternative)
+let solanaRpcWebSocket = null;
+let solanaRpcSubscriptions = new Map(); // Map of mint -> subscription ID
+let solanaRpcReconnectAttempts = 0;
+const SOLANA_RPC_MAX_RECONNECT_ATTEMPTS = 5;
+const SOLANA_RPC_RECONNECT_DELAY_MS = 3000;
 
 function getShyftSettings() {
     try {
@@ -6387,6 +6395,167 @@ function handleShyftMessage(data) {
     }
 }
 
+// Solana RPC WebSocket Manager (FREE - Public RPC)
+function getSolanaRpcWebSocketUrl() {
+    // Try to get WebSocket URL from settings
+    try {
+        if (typeof window.settingsManager !== 'undefined' && window.settingsManager.getSettings) {
+            const settings = window.settingsManager.getSettings();
+            const wsUrl = settings?.solana?.rpcWebsocket;
+            if (wsUrl && wsUrl.startsWith('wss://')) {
+                return wsUrl;
+            }
+        }
+    } catch (error) {
+        console.debug('Failed to get RPC WebSocket from settings:', error);
+    }
+    
+    // Fallback to public Solana RPC WebSocket (FREE)
+    return 'wss://api.mainnet-beta.solana.com';
+}
+
+function connectSolanaRpcWebSocket() {
+    if (solanaRpcWebSocket && solanaRpcWebSocket.readyState === WebSocket.OPEN) {
+        return; // Already connected
+    }
+
+    const wsUrl = getSolanaRpcWebSocketUrl();
+    
+    try {
+        console.log('🔵 Connecting to Solana RPC WebSocket for live monitoring (FREE)...');
+        solanaRpcWebSocket = new WebSocket(wsUrl);
+
+        solanaRpcWebSocket.onopen = () => {
+            console.log('✅ Solana RPC WebSocket connected (FREE monitoring active)');
+            solanaRpcReconnectAttempts = 0;
+            
+            // Re-subscribe to all active subscriptions
+            solanaRpcSubscriptions.forEach((subscriptionId, mint) => {
+                subscribeToSolanaRpcTokenAccount(mint);
+            });
+        };
+
+        solanaRpcWebSocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                handleSolanaRpcMessage(data);
+            } catch (error) {
+                console.debug('Failed to parse Solana RPC message:', error);
+            }
+        };
+
+        solanaRpcWebSocket.onerror = (error) => {
+            console.debug('Solana RPC WebSocket error:', error);
+        };
+
+        solanaRpcWebSocket.onclose = () => {
+            console.debug('Solana RPC WebSocket closed');
+            solanaRpcWebSocket = null;
+            
+            // Attempt to reconnect if we have active subscriptions
+            if (solanaRpcSubscriptions.size > 0 && solanaRpcReconnectAttempts < SOLANA_RPC_MAX_RECONNECT_ATTEMPTS) {
+                solanaRpcReconnectAttempts++;
+                console.log(`Reconnecting to Solana RPC WebSocket (attempt ${solanaRpcReconnectAttempts}/${SOLANA_RPC_MAX_RECONNECT_ATTEMPTS})...`);
+                setTimeout(() => {
+                    connectSolanaRpcWebSocket();
+                }, SOLANA_RPC_RECONNECT_DELAY_MS);
+            }
+        };
+    } catch (error) {
+        console.error('Failed to create Solana RPC WebSocket:', error);
+    }
+}
+
+function sendSolanaRpcRequest(method, params) {
+    if (!solanaRpcWebSocket || solanaRpcWebSocket.readyState !== WebSocket.OPEN) {
+        return;
+    }
+
+    const requestId = Date.now() + Math.random();
+    const request = {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: method,
+        params: params
+    };
+
+    solanaRpcWebSocket.send(JSON.stringify(request));
+    return requestId;
+}
+
+function subscribeToSolanaRpcTokenAccount(mint) {
+    if (!mint) return;
+
+    // Get the token mint public key
+    if (!window.solanaWeb3?.PublicKey) {
+        console.warn('Solana Web3 not available for RPC subscription');
+        return;
+    }
+
+    try {
+        const mintPubkey = new window.solanaWeb3.PublicKey(mint);
+        
+        // Subscribe to account changes for the token mint
+        const subscriptionId = sendSolanaRpcRequest('accountSubscribe', [
+            mintPubkey.toBase58(),
+            {
+                encoding: 'jsonParsed',
+                commitment: 'confirmed'
+            }
+        ]);
+
+        if (subscriptionId) {
+            solanaRpcSubscriptions.set(mint, subscriptionId);
+            console.log(`🔵 Subscribed to Solana RPC monitoring (FREE) for token: ${mint.substring(0, 8)}...`);
+        }
+    } catch (error) {
+        console.error('Failed to subscribe to Solana RPC token account:', error);
+    }
+}
+
+function unsubscribeFromSolanaRpcTokenAccount(mint) {
+    if (!mint || !solanaRpcSubscriptions.has(mint)) return;
+
+    const subscriptionId = solanaRpcSubscriptions.get(mint);
+    sendSolanaRpcRequest('accountUnsubscribe', [subscriptionId]);
+    solanaRpcSubscriptions.delete(mint);
+
+    // Close connection if no more subscriptions
+    if (solanaRpcSubscriptions.size === 0 && solanaRpcWebSocket) {
+        solanaRpcWebSocket.close();
+    }
+}
+
+function handleSolanaRpcMessage(data) {
+    // Handle subscription notifications
+    if (data.method === 'accountNotification' && data.params) {
+        const accountData = data.params.result?.value;
+        if (!accountData) return;
+
+        // Find which token this notification is for
+        const mint = Array.from(solanaRpcSubscriptions.keys()).find(m => {
+            // Check if this account data matches our subscribed mint
+            return true; // Simplified - would need proper account data parsing
+        });
+
+        if (mint && tokenRegistry.current && tokenRegistry.current.mint === mint) {
+            // Trigger activity refresh when we detect account changes
+            console.log('🔵 Solana RPC (FREE) detected account change for token:', mint.substring(0, 8));
+            
+            // Refresh activity feed
+            if (tokenDetailViewState.currentActivity) {
+                fetchPumpFunTradeFeed(mint, 20).then(latest => {
+                    const solPrice = tokenDetailViewState.solPrice || null;
+                    renderTokenActivity(latest, { isLive: true, solPrice });
+                    tokenDetailViewState.currentActivity = latest;
+                }).catch(error => {
+                    console.debug('Solana RPC-triggered activity refresh failed:', error);
+                });
+            }
+        }
+    }
+}
+
 function startTokenActivityStream(mint) {
     stopTokenActivityStream();
     if (!mint) {
@@ -6403,6 +6572,13 @@ function startTokenActivityStream(mint) {
         // Wait a bit for connection, then subscribe
         setTimeout(() => {
             subscribeToShyftTokenAccount(mint);
+        }, 500);
+    } else {
+        // Fallback: Use public Solana RPC WebSocket (FREE - best option for free monitoring)
+        // WebSocket subscriptions don't count against HTTP rate limits
+        connectSolanaRpcWebSocket();
+        setTimeout(() => {
+            subscribeToSolanaRpcTokenAccount(mint);
         }, 500);
     }
     

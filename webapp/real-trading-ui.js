@@ -13810,13 +13810,25 @@ function formatRelativeTime(timestamp) {
         return '—';
     }
     const diff = Date.now() - value;
-    const minute = 60 * 1000;
+    const second = 1000;
+    const minute = 60 * second;
     const hour = 60 * minute;
     const day = 24 * hour;
 
-    if (Math.abs(diff) < minute) {
+    // Show "just now" only for entries less than 1 second old
+    if (Math.abs(diff) < second) {
         return 'just now';
     }
+    
+    // Show seconds for entries less than 1 minute old
+    if (Math.abs(diff) < minute) {
+        const seconds = Math.floor(diff / second);
+        if (seconds === 1) {
+            return '1 second ago';
+        }
+        return `${seconds} seconds ago`;
+    }
+    
     if (Math.abs(diff) < hour) {
         const mins = Math.round(diff / minute);
         return `${Math.abs(mins)} min${Math.abs(mins) === 1 ? '' : 's'} ${mins >= 0 ? 'ago' : 'from now'}`;

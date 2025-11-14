@@ -6097,6 +6097,12 @@ function startTokenActivityStream(mint) {
     }, 60000); // Reduced to 60 seconds since WebSocket provides real-time updates
 }
 
+/**
+ * Fetch trade feed from Pump.fun API
+ * Note: Browser console may show "Fetch failed loading" errors for failed requests.
+ * These are expected when Pump.fun APIs are down or return 404/530, and are handled gracefully.
+ * The application continues to work even when these APIs fail.
+ */
 async function fetchPumpFunTradeFeed(mint, limit = 20) {
     if (!mint) {
         return [];

@@ -5451,10 +5451,11 @@ function updateTokenMetrics({
     solPrice = null,
     source = ''
 } = {}) {
-    // Debug: Check if we're in the token detail page
+    // Early return if token detail page is not visible
     const tokenDetailPage = document.getElementById('token-detail-page');
     if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
-        console.warn('updateTokenMetrics called but token-detail-page is hidden or not found');
+        // Silently return - this is expected when navigating away from the page
+        return;
     }
     
     const formatMaybeSol = (value) => (value !== null ? formatSol(value) : '—');
@@ -6233,6 +6234,13 @@ function startMetricsRefresh(mint, solPrice = null) {
     // Refresh every 1 second for maximum responsiveness
     // Uses intelligent caching to avoid rate limits
     tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
+        // Check if token detail page is visible
+        const tokenDetailPage = document.getElementById('token-detail-page');
+        if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
+            stopMetricsRefresh();
+            return;
+        }
+        
         // Only refresh if we're still on the token detail page for this mint
         if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
             stopMetricsRefresh();

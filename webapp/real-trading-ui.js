@@ -4660,7 +4660,8 @@ const tokenDetailViewState = {
     loading: false,
     lastRuntime: null,
     holdingsSource: 'jito',
-    activityIntervalId: null
+    activityIntervalId: null,
+    currentActivity: [] // Store current activity feed for WebSocket updates
 };
 
 let archivedImportedTokens = new Set();

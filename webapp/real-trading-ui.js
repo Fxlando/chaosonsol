@@ -3941,9 +3941,13 @@ function renderFeeHistory(history = []) {
     }
 
     const rows = history.slice(0, 25).map(entry => {
+        const isCreatorFee = entry.category === 'creator';
         const successful = Number(entry.successful) || 0;
-        const processed = Number(entry.walletsProcessed) || entry.walletIds?.length || 0;
-        const amount = Number(entry.totalCollected) || 0;
+        const processed = isCreatorFee 
+            ? (Number(entry.tokensProcessed) || Number(entry.walletsProcessed) || 0)
+            : (Number(entry.walletsProcessed) || entry.walletIds?.length || 0);
+        const amount = isCreatorFee ? null : (Number(entry.totalCollected) || 0);
+        const source = isCreatorFee ? 'Tokens' : 'Wallets';
 
         const statusClass = successful === processed
             ? 'text-green-400'
@@ -3955,8 +3959,8 @@ function renderFeeHistory(history = []) {
             <tr class="border-b border-neutral-800 hover:bg-neutral-800/40 transition">
                 <td class="p-4 text-sm text-gray-300">${formatTimestamp(entry.timestamp)}</td>
                 <td class="p-4 text-sm text-gray-300">${getFeeCategoryLabel(entry.category)}</td>
-                <td class="p-4 text-sm font-mono text-purple-200">${amount.toFixed(4)} SOL</td>
-                <td class="p-4 text-sm text-gray-300">${processed}</td>
+                <td class="p-4 text-sm font-mono ${isCreatorFee ? 'text-amber-200' : 'text-purple-200'}">${isCreatorFee ? 'N/A' : `${amount.toFixed(4)} SOL`}</td>
+                <td class="p-4 text-sm text-gray-300">${source}: ${processed}</td>
                 <td class="p-4 text-sm font-mono ${statusClass}">${successful}/${processed}</td>
             </tr>
         `;
@@ -3986,6 +3990,8 @@ function getFeeCategoryLabel(category) {
             return 'Trading';
         case 'rent':
             return 'Rent';
+        case 'creator':
+            return 'Creator Fees';
         case 'custom':
             return 'Custom';
         case 'all':
@@ -4058,8 +4064,11 @@ function updateAutoCollectLabel() {
         label.className = 'text-sm font-mono text-gray-400';
     }
 }
-// Collect all fees
+// Collect all fees (trading + rent, optionally creator fees)
 async function collectAllFees(options = {}) {
+    const includeCreatorFees = options.includeCreatorFees ?? true; // Default to true
+    
+    // Collect wallet fees (trading + rent) first
     initializeMultiWallet();
     
     if (!solanaIntegration.wallets || solanaIntegration.wallets.length === 0) {
@@ -4084,40 +4093,84 @@ async function collectAllFees(options = {}) {
     }
     if (!targetWallet) return;
     
-    // Confirm
+    // Build confirmation message
     const walletCount = config.walletIds ? config.walletIds.length : solanaIntegration.wallets.length;
-    const confirm = window.confirm(
-        config.confirmMessage
-            || `Collect SOL from ${walletCount} wallet${walletCount === 1 ? '' : 's'} to ${targetWallet}?\n\nThis will transfer all available SOL (minus rent) to the target wallet.`
-    );
+    let confirmMsg = `Collect fees from ${walletCount} wallet${walletCount === 1 ? '' : 's'} to ${targetWallet}?`;
     
+    if (includeCreatorFees) {
+        const importedRecords = Array.from(tokenRegistry.imported.values());
+        const launchedTokens = importedRecords.filter(record => {
+            const isDraft = record.type === 'draft' || !record.mint;
+            return !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+        });
+        if (launchedTokens.length > 0) {
+            confirmMsg += `\n\nThis will collect:\n- Trading & Rent fees from wallets\n- Creator fees from ${launchedTokens.length} token(s)`;
+        } else {
+            confirmMsg += `\n\nThis will collect Trading & Rent fees from wallets.`;
+        }
+    } else {
+        confirmMsg += `\n\nThis will transfer all available SOL (minus rent) to the target wallet.`;
+    }
+    
+    const confirm = window.confirm(config.confirmMessage || confirmMsg);
     if (!confirm) return;
     
-    addConsoleLog(`💎 Starting fee collection (${config.category})...`, 'info');
+    addConsoleLog(`💎 Starting fee collection (${config.category}${includeCreatorFees ? ' + creator fees' : ''})...`, 'info');
     setCollectFeesLoading(true);
     
+    const results = {
+        walletFees: null,
+        creatorFees: null
+    };
+    
     try {
-        const result = await multiWalletManager.collectFees(targetWallet, {
+        // Collect wallet fees (trading + rent)
+        const walletResult = await multiWalletManager.collectFees(targetWallet, {
             walletIds: config.walletIds,
             category: config.category
         });
         window.__reclaimRentConfig = null;
+        results.walletFees = walletResult;
         
-        if (result.success) {
-            addConsoleLog(`✅ Fee collection complete!`, 'success');
-            addConsoleLog(`   Total collected: ${result.totalCollected.toFixed(4)} SOL`, 'success');
-            addConsoleLog(`   Wallets processed: ${result.walletsProcessed}`, 'info');
-            addConsoleLog(`   Successful: ${result.successful}`, 'info');
-            
-            alert(`✅ Collected ${result.totalCollected.toFixed(4)} SOL from ${result.successful} wallets!`);
-            
-            // Refresh wallets
-            await loadRealData();
-            await refreshCollectFeesView();
+        if (walletResult.success) {
+            addConsoleLog(`✅ Wallet fee collection complete!`, 'success');
+            addConsoleLog(`   Total collected: ${walletResult.totalCollected.toFixed(4)} SOL`, 'success');
+            addConsoleLog(`   Wallets processed: ${walletResult.walletsProcessed}`, 'info');
+            addConsoleLog(`   Successful: ${walletResult.successful}`, 'info');
         } else {
-            addConsoleLog(`❌ Fee collection failed: ${result.error}`, 'error');
-            alert(`Fee collection failed: ${result.error}`);
+            addConsoleLog(`❌ Wallet fee collection failed: ${walletResult.error}`, 'error');
         }
+        
+        // Collect creator fees if requested
+        if (includeCreatorFees) {
+            try {
+                await collectAllCreatorFees({ skipConfirm: true, skipRefresh: true });
+                results.creatorFees = { success: true };
+            } catch (error) {
+                addConsoleLog(`⚠️ Creator fee collection failed: ${error.message}`, 'warning');
+                results.creatorFees = { success: false, error: error.message };
+            }
+        }
+        
+        // Show summary
+        const walletSuccess = results.walletFees?.success;
+        const creatorSuccess = results.creatorFees?.success !== false;
+        const walletAmount = results.walletFees?.totalCollected || 0;
+        
+        if (walletSuccess) {
+            let summary = `✅ Collected ${walletAmount.toFixed(4)} SOL from ${results.walletFees.successful} wallets!`;
+            if (includeCreatorFees) {
+                summary += `\n${creatorSuccess ? '✅' : '⚠️'} Creator fees: ${creatorSuccess ? 'Collected' : 'Failed'}`;
+            }
+            alert(summary);
+        } else {
+            alert(`Fee collection failed: ${results.walletFees?.error || 'Unknown error'}`);
+        }
+        
+        // Refresh wallets and view
+        await loadRealData();
+        await refreshCollectFeesView();
+        
     } catch (error) {
         window.__reclaimRentConfig = null;
         console.error('Fee collection threw error:', error);
@@ -4261,7 +4314,7 @@ async function collectCreatorFees(tokenMint = null, options = {}) {
 }
 
 // Collect all creator fees from all launched tokens
-async function collectAllCreatorFees() {
+async function collectAllCreatorFees(options = {}) {
     // Get all launched tokens
     const importedRecords = Array.from(tokenRegistry.imported.values());
     const launchedTokens = importedRecords.filter(record => {
@@ -4300,24 +4353,26 @@ async function collectAllCreatorFees() {
         apiKey = userApiKey.trim();
     }
 
-    // Show confirmation dialog
-    const confirmMessage = `Collect Creator Fees from All Tokens\n\n` +
-        `Tokens: ${launchedTokens.length} launched token(s)\n` +
-        `Priority Fee: ${priorityFee} SOL\n` +
-        `Pool: ${pool}\n\n` +
-        `This will claim all available creator fees from Pump.fun for all your launched tokens.\n\n` +
-        `Continue?`;
+    // Show confirmation dialog (unless skipped)
+    if (!options.skipConfirm) {
+        const confirmMessage = `Collect Creator Fees from All Tokens\n\n` +
+            `Tokens: ${launchedTokens.length} launched token(s)\n` +
+            `Priority Fee: ${priorityFee} SOL\n` +
+            `Pool: ${pool}\n\n` +
+            `This will claim all available creator fees from Pump.fun for all your launched tokens.\n\n` +
+            `Continue?`;
 
-    if (!window.confirm(confirmMessage)) {
-        addConsoleLog('Creator fee collection cancelled.', 'info');
-        return;
+        if (!window.confirm(confirmMessage)) {
+            addConsoleLog('Creator fee collection cancelled.', 'info');
+            return;
+        }
     }
 
     addConsoleLog(`💎 Collecting creator fees from ${launchedTokens.length} token(s)...`, 'info');
 
     let successCount = 0;
     let failCount = 0;
-    const results = [];
+    const collectionResults = [];
 
     // For pump.fun, we can collect all at once (no mint needed)
     // For meteora-dbc, we need to collect per token
@@ -4349,16 +4404,16 @@ async function collectAllCreatorFees() {
                 successCount = launchedTokens.length;
                 addConsoleLog(`✅ Creator fees collected successfully for all tokens!`, 'success');
                 addConsoleLog(`   Transaction: https://solscan.io/tx/${signature}`, 'info');
-                results.push({ success: true, signature, tokens: launchedTokens.length });
+                collectionResults.push({ success: true, signature, tokens: launchedTokens.length });
             } else {
                 addConsoleLog(`✅ Creator fee collection request submitted.`, 'success');
-                results.push({ success: true, response: data, tokens: launchedTokens.length });
+                collectionResults.push({ success: true, response: data, tokens: launchedTokens.length });
             }
         } catch (error) {
             failCount = launchedTokens.length;
             console.error('Creator fee collection error:', error);
             addConsoleLog(`❌ Failed to collect creator fees: ${error.message}`, 'error');
-            results.push({ success: false, error: error.message, tokens: launchedTokens.length });
+            collectionResults.push({ success: false, error: error.message, tokens: launchedTokens.length });
         }
     } else {
         // Collect per token for meteora-dbc
@@ -4366,10 +4421,10 @@ async function collectAllCreatorFees() {
             try {
                 await collectCreatorFees(token.mint, { apiKey, skipConfirm: true });
                 successCount++;
-                results.push({ success: true, mint: token.mint });
+                collectionResults.push({ success: true, mint: token.mint });
             } catch (error) {
                 failCount++;
-                results.push({ success: false, mint: token.mint, error: error.message });
+                collectionResults.push({ success: false, mint: token.mint, error: error.message });
             }
         }
     }
@@ -4380,11 +4435,33 @@ async function collectAllCreatorFees() {
         `❌ Failed: ${failCount}\n\n` +
         `${successCount > 0 ? 'Some fees were collected successfully!' : 'All collections failed.'}`;
 
-    alert(summary);
+    if (!options.skipConfirm) {
+        alert(summary);
+    }
     addConsoleLog(`📊 Collection summary: ${successCount} success, ${failCount} failed`, successCount > 0 ? 'success' : 'error');
 
-    // Refresh the view
-    await refreshCollectFeesView();
+    // Record in fee history
+    if (multiWalletManager && multiWalletManager.feeCollectionHistory) {
+        const historyEntry = {
+            id: `creator-fee-${Date.now()}`,
+            timestamp: Date.now(),
+            totalCollected: 0, // Creator fees aren't tracked as SOL amount
+            walletsProcessed: launchedTokens.length,
+            successful: successCount,
+            category: 'creator',
+            source: 'tokens',
+            tokensProcessed: launchedTokens.length,
+            tokensSuccessful: successCount,
+            results: collectionResults
+        };
+        multiWalletManager.feeCollectionHistory.push(historyEntry);
+        multiWalletManager.saveFeeHistory();
+    }
+
+    // Refresh the view (unless skipped)
+    if (!options.skipRefresh) {
+        await refreshCollectFeesView();
+    }
 }
 
 // Collect rent fees

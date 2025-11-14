@@ -1038,6 +1038,24 @@ function switchView(viewName) {
         stopInstantTradingRefresh();
     }
 
+    if (viewName === 'token-detail') {
+        // Ensure token detail data is loaded when navigating to this view
+        if (tokenRegistry.current && tokenRegistry.current.mint) {
+            const currentRecord = tokenRegistry.imported.get(tokenRegistry.current.mint) || tokenRegistry.current;
+            if (currentRecord) {
+                console.log('Loading token detail data for:', currentRecord.mint);
+                loadLiveTokenDetail(currentRecord).catch(error => {
+                    console.error('Failed to load token detail data:', error);
+                    notify(`Unable to load token metrics: ${error.message || error}`, 'error');
+                });
+            } else {
+                console.warn('Token detail view opened but no token record found');
+            }
+        } else {
+            console.warn('Token detail view opened but no current token set');
+        }
+    }
+
     if (viewName === 'collect-fees') {
         initializeCollectFeesView();
         refreshCollectFeesView().catch(error => {
@@ -5367,6 +5385,12 @@ function updateTokenMetrics({
     solPrice = null,
     source = ''
 } = {}) {
+    // Debug: Check if we're in the token detail page
+    const tokenDetailPage = document.getElementById('token-detail-page');
+    if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
+        console.warn('updateTokenMetrics called but token-detail-page is hidden or not found');
+    }
+    
     const formatMaybeSol = (value) => (value !== null ? formatSol(value) : '—');
     const formatMaybeUsd = (value) => (value !== null ? formatUSD(value) : '—');
 
@@ -5464,6 +5488,26 @@ function updateTokenMetrics({
             ? `${Math.max(0, Math.min(100, bondingPercent))}%`
             : '0%';
         bondingBar.style.width = width;
+    }
+    
+    // Debug: Log which elements were found/updated
+    const allMetricIds = [
+        'metric-profit-loss', 'metric-profit-loss-detail',
+        'metric-amount-invested', 'metric-amount-invested-detail',
+        'metric-token-holdings', 'metric-token-holdings-detail',
+        'metric-holdings-value', 'metric-holdings-value-detail',
+        'metric-amount-sold', 'metric-amount-sold-detail',
+        'metric-price-per-token', 'metric-price-per-token-detail',
+        'metric-market-cap', 'metric-market-cap-detail',
+        'metric-bonding-percent', 'metric-bonding-bar'
+    ];
+    const foundElements = allMetricIds.filter(id => getElement(id) !== null);
+    const missingElements = allMetricIds.filter(id => getElement(id) === null);
+    if (missingElements.length > 0) {
+        console.warn('Missing metric elements:', missingElements);
+    }
+    if (foundElements.length > 0) {
+        console.log(`✅ Updated ${foundElements.length} metric elements`);
     }
 }
 
@@ -6888,6 +6932,22 @@ async function loadLiveTokenDetail(record) {
             profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
         }
 
+        // Log data for debugging
+        console.log('Token metrics data:', {
+            priceSol,
+            priceUsd,
+            marketCapUsd,
+            bondingPercent,
+            totalTokenHoldings: holdingsSummary.totalTokenBalance,
+            holdingsValueSol,
+            holdingsValueUsd,
+            amountInvestedSol,
+            amountSoldSol,
+            profitLossSol,
+            solPrice,
+            source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')
+        });
+
         updateTokenMetrics({
             priceSol,
             priceUsd,
@@ -6917,10 +6977,29 @@ async function loadLiveTokenDetail(record) {
 
         tokenDetailViewState.lastRuntime = Date.now();
         updateTokenLastRuntime(tokenDetailViewState.lastRuntime);
+        
+        console.log('✅ Token detail data loaded successfully');
     } catch (error) {
         console.error('Failed to load live token data:', error);
+        console.error('Error stack:', error.stack);
         notify(`Unable to load live token dashboard: ${error.message || error}`, 'error');
         resetHoldingsTable({ message: 'Live holdings unavailable. Try reloading or check RPC connection.' });
+        
+        // Still try to update metrics with whatever data we have (nulls)
+        updateTokenMetrics({
+            priceSol: null,
+            priceUsd: null,
+            marketCapUsd: null,
+            bondingPercent: null,
+            totalTokenHoldings: null,
+            holdingsValueSol: null,
+            holdingsValueUsd: null,
+            amountInvestedSol: safeNumber(record.initialBuyAmount),
+            amountSoldSol: null,
+            profitLossSol: null,
+            solPrice: null,
+            source: ''
+        });
     } finally {
         tokenDetailViewState.loading = false;
     }

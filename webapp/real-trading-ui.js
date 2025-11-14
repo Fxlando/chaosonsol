@@ -5184,12 +5184,20 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
         return;
     }
 
-    if (!Array.isArray(holdings) || holdings.length === 0) {
+    // Filter out holdings with zero or null token balance
+    const validHoldings = holdings.filter(h => 
+        h.tokenBalance !== null && 
+        h.tokenBalance !== undefined && 
+        Number.isFinite(h.tokenBalance) && 
+        h.tokenBalance > 0
+    );
+    
+    if (!Array.isArray(holdings) || validHoldings.length === 0) {
         resetHoldingsTable({ message: 'No token holdings detected across managed wallets.' });
         return;
     }
 
-    const rows = holdings
+    const rows = validHoldings
         .map((holding) => {
             const solBalanceLabel =
                 holding.solBalance !== null && holding.solBalance !== undefined
@@ -5677,8 +5685,49 @@ async function fetchSolBalanceViaConnection(connection, walletAddress) {
 }
 async function fetchWalletHoldingsForMint(mint, { priceSol = null, source = 'jito' } = {}) {
     const connection = getSolanaConnection();
-    const wallets = getKnownWallets();
+    
+    // Try to get wallets from multiple sources
+    let wallets = getKnownWallets();
+    
+    // If no wallets found, try to fetch from backend API
+    if (wallets.length === 0 && window.apiClient && typeof window.apiClient.getAllWallets === 'function') {
+        try {
+            await ensureApiClientReady();
+            const response = await window.apiClient.getAllWallets();
+            if (response?.success && Array.isArray(response.wallets)) {
+                wallets = response.wallets.map(w => ({
+                    id: w.id || w.address || w.publicKey,
+                    address: w.address || w.publicKey,
+                    name: w.name || '',
+                    balance: w.balance || null,
+                    tags: w.tags || []
+                }));
+            }
+        } catch (error) {
+            console.warn('Failed to fetch wallets from backend API:', error);
+        }
+    }
+    
+    // Also try to get wallets from walletOperations if available
+    if (wallets.length === 0 && typeof window.walletOperations?.getWallets === 'function') {
+        try {
+            const opsWallets = window.walletOperations.getWallets();
+            if (Array.isArray(opsWallets) && opsWallets.length > 0) {
+                wallets = opsWallets.map(w => ({
+                    id: w.id || w.address || w.publicKey,
+                    address: w.address || w.publicKey || w.pubkey,
+                    name: w.name || '',
+                    balance: w.balance || null,
+                    tags: w.tags || []
+                }));
+            }
+        } catch (error) {
+            console.warn('Failed to get wallets from walletOperations:', error);
+        }
+    }
+    
     if (!connection || wallets.length === 0) {
+        console.warn('No wallets available for holdings check. Connection:', !!connection, 'Wallets:', wallets.length);
         return { holdings: [], summary: { totalTokenBalance: 0, totalHoldingsSol: 0 } };
     }
 

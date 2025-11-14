@@ -1064,6 +1064,60 @@
             
             <div class="flex-1 overflow-auto p-6">
                 <div class="max-w-2xl">
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-white mb-3">💰 Funding Wallet (Source)</h3>
+                        <p class="text-xs text-gray-400 mb-4">The wallet that contains the SOL to send to receiving wallets.</p>
+                        
+                        <div class="space-y-2 mb-3">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="fund-source-type" value="address" checked class="text-purple-600" />
+                                <span class="text-sm">Wallet Address</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="fund-source-type" value="private-key" class="text-purple-600" />
+                                <span class="text-sm">Private Key</span>
+                            </label>
+                        </div>
+                        <div id="fund-address-wrapper">
+                            <input
+                                type="text"
+                                id="fund-wallet-address"
+                                placeholder="Enter funding wallet address (e.g., 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The wallet address containing the SOL. Must be in your wallet list.</p>
+                        </div>
+                        <div id="fund-private-key-wrapper" class="hidden">
+                            <input
+                                type="text"
+                                id="fund-private-key"
+                                placeholder="Enter private key (base58 or array format)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
+                            />
+                            <p class="text-xs text-gray-500">The private key of the wallet containing the SOL.</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-sm font-semibold text-white mb-3">📥 Receiving Wallets (Destination)</h3>
+                        <p class="text-xs text-gray-400 mb-4">Select one or more wallets from the table to receive funding.</p>
+                        
+                        <div class="bg-neutral-800/50 border border-neutral-700 rounded-lg p-4">
+                            <div id="fund-selected-wallets-list" class="space-y-2 max-h-64 overflow-y-auto">
+                                <p class="text-xs text-gray-400">Select wallets from the table above to fund them.</p>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-neutral-700">
+                                <button 
+                                    type="button"
+                                    onclick="navigateToPage('wallets')"
+                                    class="text-xs text-purple-400 hover:text-purple-300 transition"
+                                >
+                                    ← Go to Wallets table to select wallets
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="grid grid-cols-2 gap-4 mb-6">
                         <div id="fund-standard-mode" class="border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition" onclick="selectFundMode('standard')">
                             <h3 class="font-semibold mb-1">Standard Mode</h3>
@@ -1076,17 +1130,6 @@
                             </div>
                             <p class="text-xs text-purple-300">Avoid bubble maps detection.</p>
                         </div>
-                    </div>
-                    
-                    <div class="mb-6">
-                        <label class="block mb-2 text-sm font-medium">Funding Wallet Private Key</label>
-                        <input
-                            type="text"
-                            id="fund-private-key"
-                            value="2P9FUckSohxUUDGr9Y5QMcFvYVycQZn+WxXpeU3sDuKyADDvXDenXNeF"
-                            class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600 mb-2"
-                        />
-                        <p class="text-xs text-gray-500">The private key of the wallet containing the SOL which will be used to fund the wallets.</p>
                     </div>
                     
                     <div class="mb-6">

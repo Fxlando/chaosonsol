@@ -1010,6 +1010,12 @@ function switchView(viewName) {
         if (countElement) {
             countElement.textContent = selectedCount;
         }
+        
+        // Update fund selected wallets list and setup toggles
+        if (viewName === 'fund') {
+            updateFundSelectedWallets();
+            setupFundSourceToggle();
+        }
     }
 
     // Re-initialize Lucide icons for the new view
@@ -2898,6 +2904,54 @@ async function executeLaunchToken() {
         }
 
         openLaunchLinks(launchResponse.tokenMint);
+
+        // Execute blueprint if one was applied
+        if (launchConfig.appliedBlueprint?.id) {
+            try {
+                addConsoleLog(`🔄 Executing blueprint for launched token...`, 'info');
+                
+                // Refresh blueprint list to get latest data
+                await blueprintService.fetchList(true);
+                
+                const blueprint = blueprintService.getById(launchConfig.appliedBlueprint.id);
+                if (blueprint) {
+                    // Update blueprint settings with the new token mint
+                    const updatedBlueprint = {
+                        ...blueprint,
+                        settings: {
+                            ...blueprint.settings,
+                            tokenMint: launchResponse.tokenMint
+                        }
+                    };
+                    
+                    // Update the blueprint in the store with the new token mint
+                    try {
+                        const updatePayload = buildBlueprintApiPayload(updatedBlueprint);
+                        await blueprintService.update(blueprint.id, updatePayload);
+                    } catch (updateError) {
+                        console.warn('Failed to update blueprint token mint, executing with current settings:', updateError);
+                    }
+                    
+                    // Execute the blueprint
+                    addConsoleLog(`🚀 Starting blueprint "${blueprint.name}" for token ${launchResponse.tokenMint}...`, 'info');
+                    const run = await blueprintService.execute(blueprint.id);
+                    
+                    if (run) {
+                        notify(`Blueprint "${blueprint.name}" started successfully!`, 'success');
+                        addConsoleLog(`✅ Blueprint execution started (Run ID: ${run.id})`, 'success');
+                    } else {
+                        throw new Error('Blueprint execution returned no run ID');
+                    }
+                } else {
+                    addConsoleLog(`⚠️ Blueprint ${launchConfig.appliedBlueprint.id} not found`, 'warning');
+                }
+            } catch (blueprintError) {
+                console.error('Failed to execute blueprint after launch:', blueprintError);
+                addConsoleLog(`❌ Blueprint execution failed: ${blueprintError.message}`, 'error');
+                notify(`Blueprint execution failed: ${blueprintError.message}`, 'warning');
+                // Don't fail the entire launch if blueprint execution fails
+            }
+        }
 
         try {
             await loadCreatorWallets();
@@ -7687,13 +7741,24 @@ const blueprintService = (() => {
     const getById = (blueprintId) =>
         state.list.find((entry) => entry.id === blueprintId) || null;
 
+    const update = async (blueprintId, payload) => {
+        const response = await request(`/blueprints/${blueprintId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        await fetchList(true);
+        return response.blueprint;
+    };
+
     return {
         state,
         fetchList,
         create,
         remove,
         execute,
+        update,
         getById,
+        request, // Expose request method for direct API calls
         markApplied: async (blueprintId) => {
             await request(`/blueprints/${blueprintId}/applied`, {
                 method: 'POST'
@@ -8628,6 +8693,87 @@ registerGlobalHandler('selectFundMode', (mode) => {
     notify(`Funding mode set to ${mode.toUpperCase()}`, 'info');
 });
 
+// Setup fund source type toggle
+function setupFundSourceToggle() {
+    const radios = document.querySelectorAll('input[name="fund-source-type"]');
+    const addressWrapper = document.getElementById('fund-address-wrapper');
+    const privateKeyWrapper = document.getElementById('fund-private-key-wrapper');
+
+    const toggle = () => {
+        const selected = document.querySelector('input[name="fund-source-type"]:checked');
+        if (selected && selected.value === 'private-key') {
+            if (addressWrapper) addressWrapper.classList.add('hidden');
+            if (privateKeyWrapper) privateKeyWrapper.classList.remove('hidden');
+        } else {
+            if (addressWrapper) addressWrapper.classList.remove('hidden');
+            if (privateKeyWrapper) privateKeyWrapper.classList.add('hidden');
+        }
+    };
+
+    radios.forEach(radio => {
+        radio.addEventListener('change', toggle);
+    });
+
+    toggle();
+}
+
+// Update fund selected wallets list
+function updateFundSelectedWallets() {
+    const container = document.getElementById('fund-selected-wallets-list');
+    if (!container) return;
+
+    const walletIds = getSelectedWalletIds();
+    if (walletIds.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400">Select wallets from the table to fund them.</p>';
+        return;
+    }
+
+    const wallets = typeof window.walletOperations?.getWallets === 'function' 
+        ? window.walletOperations.getWallets()
+        : [];
+
+    const selectedWallets = walletIds.map(walletId => {
+        return wallets.find(w => {
+            const id = w.id || w.address || w.publicKey || w.pubkey;
+            return id === walletId;
+        });
+    }).filter(Boolean);
+
+    if (selectedWallets.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400">Selected wallets not found. Please refresh.</p>';
+        return;
+    }
+
+    container.innerHTML = selectedWallets.map((wallet, index) => {
+        const address = wallet.address || wallet.publicKey || wallet.pubkey || 'Unknown';
+        const name = wallet.name || 'Unnamed';
+        const balance = typeof wallet.balance === 'number' ? wallet.balance.toFixed(4) : '0.0000';
+        const truncated = address.length > 20 ? `${address.substring(0, 10)}...${address.substring(address.length - 8)}` : address;
+        const walletId = wallet.id || wallet.address || wallet.publicKey || wallet.pubkey;
+        return `
+            <div class="flex items-center justify-between p-3 bg-neutral-900 rounded border border-neutral-800 hover:border-purple-500/50 transition">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <div class="flex-shrink-0 w-6 h-6 rounded-full bg-purple-600/20 flex items-center justify-center text-xs font-semibold text-purple-300">
+                        ${index + 1}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs font-medium text-white truncate">${escapeHtml(name)}</div>
+                        <div class="text-xs text-gray-400 font-mono truncate" title="${address}">${truncated}</div>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-300 ml-2 flex-shrink-0">${balance} SOL</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Call setup on page load
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setupFundSourceToggle();
+    });
+}
+
 registerGlobalHandler('executeFundWallets', async () => {
     const button = document.querySelector('#fund-page button[onclick="executeFundWallets()"]');
     try {
@@ -8659,78 +8805,94 @@ registerGlobalHandler('executeFundWallets', async () => {
             setButtonLoading(button, true, 'Funding...');
         }
 
-        // Get creator wallet for funding source
-        let creatorWallet = null;
-        let creatorPrivateKey = null;
+        // Get funding source (address or private key)
+        const sourceType = document.querySelector('input[name="fund-source-type"]:checked')?.value || 'address';
+        let fundingWallet = null;
+        let fundingPrivateKey = null;
 
-        // Try to get from creatorWalletState (from real-trading-ui)
-        if (typeof creatorWalletState !== 'undefined' && creatorWalletState.address) {
-            creatorWallet = {
-                address: creatorWalletState.address,
-                publicKey: creatorWalletState.address,
-                id: creatorWalletState.address
-            };
-            // Try to get private key from state if available
-            if (creatorWalletState.privateKey) {
-                creatorPrivateKey = creatorWalletState.privateKey;
+        if (sourceType === 'private-key') {
+            // Use private key input
+            const privateKeyInput = document.getElementById('fund-private-key');
+            if (!privateKeyInput || !privateKeyInput.value.trim()) {
+                throw new Error('Enter a funding wallet private key.');
             }
-        }
+            fundingPrivateKey = privateKeyInput.value.trim();
+        } else {
+            // Use wallet address - find wallet in list
+            const addressInput = document.getElementById('fund-wallet-address');
+            if (!addressInput || !addressInput.value.trim()) {
+                throw new Error('Enter a funding wallet address.');
+            }
+            const fundingAddress = addressInput.value.trim();
 
-        // If not found, try to get from wallet operations
-        if (!creatorWallet && typeof window.walletOperations?.getCreatorWallet === 'function') {
-            creatorWallet = window.walletOperations.getCreatorWallet();
-        }
-
-        if (!creatorWallet) {
-            throw new Error('Creator wallet not set. Please set a creator wallet first in Settings or via wallet operations.');
-        }
-
-        // Get creator wallet private key
-        if (!creatorPrivateKey) {
-            creatorPrivateKey = creatorWallet.privateKey || creatorWallet.privateKeyArray;
-        }
-        
-        if (!creatorPrivateKey && window.apiClient) {
+            // Validate address format
             try {
-                const exportResult = await window.apiClient.request('/wallets/export', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        walletIds: [creatorWallet.id || creatorWallet.address || creatorWallet.publicKey],
-                        includePrivateKey: true
-                    })
-                });
-                
-                if (exportResult.success && exportResult.wallets && exportResult.wallets[0]) {
-                    creatorPrivateKey = exportResult.wallets[0].privateKeyArray || exportResult.wallets[0].privateKey;
+                if (window.solanaWeb3 && window.solanaWeb3.PublicKey) {
+                    new window.solanaWeb3.PublicKey(fundingAddress);
                 }
-            } catch (exportError) {
-                console.warn('Failed to fetch creator wallet private key:', exportError);
+            } catch (error) {
+                throw new Error('Invalid wallet address format. Please check and try again.');
             }
-        }
 
-        if (!creatorPrivateKey) {
-            throw new Error('Creator wallet private key not available. Please re-import the creator wallet.');
+            // Find wallet in wallet list
+            const wallets = typeof window.walletOperations?.getWallets === 'function' 
+                ? window.walletOperations.getWallets()
+                : [];
+
+            fundingWallet = wallets.find(w => {
+                const id = w.id || w.address || w.publicKey || w.pubkey;
+                return id === fundingAddress;
+            });
+
+            if (!fundingWallet) {
+                throw new Error('Funding wallet not found in your wallet list. Please import it first or use private key option.');
+            }
+
+            // Get private key from wallet
+            fundingPrivateKey = fundingWallet.privateKey || fundingWallet.privateKeyArray;
+            
+            if (!fundingPrivateKey && window.apiClient) {
+                try {
+                    const exportResult = await window.apiClient.request('/wallets/export', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            walletIds: [fundingAddress],
+                            includePrivateKey: true
+                        })
+                    });
+                    
+                    if (exportResult.success && exportResult.wallets && exportResult.wallets[0]) {
+                        fundingPrivateKey = exportResult.wallets[0].privateKeyArray || exportResult.wallets[0].privateKey;
+                    }
+                } catch (exportError) {
+                    console.warn('Failed to fetch funding wallet private key:', exportError);
+                }
+            }
+
+            if (!fundingPrivateKey) {
+                throw new Error('Funding wallet private key not available. Please re-import the wallet or use private key option.');
+            }
         }
 
         // Convert private key to format needed
         let privateKeyString;
-        if (Array.isArray(creatorPrivateKey)) {
-            privateKeyString = JSON.stringify(creatorPrivateKey);
-        } else if (typeof creatorPrivateKey === 'string') {
+        if (Array.isArray(fundingPrivateKey)) {
+            privateKeyString = JSON.stringify(fundingPrivateKey);
+        } else if (typeof fundingPrivateKey === 'string') {
             try {
-                JSON.parse(creatorPrivateKey);
-                privateKeyString = creatorPrivateKey;
+                JSON.parse(fundingPrivateKey);
+                privateKeyString = fundingPrivateKey;
             } catch {
                 if (window.bs58) {
-                    const decoded = window.bs58.decode(creatorPrivateKey);
+                    const decoded = window.bs58.decode(fundingPrivateKey);
                     privateKeyString = JSON.stringify(Array.from(decoded));
                 } else {
-                    privateKeyString = creatorPrivateKey;
+                    privateKeyString = fundingPrivateKey;
                 }
             }
         } else {
-            throw new Error('Invalid creator wallet private key format');
+            throw new Error('Invalid funding wallet private key format');
         }
 
         // Get wallet details
@@ -10362,7 +10524,13 @@ async function refreshVanityLaunchPerformance(force = false, tokenMints = null) 
                     entry.launchedAt = normalizeTimestamp(stats.createdTimestamp);
                 }
             } catch (error) {
-                console.warn(`Failed to refresh performance for ${entry.tokenMint}:`, error.message || error);
+                // Only log non-5xx errors as warnings (API down is expected)
+                if (!error.message || (!error.message.includes('530') && !error.message.includes('503') && !error.message.includes('502'))) {
+                    console.warn(`Failed to refresh performance for ${entry.tokenMint}:`, error.message || error);
+                } else {
+                    // Silently handle API downtime
+                    console.debug(`Pump.fun API unavailable for ${entry.tokenMint}`);
+                }
             }
         }
         persistVanityLaunchStore();
@@ -10413,6 +10581,12 @@ async function fetchTokenPerformance(tokenMint) {
         });
 
         if (!response.ok) {
+            // 530 is "Service Temporarily Unavailable" - Pump.fun API is down
+            // Don't throw for 5xx errors, just return empty stats
+            if (response.status >= 500 && response.status < 600) {
+                console.debug(`Pump.fun API temporarily unavailable (${response.status}) for ${tokenMint}`);
+                return stats; // Return empty stats object
+            }
             throw new Error(`Pump.fun coin API responded with status ${response.status}`);
         }
 
@@ -10437,6 +10611,12 @@ async function fetchTokenPerformance(tokenMint) {
             stats.priceUsd = fallbackPrice;
         }
     } catch (error) {
+        // Network errors or API down - return empty stats instead of throwing
+        if (error.message && (error.message.includes('530') || error.message.includes('503') || error.message.includes('502'))) {
+            console.debug(`Pump.fun API unavailable for ${tokenMint}: ${error.message}`);
+            return stats; // Return empty stats object
+        }
+        // Only throw for non-5xx errors (like network failures, 404, etc.)
         throw new Error(`Unable to fetch Pump.fun performance: ${error.message || error}`);
     }
 

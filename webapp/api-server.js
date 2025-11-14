@@ -936,6 +936,33 @@ register('post', '/blueprints', async (req, res) => {
   };
 });
 
+register('put', '/blueprints/:blueprintId', async (req, res) => {
+  const { blueprintId } = req.params;
+  const payload = req.body || {};
+
+  const existing = blueprintStore.getBlueprint(blueprintId);
+  if (!existing) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Blueprint not found'
+    };
+  }
+
+  // Merge existing blueprint with updates
+  const updated = blueprintStore.upsertBlueprint({
+    ...existing,
+    ...payload,
+    id: blueprintId, // Ensure ID doesn't change
+    updatedAt: Date.now()
+  });
+
+  return {
+    success: true,
+    blueprint: updated
+  };
+});
+
 register('post', '/blueprints/:blueprintId/execute', async (req, res) => {
   const { blueprintId } = req.params;
   const blueprint = blueprintStore.getBlueprint(blueprintId);

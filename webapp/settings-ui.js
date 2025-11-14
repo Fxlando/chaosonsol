@@ -21,6 +21,12 @@
         bonk: 'auto-open-bonk'
     };
 
+    const PUMPPORTAL_FIELDS = {
+        apiKey: 'pumpportal-api-key',
+        priorityFee: 'pumpportal-priority-fee',
+        pool: 'pumpportal-pool'
+    };
+
     function parseNumber(value, fallback = 0) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -42,10 +48,15 @@
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
+        });
+
+        // Populate PumpPortal settings
+        Object.entries(PUMPPORTAL_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, pumpportal[key]);
         });
 
         const quickBuy = Array.isArray(customization.quickBuyOptions) ? customization.quickBuyOptions : [];
@@ -88,9 +99,16 @@
             hideAddresses: get('hideAddresses')?.checked || false
         };
 
+        const pumpportal = {
+            apiKey: get(PUMPPORTAL_FIELDS.apiKey)?.value.trim() || '',
+            priorityFee: parseNumber(get(PUMPPORTAL_FIELDS.priorityFee)?.value, 0.000001),
+            pool: get(PUMPPORTAL_FIELDS.pool)?.value || 'pump'
+        };
+
         return {
             solana,
-            customization
+            customization,
+            pumpportal
         };
     }
 

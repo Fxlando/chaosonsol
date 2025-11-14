@@ -7718,8 +7718,8 @@ async function runBulkSellTask() {
         slippage: slippage !== null ? slippage : undefined // undefined means use default
     };
 
-    // Execute sells
-    const sellPromises = wallets.map(async (wallet) => {
+    // Helper function to sell from a wallet
+    const sellFromWallet = async (wallet) => {
         if (!bulkSellTaskConfig.running) {
             return null;
         }
@@ -7764,7 +7764,6 @@ async function runBulkSellTask() {
             }
 
             const sellAmount = tokenBalance * (sellPercentage / 100);
-
             addConsoleLog(`💸 Selling ${sellPercentage}% (${sellAmount.toFixed(6)} tokens) from ${walletName}...`, 'info');
 
             const sellResponse = await window.apiClient.sellToken(
@@ -7793,23 +7792,29 @@ async function runBulkSellTask() {
             addConsoleLog(`❌ Error selling from wallet: ${error.message}`, 'error');
             return null;
         }
-    });
+    };
 
     // Execute sells based on method
     let sellResults = [];
     if (useBundle && executor === 'jito') {
-        // For bundle mode, we might want to execute in batches or all at once
-        // For now, execute in parallel but note that true bundle requires backend support
+        // For bundle mode, execute all in parallel
+        // Note: True bundle requires backend support for Jito bundles
+        const sellPromises = wallets.map(wallet => sellFromWallet(wallet));
         sellResults = await Promise.all(sellPromises);
     } else {
         // Individual mode: execute sequentially with small delay between each
-        for (const promise of sellPromises) {
-            const result = await promise;
+        for (let i = 0; i < wallets.length; i++) {
+            if (!bulkSellTaskConfig.running) {
+                break;
+            }
+            
+            const result = await sellFromWallet(wallets[i]);
             if (result) {
                 sellResults.push(result);
             }
+            
             // Small delay between individual sells
-            if (sellPromises.indexOf(promise) < sellPromises.length - 1) {
+            if (i < wallets.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
         }

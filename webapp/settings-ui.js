@@ -27,6 +27,11 @@
         pool: 'pumpportal-pool'
     };
 
+    const SHYFT_FIELDS = {
+        enabled: 'shyft-enabled',
+        apiKey: 'shyft-api-key'
+    };
+
     function parseNumber(value, fallback = 0) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -45,10 +50,17 @@
         }
     }
 
+    function updateShyftEndpoints(apiKey) {
+        const endpointEl = document.getElementById('shyft-ws-endpoint');
+        if (endpointEl) {
+            endpointEl.textContent = apiKey || 'YOUR_KEY';
+        }
+    }
+
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {}, pumpportal = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {}, shyft = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
@@ -58,6 +70,22 @@
         Object.entries(PUMPPORTAL_FIELDS).forEach(([key, id]) => {
             setInputValue(id, pumpportal[key]);
         });
+
+        // Populate Shyft RPC settings
+        Object.entries(SHYFT_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, shyft[key]);
+        });
+
+        // Update endpoint display
+        updateShyftEndpoints(shyft.apiKey || '');
+
+        // Add event listener for API key changes
+        const shyftApiKeyInput = document.getElementById(SHYFT_FIELDS.apiKey);
+        if (shyftApiKeyInput) {
+            shyftApiKeyInput.addEventListener('input', (e) => {
+                updateShyftEndpoints(e.target.value.trim());
+            });
+        }
 
         const quickBuy = Array.isArray(customization.quickBuyOptions) ? customization.quickBuyOptions : [];
         QUICK_BUY_IDS.forEach((id, index) => setInputValue(id, quickBuy[index] ?? ''));
@@ -105,10 +133,16 @@
             pool: get(PUMPPORTAL_FIELDS.pool)?.value || 'pump'
         };
 
+        const shyft = {
+            enabled: get(SHYFT_FIELDS.enabled)?.checked || false,
+            apiKey: get(SHYFT_FIELDS.apiKey)?.value.trim() || ''
+        };
+
         return {
             solana,
             customization,
-            pumpportal
+            pumpportal,
+            shyft
         };
     }
 
@@ -120,7 +154,7 @@
         }
 
         const settingsPatch = collectSettingsFromForm();
-        const { solana, customization } = settingsPatch;
+        const { solana, customization, shyft } = settingsPatch;
 
         const rpcResult = await window.settingsManager.updateSolana(solana);
         if (!rpcResult.success) {
@@ -130,6 +164,16 @@
         }
 
         window.settingsManager.updateCustomization(customization);
+        
+        // Save Shyft settings
+        if (window.settingsManager.updateShyft) {
+            window.settingsManager.updateShyft(shyft);
+        } else {
+            // Fallback: update full settings
+            const currentSettings = window.settingsManager.getSettings();
+            currentSettings.shyft = shyft;
+            window.settingsManager.saveSettings(currentSettings);
+        }
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');

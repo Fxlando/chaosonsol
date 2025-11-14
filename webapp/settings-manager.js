@@ -113,6 +113,12 @@ class SettingsManager {
                 pool: 'pump' // 'pump' or 'meteora-dbc'
             },
 
+            // Shyft RPC Settings
+            shyft: {
+                apiKey: '',
+                enabled: false // Enable Shyft RPC for blockchain queries and WebSocket subscriptions
+            },
+
             // Trading Settings (legacy compatibility)
             trading: {
                 defaultSlippage: 1,
@@ -370,6 +376,14 @@ class SettingsManager {
         this.saveSettings();
         this.applySettings();
         console.log('✅ Customization settings updated');
+        return true;
+    }
+
+    updateShyft(config = {}) {
+        this.settings.shyft = this.deepMerge(this.settings.shyft, config);
+        this.saveSettings();
+        this.applySettings();
+        console.log('✅ Shyft RPC settings updated');
         return true;
     }
 

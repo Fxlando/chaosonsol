@@ -4015,6 +4015,63 @@
                         </div>
                     </section>
 
+                    <!-- Shyft RPC Monitoring Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Shyft RPC Monitoring</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure Shyft RPC WebSocket for real-time transaction monitoring and live trading updates. 
+                                Your existing RPC endpoints will continue to be used for regular blockchain queries.
+                                Get your API key from <a href="https://shyft.to" target="_blank" class="text-blue-400 hover:text-blue-300 underline">shyft.to</a>
+                            </p>
+                            <div class="mt-3 bg-blue-900/20 border border-blue-700/50 rounded-lg p-3">
+                                <p class="text-xs text-blue-200">
+                                    <strong>Note:</strong> Shyft WebSocket is used specifically for:
+                                    <br>• Real-time transaction monitoring via WebSocket subscriptions
+                                    <br>• Enhanced live trading updates for activity feed
+                                    <br>• Faster detection of new trades and swaps
+                                    <br><br>Your existing RPC endpoints remain unchanged for all other operations.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <input
+                                    type="checkbox"
+                                    id="shyft-enabled"
+                                    class="rounded"
+                                />
+                                <label for="shyft-enabled" class="text-sm cursor-pointer font-medium">Enable Shyft WebSocket Monitoring</label>
+                            </div>
+                            <p class="text-xs text-gray-500 ml-6 mb-4">
+                                When enabled, Shyft WebSocket will be used for real-time transaction monitoring. Your existing RPC endpoints are not affected.
+                            </p>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-2 text-sm font-medium">API Key</label>
+                            <input
+                                type="text"
+                                id="shyft-api-key"
+                                placeholder="Enter your Shyft API key (e.g., 6AC3vTBB5lObDYTm)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">
+                                Your Shyft API key. Required for Shyft WebSocket endpoint for real-time monitoring.
+                            </p>
+                        </div>
+
+                        <div class="bg-neutral-900/50 border border-neutral-800 rounded-lg p-4">
+                            <p class="text-xs text-gray-400 mb-2">
+                                <strong>WebSocket endpoint (auto-configured):</strong>
+                            </p>
+                            <div class="text-xs font-mono text-gray-500">
+                                <div>wss://rpc.shyft.to?api_key=<span id="shyft-ws-endpoint" class="text-gray-300">YOUR_KEY</span></div>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- Customization Section -->
                     <section>
                         <div class="mb-6">

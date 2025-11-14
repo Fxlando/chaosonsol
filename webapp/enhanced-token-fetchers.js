@@ -92,9 +92,9 @@ function getSolanaConnection(purpose = null) {
 }
 
 /**
- * Enhanced token price fetching with multiple fallback sources
- * Priority: On-chain (fastest, uses dedicated RPC) > Jupiter > DexScreener
- * Optimized for frequent updates without hitting rate limits
+ * Enhanced token price fetching with API Pool Manager
+ * Uses intelligent rotation: Fastest APIs first → Free APIs prioritized
+ * Supports parallel requests for fastest response
  */
 async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnChain = false } = {}) {
     // If preferOnChain is true, try on-chain first (fastest, no rate limits)
@@ -119,6 +119,67 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
         }
     }
     
+    // Use API Pool Manager if available (intelligent rotation & parallel requests)
+    if (window.apiPoolManager) {
+        try {
+            return await window.apiPoolManager.executeWithFailover('price', async (api) => {
+                switch (api.url) {
+                    case 'jupiter':
+                        const jupiterData = await fetchJupiterPrice(mintAddress);
+                        if (jupiterData && jupiterData.price) {
+                            const priceSol = jupiterData.price;
+                            const priceUsd = solPrice ? priceSol * solPrice : null;
+                            return {
+                                priceSol,
+                                priceUsd,
+                                marketCapUsd: jupiterData.marketCap || null,
+                                source: 'jupiter'
+                            };
+                        }
+                        throw new Error('Jupiter returned no price data');
+                        
+                    case 'dexscreener':
+                        const dexData = await fetchDexScreenerPrice(mintAddress);
+                        if (dexData && dexData.priceUsd) {
+                            const priceUsd = dexData.priceUsd;
+                            const priceSol = solPrice ? priceUsd / solPrice : null;
+                            return {
+                                priceSol,
+                                priceUsd,
+                                marketCapUsd: dexData.marketCap || null,
+                                source: 'dexscreener'
+                            };
+                        }
+                        throw new Error('DexScreener returned no price data');
+                        
+                    case 'onchain':
+                        const connection = getSolanaConnection('price');
+                        if (!connection) {
+                            throw new Error('No RPC connection available');
+                        }
+                        const onChainData = await calculateOnChainPrice(mintAddress);
+                        if (onChainData && onChainData.priceSol) {
+                            const priceSol = onChainData.priceSol;
+                            const priceUsd = solPrice ? priceSol * solPrice : null;
+                            return {
+                                priceSol,
+                                priceUsd,
+                                marketCapUsd: null,
+                                source: 'on-chain'
+                            };
+                        }
+                        throw new Error('On-chain calculation returned no price');
+                        
+                    default:
+                        throw new Error(`Unknown price API: ${api.url}`);
+                }
+            }, { parallel: true }); // Try fastest APIs in parallel
+        } catch (error) {
+            console.debug('API Pool Manager price fetch failed, using legacy fallback:', error.message);
+        }
+    }
+    
+    // Legacy fallback (if API Pool Manager not available)
     // Try Jupiter first (most reliable for market cap)
     try {
         const jupiterData = await fetchJupiterPrice(mintAddress);
@@ -166,8 +227,7 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
         }
     }
 
-    // Try on-chain calculation as last resort (only if we have valid RPC)
-    // Use dedicated price RPC if available
+    // Try on-chain calculation as last resort
     try {
         const connection = getSolanaConnection('price');
         if (connection) {
@@ -182,16 +242,9 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                     source: 'on-chain'
                 };
             }
-        } else {
-            console.debug('Skipping on-chain price calculation - no valid RPC connection');
         }
     } catch (error) {
-        // Only log if it's not a connection availability error
-        if (!error.message.includes('not available')) {
-            console.debug('⚠️ On-chain price calculation failed:', error.message);
-        } else {
-            console.debug('On-chain price calculation skipped:', error.message);
-        }
+        console.debug('On-chain price calculation skipped:', error.message);
     }
 
     // Log as debug instead of error - this is expected when all external APIs are down
@@ -825,12 +878,80 @@ async function fetchBirdeyeMetadata(mintAddress) {
 }
 
 /**
- * Enhanced token info fetch with comprehensive fallbacks and retry logic
- * Priority: Pump.fun API > DexScreener > Birdeye > On-chain Metaplex > On-chain basic
+ * Enhanced token info fetch with API Pool Manager
+ * Uses intelligent rotation: Fastest APIs first → Free APIs prioritized
+ * Supports parallel requests for fastest response
  */
 async function fetchPumpFunTokenDetails(mintAddress) {
     console.log('🔍 Fetching token details for:', mintAddress);
     
+    // Use API Pool Manager if available (intelligent rotation & parallel requests)
+    if (window.apiPoolManager) {
+        try {
+            return await window.apiPoolManager.executeWithFailover('metadata', async (api) => {
+                switch (api.url) {
+                    case 'pumpfun':
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
+                        
+                        const response = await fetch(
+                            `https://frontend-api.pump.fun/coins/${mintAddress}`,
+                            { 
+                                signal: controller.signal,
+                                headers: { 'Accept': 'application/json' }
+                            }
+                        );
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data && data.name) {
+                                return { ...data, success: true, source: 'pumpfun' };
+                            }
+                        }
+                        if (response.status === 530) {
+                            throw new Error('Pump.fun API temporarily unavailable (530)');
+                        }
+                        throw new Error(`Pump.fun API returned ${response.status}`);
+                        
+                    case 'dexscreener':
+                        const dexData = await fetchDexScreenerMetadata(mintAddress);
+                        if (dexData && (dexData.name || dexData.symbol)) {
+                            return { ...dexData, success: true };
+                        }
+                        throw new Error('DexScreener returned no metadata');
+                        
+                    case 'birdeye':
+                        const birdeyeData = await fetchBirdeyeMetadata(mintAddress);
+                        if (birdeyeData && (birdeyeData.name || birdeyeData.symbol)) {
+                            return { ...birdeyeData, success: true };
+                        }
+                        throw new Error('Birdeye returned no metadata');
+                        
+                    case 'onchain':
+                        const connection = getSolanaConnection();
+                        if (!connection) {
+                            throw new Error('No RPC connection available');
+                        }
+                        const metadata = await fetchOnChainMetadata(mintAddress, true);
+                        if (metadata && (metadata.name || metadata.symbol)) {
+                            return { ...metadata, success: true, source: 'on-chain-metaplex' };
+                        }
+                        // Fallback to basic info
+                        const basicInfo = await fetchOnChainMetadata(mintAddress, false);
+                        return { ...basicInfo, success: true, source: 'on-chain-basic' };
+                        
+                    default:
+                        throw new Error(`Unknown metadata API: ${api.url}`);
+                }
+            }, { parallel: true }); // Try fastest APIs in parallel
+        } catch (error) {
+            console.debug('API Pool Manager metadata fetch failed, using legacy fallback:', error.message);
+        }
+    }
+    
+    // Legacy fallback (if API Pool Manager not available)
     // Source 1: Pump.fun API (with retry)
     try {
         const pumpFunData = await retryWithBackoff(async () => {
@@ -851,12 +972,11 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                 const data = await response.json();
                 return { ...data, success: true, source: 'pumpfun' };
             }
-            // Handle Cloudflare 530 errors gracefully (service unavailable)
             if (response.status === 530) {
                 throw new Error('Pump.fun API temporarily unavailable (530)');
             }
             throw new Error(`Pump.fun API returned ${response.status}`);
-        }, 2); // 2 retries
+        }, 2);
         
         if (pumpFunData && pumpFunData.name) {
             console.log('✅ Pump.fun token details retrieved');
@@ -864,7 +984,6 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
-            // Silently handle 530 errors (expected when Pump.fun is down)
             if (error.message && error.message.includes('530')) {
                 console.debug('⚠️ Pump.fun API temporarily unavailable (530) - using fallbacks');
             } else {
@@ -898,7 +1017,6 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             return { ...birdeyeData, success: true };
         }
     } catch (error) {
-        // Silently handle network errors
         const errorMsg = error.message || '';
         if (!errorMsg.includes('ERR_NAME_NOT_RESOLVED') && 
             !errorMsg.includes('ERR_INTERNET_DISCONNECTED') &&
@@ -907,11 +1025,11 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         }
     }
     
-    // Source 4: On-chain Metaplex metadata (full metadata with name, symbol, image)
+    // Source 4: On-chain Metaplex metadata
     try {
         const connection = getSolanaConnection();
         if (connection) {
-            const metadata = await fetchOnChainMetadata(mintAddress, true); // true = full metadata
+            const metadata = await fetchOnChainMetadata(mintAddress, true);
             if (metadata && (metadata.name || metadata.symbol)) {
                 console.log('✅ Retrieved full metadata from blockchain (Metaplex)');
                 return { ...metadata, success: true, source: 'on-chain-metaplex' };
@@ -921,11 +1039,11 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         console.debug('⚠️ On-chain Metaplex metadata fetch failed:', error.message);
     }
     
-    // Source 5: On-chain basic info (mint account only)
+    // Source 5: On-chain basic info
     try {
         const connection = getSolanaConnection();
         if (connection) {
-            const basicInfo = await fetchOnChainMetadata(mintAddress, false); // false = basic only
+            const basicInfo = await fetchOnChainMetadata(mintAddress, false);
             console.log('✅ Retrieved basic info from blockchain');
             return { ...basicInfo, success: true, source: 'on-chain-basic' };
         }

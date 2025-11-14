@@ -6171,12 +6171,25 @@ function stopTokenActivityStream() {
 }
 
 // Frequent refresh for market cap and price updates
+// Optimized for maximum frequency without hitting rate limits
+let lastExternalApiCall = 0;
+const EXTERNAL_API_INTERVAL = 5000; // Call Jupiter/DexScreener every 5 seconds max
+let solPriceCache = { value: null, timestamp: 0 };
+const SOL_PRICE_CACHE_DURATION = 30000; // Cache SOL price for 30 seconds
+
 function startMetricsRefresh(mint, solPrice = null) {
     stopMetricsRefresh(); // Clear any existing interval
     
     if (!mint) return;
     
-    // Refresh every 3 seconds for fast market cap updates
+    // Initialize SOL price cache
+    if (solPrice) {
+        solPriceCache = { value: solPrice, timestamp: Date.now() };
+        tokenDetailViewState.solPrice = solPrice;
+    }
+    
+    // Refresh every 1 second for maximum responsiveness
+    // Uses intelligent caching to avoid rate limits
     tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
         // Only refresh if we're still on the token detail page for this mint
         if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
@@ -6185,32 +6198,55 @@ function startMetricsRefresh(mint, solPrice = null) {
         }
         
         try {
-            // Get fresh SOL price
-            const currentSolPrice = solPrice || tokenDetailViewState.solPrice || await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
-            if (currentSolPrice) {
-                tokenDetailViewState.solPrice = currentSolPrice;
+            // Get SOL price (cached for 30 seconds to avoid excessive API calls)
+            let currentSolPrice = solPriceCache.value;
+            const now = Date.now();
+            if (!currentSolPrice || (now - solPriceCache.timestamp) > SOL_PRICE_CACHE_DURATION) {
+                try {
+                    currentSolPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
+                    if (currentSolPrice) {
+                        solPriceCache = { value: currentSolPrice, timestamp: now };
+                        tokenDetailViewState.solPrice = currentSolPrice;
+                    }
+                } catch (error) {
+                    // Use cached value if fetch fails
+                    console.debug('SOL price fetch failed, using cache:', error.message);
+                }
             }
             
-            // Fetch fresh price and market cap data (lightweight - just price/market cap)
-            // Uses dedicated price RPC if configured in settings
-            const priceDetails = await fetchTokenPriceDetails(mint, { solPrice: currentSolPrice });
+            // Determine if we should call external APIs (Jupiter/DexScreener)
+            const shouldCallExternalApi = (now - lastExternalApiCall) >= EXTERNAL_API_INTERVAL;
             
-            if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null)) {
+            // Fetch price and market cap data
+            // Uses dedicated price RPC (on-chain) for fast updates, external APIs only periodically
+            const priceDetails = await fetchTokenPriceDetails(mint, { 
+                solPrice: currentSolPrice,
+                preferOnChain: !shouldCallExternalApi // Prefer on-chain if we just called external APIs
+            });
+            
+            if (priceDetails) {
+                // Track when we called external APIs
+                if (priceDetails.source === 'jupiter' || priceDetails.source === 'dexscreener') {
+                    lastExternalApiCall = now;
+                }
+                
                 // Update only price and market cap (preserve other metrics)
-                updateTokenMetrics({
-                    priceSol: priceDetails.priceSol,
-                    priceUsd: priceDetails.priceUsd,
-                    marketCapUsd: priceDetails.marketCapUsd,
-                    solPrice: currentSolPrice,
-                    source: priceDetails.source || ''
-                    // Don't update other fields - keep existing values
-                });
+                if (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null) {
+                    updateTokenMetrics({
+                        priceSol: priceDetails.priceSol,
+                        priceUsd: priceDetails.priceUsd,
+                        marketCapUsd: priceDetails.marketCapUsd,
+                        solPrice: currentSolPrice,
+                        source: priceDetails.source || ''
+                        // Don't update other fields - keep existing values
+                    });
+                }
             }
         } catch (error) {
             // Silently handle errors - don't spam console
-            console.debug('Metrics refresh failed:', error.message);
+            console.debug('Market cap refresh error:', error.message);
         }
-    }, 3000); // Every 3 seconds for fast updates
+    }, 1000); // Every 1 second for maximum responsiveness
 }
 
 function stopMetricsRefresh() {

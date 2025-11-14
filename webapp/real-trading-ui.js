@@ -7717,11 +7717,12 @@ function populateTokenDetailView(record) {
     }
 
     if (iconEl) {
-        if (record.image) {
-            iconEl.innerHTML = `<img src="${escapeHtml(record.image)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover rounded-full" />`;
-        } else {
-            iconEl.textContent = '🪙';
-        }
+        const pumpFunLogo = 'https://pump.fun/logo.png';
+        const hasImage = record?.image && typeof record.image === 'string' && record.image.trim().length > 0;
+        const imageUrl = hasImage ? (resolveImageUrl(record.image) || record.image) : pumpFunLogo;
+        
+        // Always use an img tag to ensure proper styling and fallback behavior
+        iconEl.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover rounded-full" loading="lazy" onerror="this.onerror=null; this.src='${pumpFunLogo}'; this.onerror=function(){this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>🪙</span>';};" />`;
     }
 
     if (statusEl) {

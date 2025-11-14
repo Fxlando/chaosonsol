@@ -7328,7 +7328,7 @@ function buildTokenRow(record) {
     const launchpadLabel = record.launchpad || (record.platform ? record.platform : isDraft ? 'Pump.fun' : 'Pump.fun');
     const rowSource = isDraft ? 'draft' : 'imported';
     const identifier = isDraft ? record.id : record.mint;
-    
+
     // Add price and market cap info if available
     const stats = record.stats || {};
     const priceInfo = stats.priceUsd ? `$${formatNumber(stats.priceUsd, { decimals: 6, compact: true })}` : null;
@@ -7404,11 +7404,11 @@ function attachTokenRowHandlers() {
     tbody.querySelectorAll('tr[data-token-id]').forEach((row) => {
         // Don't attach click handler in delete mode (checkboxes handle selection)
         if (!uiHelperState.tokenDeleteMode) {
-            row.addEventListener('click', () => {
-                const identifier = row.getAttribute('data-token-id');
-                const source = row.getAttribute('data-token-source') || 'imported';
-                viewTokenDetails(identifier, source);
-            });
+        row.addEventListener('click', () => {
+            const identifier = row.getAttribute('data-token-id');
+            const source = row.getAttribute('data-token-source') || 'imported';
+            viewTokenDetails(identifier, source);
+        });
         }
     });
 }
@@ -7560,23 +7560,46 @@ async function deleteSelectedTokens() {
     for (const identifier of selectedIds) {
         try {
             // Check if it's a draft or imported token
-            const isDraft = tokenRegistry.drafts.has(identifier);
+            // Try both the identifier and case variations
+            const isDraft = tokenRegistry.drafts.has(identifier) || 
+                           Array.from(tokenRegistry.drafts.keys()).some(key => 
+                               key.toLowerCase() === identifier.toLowerCase()
+                           );
             
             if (isDraft) {
-                // Delete from drafts
-                tokenRegistry.drafts.delete(identifier);
-                removeTokenDraft(identifier);
+                // Find the actual draft key (case-insensitive)
+                const draftKey = Array.from(tokenRegistry.drafts.keys()).find(key => 
+                    key === identifier || key.toLowerCase() === identifier.toLowerCase()
+                );
+                
+                if (draftKey) {
+                    // Delete from drafts registry
+                    tokenRegistry.drafts.delete(draftKey);
+                    // Persist drafts (removeTokenDraft calls persistTokenDrafts)
+                    removeTokenDraft(draftKey);
+                }
             } else {
-                // Delete from imported tokens
+                // Delete from imported tokens - try all case variations
                 const normalizedMint = identifier.toLowerCase();
+                const originalMint = identifier;
+                
+                // Remove from registry (try all variations)
                 tokenRegistry.imported.delete(identifier);
                 tokenRegistry.imported.delete(normalizedMint);
+                tokenRegistry.imported.delete(originalMint);
+                
+                // Also check all keys for case-insensitive match
+                const matchingKeys = Array.from(tokenRegistry.imported.keys()).filter(key => 
+                    key.toLowerCase() === normalizedMint
+                );
+                matchingKeys.forEach(key => tokenRegistry.imported.delete(key));
                 
                 // Remove from archived set
                 archivedImportedTokens.delete(identifier);
                 archivedImportedTokens.delete(normalizedMint);
+                archivedImportedTokens.delete(originalMint);
                 
-                // Remove from localStorage
+                // Remove from localStorage archived set
                 setImportedTokenArchivedState(identifier, false);
             }
             
@@ -7587,8 +7610,14 @@ async function deleteSelectedTokens() {
         }
     }
     
-    // Persist changes
+    // Persist changes - this will save the current state (without deleted tokens)
     persistImportedTokens();
+    
+    // Also persist drafts if any were deleted
+    if (selectedIds.some(id => tokenRegistry.drafts.has(id) || 
+        Array.from(tokenRegistry.drafts.keys()).some(key => key.toLowerCase() === id.toLowerCase()))) {
+        persistTokenDrafts();
+    }
     
     // Clear selections and exit delete mode
     uiHelperState.selectedTokensForDelete.clear();

@@ -869,6 +869,81 @@ function initializeEventListeners() {
     console.log('✅ Navigation listeners set up successfully');
 }
 
+// Auto-refresh for tokens page
+let tokensAutoRefreshInterval = null;
+const TOKENS_AUTO_REFRESH_INTERVAL_MS = 30000; // 30 seconds
+
+function startTokensAutoRefresh() {
+    if (tokensAutoRefreshInterval) {
+        clearInterval(tokensAutoRefreshInterval);
+    }
+    
+    tokensAutoRefreshInterval = setInterval(async () => {
+        if (rtCurrentView === 'tokens') {
+            await refreshAllLaunchedTokenStats();
+        }
+    }, TOKENS_AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopTokensAutoRefresh() {
+    if (tokensAutoRefreshInterval) {
+        clearInterval(tokensAutoRefreshInterval);
+        tokensAutoRefreshInterval = null;
+    }
+}
+
+async function refreshAllLaunchedTokenStats() {
+    const importedRecords = Array.from(tokenRegistry.imported.values());
+    const launchedTokens = importedRecords.filter(record => record.mint && record.type !== 'draft');
+    
+    if (launchedTokens.length === 0) {
+        return;
+    }
+    
+    // Refresh stats for all launched tokens
+    const refreshPromises = launchedTokens.map(async (record) => {
+        try {
+            const stats = await fetchTokenPerformance(record.mint);
+            if (stats) {
+                // Update the record with new stats
+                const existing = tokenRegistry.imported.get(record.mint) || {};
+                const updated = {
+                    ...existing,
+                    ...record,
+                    stats: {
+                        ...existing.stats,
+                        ...stats
+                    },
+                    priceUsd: stats.priceUsd || existing.priceUsd,
+                    marketCapUsd: stats.marketCapUsd || existing.marketCapUsd,
+                    volume24hUsd: stats.volume24hUsd || existing.volume24hUsd,
+                    updatedAt: Date.now()
+                };
+                
+                tokenRegistry.imported.set(record.mint, updated);
+            }
+        } catch (error) {
+            // Silently handle API errors (5xx) - API might be down
+            if (!error.message || (!error.message.includes('530') && !error.message.includes('503') && !error.message.includes('502'))) {
+                console.debug(`Failed to refresh stats for ${record.mint}:`, error.message || error);
+            }
+        }
+    });
+    
+    await Promise.all(refreshPromises);
+    
+    // Re-render the table with updated stats
+    renderTokensTable();
+    
+    // If a token detail view is open, refresh it too
+    if (tokenRegistry.current && tokenRegistry.current.mint) {
+        const currentRecord = tokenRegistry.imported.get(tokenRegistry.current.mint);
+        if (currentRecord) {
+            loadLiveTokenDetail(currentRecord).catch(console.error);
+        }
+    }
+}
+
 function switchView(viewName) {
     console.log(`switchView called with: ${viewName}`);
     
@@ -883,6 +958,15 @@ function switchView(viewName) {
     }
     
     rtCurrentView = viewName;
+    
+    // Start/stop auto-refresh based on view
+    if (viewName === 'tokens') {
+        startTokensAutoRefresh();
+        // Also refresh immediately when switching to tokens view
+        refreshAllLaunchedTokenStats().catch(console.error);
+    } else {
+        stopTokensAutoRefresh();
+    }
     
     // Hide ALL views and pages
     const allViews = document.querySelectorAll('.view');

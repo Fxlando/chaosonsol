@@ -7368,7 +7368,7 @@ function buildTokenRow(record) {
                    onchange="toggleTokenDeleteSelection('${escapeHtml(identifier)}', this.checked)">
         </td>`
         : '<td></td>';
-    
+
     return `
         <tr data-token-id="${escapeHtml(identifier)}" data-token-source="${rowSource}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition ${isDeleteMode ? '' : 'cursor-pointer'} ${isSelected ? 'bg-red-900/20' : ''}">
             ${checkboxCell}
@@ -8201,11 +8201,15 @@ function buildAutomationTaskEntries(record = {}, runtimeTasks = []) {
         let launchLabel = 'Queued';
 
         const normalized = statusLabel.toLowerCase();
+        // Check if token has been launched (has mint address and is not a draft)
+        const isLaunched = !isDraft && record?.mint && record.mint.length > 0;
+        
         if (normalized.includes('running') || normalized.includes('launching')) {
             launchState = 'running';
             launchClass = 'bg-amber-900/60 text-amber-200';
             launchLabel = 'Running';
-        } else if (!isDraft && (normalized.includes('live') || normalized.includes('launched'))) {
+        } else if (isLaunched || normalized.includes('live') || normalized.includes('launched') || normalized.includes('imported')) {
+            // Token is launched if it has a mint address (imported tokens are already launched)
             launchState = 'completed';
             launchClass = 'bg-emerald-900/60 text-emerald-200';
             launchLabel = 'Completed';

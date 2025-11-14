@@ -2656,17 +2656,17 @@
                             </div>
                         </div>
 
-                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl flex-1 shadow-[0_0_45px_rgba(59,130,246,0.12)]">
+                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl flex-1 shadow-[0_0_45px_rgba(59,130,246,0.12)] flex flex-col">
                             <div class="px-5 py-4 border-b border-neutral-900/60">
                                 <h3 class="text-lg font-semibold text-white">Activity</h3>
                             </div>
-                            <div class="p-5">
+                            <div class="p-5 flex-1 flex flex-col min-h-0">
                                 <div id="token-activity-empty" class="text-sm text-gray-500 text-center py-6">
                                     No live trades captured yet.
                                 </div>
-                                <div id="token-activity-table" class="hidden overflow-x-auto">
+                                <div id="token-activity-table" class="hidden flex-1 overflow-y-auto overflow-x-auto" style="max-height: 400px;">
                                     <table class="w-full text-sm">
-                                        <thead>
+                                        <thead class="sticky top-0 bg-neutral-950 z-10">
                                             <tr class="text-gray-500 text-[11px] uppercase tracking-wide">
                                                 <th class="text-left py-2">Age</th>
                                                 <th class="text-left py-2">Wallet</th>

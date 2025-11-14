@@ -5821,7 +5821,7 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
     }
 }
 
-function renderTokenActivity(entries = [], { loading = false, isLive = false } = {}) {
+function renderTokenActivity(entries = [], { loading = false, isLive = false, solPrice = null } = {}) {
     const empty = getElement('token-activity-empty');
     const tableWrapper = getElement('token-activity-table');
     const tbody = getElement('token-activity-body');
@@ -5866,18 +5866,27 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false } =
                     : entry.type === 'sell'
                     ? 'text-rose-300'
                     : 'text-gray-300';
-            const amountLabel = entry.amountSol !== undefined && entry.amountSol !== null
-                ? `${entry.amountSol.toFixed(entry.amountSol >= 1 ? 3 : 6)} SOL`
-                : entry.amountTokens !== undefined && entry.amountTokens !== null
-                ? `${entry.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`
-                : '—';
+            
+            // Build amount label with SOL and USD
+            let amountLabel = '—';
+            if (entry.amountSol !== undefined && entry.amountSol !== null) {
+                const solAmount = entry.amountSol.toFixed(entry.amountSol >= 1 ? 3 : 6);
+                if (solPrice && solPrice > 0) {
+                    const usdAmount = entry.amountSol * solPrice;
+                    amountLabel = `${solAmount} SOL<br><span class="text-gray-400 text-xs">${formatUSD(usdAmount)}</span>`;
+                } else {
+                    amountLabel = `${solAmount} SOL`;
+                }
+            } else if (entry.amountTokens !== undefined && entry.amountTokens !== null) {
+                amountLabel = `${entry.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`;
+            }
 
             return `
                 <tr class="border-b border-neutral-800 last:border-b-0">
                     <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
                     <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
                     <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
-                    <td class="py-2 text-sm text-right text-gray-200">${amountLabel}</td>
+                    <td class="py-2 text-sm text-right text-gray-200">${amountLabel.includes('<') ? amountLabel : escapeHtml(amountLabel)}</td>
                 </tr>
             `;
         })
@@ -6106,7 +6115,9 @@ function handlePumpPortalMessage(data) {
             const updatedActivity = [activityEntry, ...currentActivity].slice(0, 50); // Keep last 50
             tokenDetailViewState.currentActivity = updatedActivity;
             
-            renderTokenActivity(updatedActivity, { isLive: true });
+            // Get solPrice for USD conversion
+            const solPrice = tokenDetailViewState.solPrice || null;
+            renderTokenActivity(updatedActivity, { isLive: true, solPrice });
             
             // Also refresh token metrics if this is a significant trade
             if (amountSol && amountSol > 0.1) {
@@ -6142,16 +6153,28 @@ function startTokenActivityStream(mint) {
     // Use WebSocket for real-time updates
     subscribeToTokenTrades(mint);
     
+    // Get solPrice for USD conversion
+    const getSolPriceForActivity = async () => {
+        try {
+            return await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
+        } catch (error) {
+            return null;
+        }
+    };
+    
     // Fallback: Also do initial fetch and periodic polling as backup
-    fetchPumpFunTradeFeed(mint, 20).then(latest => {
-        renderTokenActivity(latest, { isLive: true });
-        tokenDetailViewState.currentActivity = latest;
-    }).catch(error => {
-        // Silently handle API downtime
-        console.debug('Initial trade feed fetch failed:', error.message);
+    getSolPriceForActivity().then(solPrice => {
+        tokenDetailViewState.solPrice = solPrice;
+        fetchPumpFunTradeFeed(mint, 20).then(latest => {
+            renderTokenActivity(latest, { isLive: true, solPrice });
+            tokenDetailViewState.currentActivity = latest;
+        }).catch(error => {
+            // Silently handle API downtime
+            console.debug('Initial trade feed fetch failed:', error.message);
+        });
     });
     
-    // Keep polling as fallback (less frequent - every 60 seconds)
+    // Keep polling as fallback (frequent updates - every 5 seconds for maximum responsiveness)
     tokenDetailViewState.activityIntervalId = setInterval(async () => {
         if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
             stopTokenActivityStream();
@@ -6159,8 +6182,14 @@ function startTokenActivityStream(mint) {
         }
 
         try {
+            // Refresh solPrice periodically
+            const solPrice = await getSolPriceForActivity();
+            if (solPrice) {
+                tokenDetailViewState.solPrice = solPrice;
+            }
+            
             const latest = await fetchPumpFunTradeFeed(mint, 20);
-            renderTokenActivity(latest, { isLive: true });
+            renderTokenActivity(latest, { isLive: true, solPrice: solPrice || tokenDetailViewState.solPrice });
             tokenDetailViewState.currentActivity = latest;
         } catch (error) {
             // Silently handle API downtime
@@ -6175,7 +6204,7 @@ function startTokenActivityStream(mint) {
                 console.debug(`Live trade refresh failed for ${mint}:`, errorMessage);
             }
         }
-    }, 60000); // Reduced to 60 seconds since WebSocket provides real-time updates
+    }, 5000); // Update every 5 seconds for maximum responsiveness (WebSocket provides instant updates)
 }
 
 /**
@@ -6951,10 +6980,19 @@ async function loadLiveTokenDetail(record) {
 
     resetHoldingsTable({ message: 'Syncing wallet balances…', isLoading: true });
     renderTokenTaskList(record, { loading: true });
-    renderTokenActivity([], { loading: true, isLive: true });
+    
+    // Get solPrice early for activity rendering
+    let solPrice = null;
+    try {
+        solPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
+        tokenDetailViewState.solPrice = solPrice;
+    } catch (error) {
+        console.debug('Failed to get solPrice for activity:', error);
+    }
+    
+    renderTokenActivity([], { loading: true, isLive: true, solPrice });
 
     try {
-        const solPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
         const holdingsSource = tokenDetailViewState.holdingsSource || 'jito';
 
         // Fetch data in parallel, but handle trade feed errors gracefully
@@ -7054,7 +7092,9 @@ async function loadLiveTokenDetail(record) {
             runtimeTasks: runtimeAutomations.tasks
         });
 
-        renderTokenActivity(activity, { isLive: true });
+        // Store solPrice for activity rendering
+        tokenDetailViewState.solPrice = solPrice;
+        renderTokenActivity(activity, { isLive: true, solPrice });
         startTokenActivityStream(record.mint);
 
         tokenDetailViewState.lastRuntime = Date.now();
@@ -8333,7 +8373,9 @@ function populateTokenDetailView(record) {
             ? 'Holdings will populate once the token is launched.'
             : 'Fetching live wallet balances…'
     });
-    renderTokenActivity([], { isLive: !isDraft, loading: !isDraft });
+    // Use stored solPrice if available
+    const solPrice = tokenDetailViewState.solPrice || null;
+    renderTokenActivity([], { isLive: !isDraft, loading: !isDraft, solPrice });
 
     if (isDraft) {
         renderTokenTaskList(record, { runtimeTasks: [] });

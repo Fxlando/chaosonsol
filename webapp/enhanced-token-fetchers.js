@@ -291,6 +291,15 @@ async function fetchDexScreenerPrice(mintAddress) {
         if (error.name === 'AbortError') {
             throw new Error('DexScreener request timeout');
         }
+        // Check for network/DNS errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch') ||
+            errorMsg.includes('temporarily unavailable')) {
+            // Silently fail - fallback will be used
+            return null;
+        }
         throw new Error(`DexScreener fetch failed: ${error.message}`);
     }
 }
@@ -874,7 +883,13 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             return { ...birdeyeData, success: true };
         }
     } catch (error) {
-        console.debug('⚠️ Birdeye metadata unavailable:', error.message);
+        // Silently handle network errors
+        const errorMsg = error.message || '';
+        if (!errorMsg.includes('ERR_NAME_NOT_RESOLVED') && 
+            !errorMsg.includes('ERR_INTERNET_DISCONNECTED') &&
+            !errorMsg.includes('Failed to fetch')) {
+            console.debug('⚠️ Birdeye metadata unavailable:', error.message);
+        }
     }
     
     // Source 4: On-chain Metaplex metadata (full metadata with name, symbol, image)

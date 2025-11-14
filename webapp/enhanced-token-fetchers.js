@@ -737,6 +737,8 @@ if (typeof window !== 'undefined') {
         calculateOnChainPrice,
         fetchOnChainTrades,
         parseTradeFromTransaction,
+        fetchHeliusEnhancedTrades,
+        parseHeliusTransaction,
         getSolanaConnection // Export the RPC connection getter
     };
     

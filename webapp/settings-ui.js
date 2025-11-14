@@ -66,7 +66,7 @@
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {}, pumpportal = {}, shyft = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
@@ -187,9 +187,24 @@
             window.settingsManager.saveSettings();
         }
         
+        // Save Helius settings
+        if (window.settingsManager.updateHelius) {
+            window.settingsManager.updateHelius(helius);
+        } else {
+            // Fallback: manually update and save
+            const currentSettings = window.settingsManager.getSettings();
+            currentSettings.helius = {
+                ...(currentSettings.helius || {}),
+                ...helius
+            };
+            window.settingsManager.settings = currentSettings;
+            window.settingsManager.saveSettings();
+        }
+        
         // Force a re-read to verify it was saved
         const verifySettings = window.settingsManager.getSettings();
         console.log('✅ Shyft settings saved:', verifySettings?.shyft);
+        console.log('✅ Helius settings saved:', verifySettings?.helius);
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');

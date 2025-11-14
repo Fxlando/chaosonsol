@@ -271,6 +271,10 @@
                         shyft: {
                             ...currentSettings.shyft,
                             ...envConfig.shyft
+                        },
+                        helius: {
+                            ...currentSettings.helius,
+                            ...envConfig.helius
                         }
                     };
                     

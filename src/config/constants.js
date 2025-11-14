@@ -37,6 +37,7 @@ export const RPC_ENDPOINTS = {
     HELIUS: 'https://mainnet.helius-rpc.com/?api-key=YOUR_KEY',
     QUICKNODE: 'https://YOUR_ENDPOINT.solana-mainnet.quiknode.pro/YOUR_KEY/',
     TRITON: 'https://YOUR_ENDPOINT.rpcpool.com/YOUR_KEY',
+    // Ankr kept as fallback only (lowest priority)
     ANKR: 'https://rpc.ankr.com/solana',
     PUBLIC: [
       'https://api.mainnet-beta.solana.com',

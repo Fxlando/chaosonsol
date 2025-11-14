@@ -20,7 +20,11 @@ class PumpFunTrading {
       slippage: config.slippage || 2500, // 25% default (in bps) - higher for pump.fun volatility
       priorityFee: config.priorityFee || 5000, // 5k lamports
       maxRetries: config.maxRetries || 3,
-      rpcUrl: process.env.RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+      // Use RPC_URL (Shyft) as primary, with proper fallback order
+      rpcUrl: process.env.RPC_URL || 
+        process.env.RPC_URL_2 || 
+        'https://api.mainnet-beta.solana.com' || 
+        'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
       ...config
     };
   }

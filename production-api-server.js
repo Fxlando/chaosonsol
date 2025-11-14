@@ -39,12 +39,17 @@ class ProductionAPIServer {
         
         try {
             // Initialize Solana Core
+            // Get RPC URLs with proper fallback order: RPC_URL (Shyft) -> RPC_URL_2/3 -> Public -> Ankr
+            const rpcUrls = [];
+            if (process.env.RPC_URL) rpcUrls.push(process.env.RPC_URL);
+            if (process.env.RPC_URL_2) rpcUrls.push(process.env.RPC_URL_2);
+            if (process.env.RPC_URL_3) rpcUrls.push(process.env.RPC_URL_3);
+            rpcUrls.push('https://api.mainnet-beta.solana.com');
+            rpcUrls.push('https://solana-api.projectserum.com');
+            rpcUrls.push('https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27');
+            
             this.solanaCore = new ProductionSolanaCore({
-                rpcUrls: [
-                    process.env.RPC_URL || 'https://api.mainnet-beta.solana.com',
-                    'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
-                    'https://solana-api.projectserum.com'
-                ],
+                rpcUrls: rpcUrls,
                 network: process.env.NETWORK || 'mainnet-beta',
                 defaultSlippage: parseFloat(process.env.DEFAULT_SLIPPAGE) || 1.0,
                 priorityFee: parseInt(process.env.PRIORITY_FEE) || 1000,

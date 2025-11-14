@@ -5,14 +5,45 @@
  */
 
 const { Connection } = require('@solana/web3.js');
+require('dotenv').config();
+
+/**
+ * Get RPC URLs from environment with proper fallback order:
+ * 1. RPC_URL (Shyft - primary)
+ * 2. RPC_URL_2, RPC_URL_3 (backups)
+ * 3. Ankr (final fallback)
+ */
+function getRpcUrls() {
+  const urls = [];
+  
+  // Primary: RPC_URL (Shyft)
+  if (process.env.RPC_URL) {
+    urls.push(process.env.RPC_URL);
+  }
+  
+  // Backups: RPC_URL_2, RPC_URL_3
+  if (process.env.RPC_URL_2) {
+    urls.push(process.env.RPC_URL_2);
+  }
+  if (process.env.RPC_URL_3) {
+    urls.push(process.env.RPC_URL_3);
+  }
+  
+  // Public fallbacks
+  urls.push('https://api.mainnet-beta.solana.com');
+  urls.push('https://solana-api.projectserum.com');
+  
+  // Final fallback: Ankr (only if no configured RPCs)
+  if (urls.length === 2) { // Only public RPCs, add Ankr as fallback
+    urls.push('https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27');
+  }
+  
+  return urls;
+}
 
 class ConnectionPoolManager {
   constructor(rpcUrls = [], config = {}) {
-    this.rpcUrls = rpcUrls.length > 0 ? rpcUrls : [
-      'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
-      'https://api.mainnet-beta.solana.com',
-      'https://solana-api.projectserum.com'
-    ];
+    this.rpcUrls = rpcUrls.length > 0 ? rpcUrls : getRpcUrls();
     
     this.config = {
       maxConnections: config.maxConnections || 4,

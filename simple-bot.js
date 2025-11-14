@@ -1303,8 +1303,11 @@ Minimum buy amount is 0.001 SOL.
             return;
           }
           
-          // Check balance
-          const connection = new Connection(process.env.SOLANA_RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27');
+          // Check balance - Use RPC_URL (Shyft) as primary, with Ankr as final fallback
+          const rpcUrl = process.env.RPC_URL || process.env.SOLANA_RPC_URL || 
+            'https://api.mainnet-beta.solana.com' || 
+            'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27';
+          const connection = new Connection(rpcUrl);
           const balance = await connection.getBalance(new PublicKey(wallet.pubkey));
           const solBalance = balance / 1e9;
           

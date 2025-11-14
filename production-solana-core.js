@@ -8,15 +8,43 @@ const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getA
 const axios = require('axios');
 const bs58 = require('bs58');
 
+/**
+ * Get RPC URLs from environment with proper fallback order:
+ * 1. RPC_URL (Shyft - primary)
+ * 2. RPC_URL_2, RPC_URL_3 (backups)
+ * 3. Public RPCs
+ * 4. Ankr (final fallback)
+ */
+function getRpcUrlsFromEnv() {
+    const urls = [];
+    
+    // Primary: RPC_URL (Shyft)
+    if (process.env.RPC_URL) {
+        urls.push(process.env.RPC_URL);
+    }
+    
+    // Backups: RPC_URL_2, RPC_URL_3
+    if (process.env.RPC_URL_2) {
+        urls.push(process.env.RPC_URL_2);
+    }
+    if (process.env.RPC_URL_3) {
+        urls.push(process.env.RPC_URL_3);
+    }
+    
+    // Public RPCs
+    urls.push('https://api.mainnet-beta.solana.com');
+    urls.push('https://solana-api.projectserum.com');
+    
+    // Final fallback: Ankr
+    urls.push('https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27');
+    
+    return urls;
+}
+
 class ProductionSolanaCore {
     constructor(config = {}) {
         this.config = {
-            rpcUrls: config.rpcUrls || [
-                'https://api.mainnet-beta.solana.com',
-                'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
-                'https://solana-api.projectserum.com',
-                'https://rpc.helius.xyz/?api-key=your-key'
-            ],
+            rpcUrls: config.rpcUrls || getRpcUrlsFromEnv(),
             network: config.network || 'mainnet-beta',
             defaultSlippage: config.defaultSlippage || 1.0,
             priorityFee: config.priorityFee || 1000,

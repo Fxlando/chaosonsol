@@ -35,12 +35,44 @@ export class RPCEndpointConfig {
     // Load from environment variables or config
     const endpoints = [];
     
-    // Helius (if configured)
+    // Primary: RPC_URL (Shyft or configured RPC)
+    if (process.env?.RPC_URL) {
+      const isShyft = process.env.RPC_URL.includes('shyft.to');
+      endpoints.push({
+        url: process.env.RPC_URL,
+        provider: isShyft ? 'Shyft' : 'Custom',
+        priority: 1,
+        rateLimit: isShyft ? 1000 : 500,
+        supportsWebSocket: isShyft
+      });
+    }
+    
+    // Backup RPCs: RPC_URL_2, RPC_URL_3
+    if (process.env?.RPC_URL_2) {
+      endpoints.push({
+        url: process.env.RPC_URL_2,
+        provider: 'Backup',
+        priority: 2,
+        rateLimit: 500,
+        supportsWebSocket: false
+      });
+    }
+    if (process.env?.RPC_URL_3) {
+      endpoints.push({
+        url: process.env.RPC_URL_3,
+        provider: 'Backup',
+        priority: 3,
+        rateLimit: 500,
+        supportsWebSocket: false
+      });
+    }
+    
+    // Helius (if configured) - for dedicated tasks
     if (process.env?.HELIUS_API_KEY) {
       endpoints.push({
         url: `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
         provider: 'Helius',
-        priority: 1,
+        priority: 4,
         rateLimit: 1000, // requests per minute
         supportsWebSocket: true
       });
@@ -51,7 +83,7 @@ export class RPCEndpointConfig {
       endpoints.push({
         url: process.env.QUICKNODE_ENDPOINT,
         provider: 'QuickNode',
-        priority: 2,
+        priority: 5,
         rateLimit: 1000,
         supportsWebSocket: true
       });
@@ -62,7 +94,7 @@ export class RPCEndpointConfig {
       endpoints.push({
         url: process.env.TRITON_ENDPOINT,
         provider: 'Triton',
-        priority: 3,
+        priority: 6,
         rateLimit: 500,
         supportsWebSocket: true
       });
@@ -72,12 +104,12 @@ export class RPCEndpointConfig {
   }
 
   getSecondaryEndpoints() {
-    // Ankr (free tier available)
+    // Ankr as final fallback only (lowest priority)
     return [
       {
-        url: 'https://rpc.ankr.com/solana',
+        url: 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
         provider: 'Ankr',
-        priority: 4,
+        priority: 99, // Lowest priority - only used if all others fail
         rateLimit: 100,
         supportsWebSocket: false
       }

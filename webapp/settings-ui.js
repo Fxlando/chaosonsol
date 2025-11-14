@@ -248,10 +248,10 @@
         
         // Try to sync config from .env (backend API) if available
         try {
-            const apiBase = window.location.hostname === 'localhost' 
+            const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                 ? 'http://localhost:3000' 
-                : (window.__CHAOSBOT_API_BASE__ || '/.netlify/functions');
-            const configEndpoint = apiBase.includes('netlify') ? `${apiBase}/config` : `${apiBase}/api/config`;
+                : (window.__CHAOSBOT_API_BASE__ || '/api');
+            const configEndpoint = apiBase.startsWith('http') ? `${apiBase}/api/config` : `${apiBase}/config`;
             
             const response = await fetch(configEndpoint);
             if (response.ok) {

@@ -1266,10 +1266,12 @@ function initializeSettings(force = false) {
 
 function getFunctionBase() {
     const apiBase = getApiBase();
-    if (apiBase && apiBase.includes('/.netlify/functions')) {
+    // If it's already a full URL (localhost) or custom base, use it
+    if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
         return apiBase;
     }
-    return '/.netlify/functions';
+    // Otherwise use /api (api-server.js handles /api routes)
+    return '/api';
 }
 
 function truncateAddress(address) {
@@ -10885,13 +10887,14 @@ const VANITY_LAUNCH_STATS_ENDPOINT_BASE = 'https://frontend-api.pump.fun';
 const LAMPORTS_PER_SOL_FALLBACK = 1_000_000_000;
 
 function getApiBase() {
-    if (window.location.hostname === 'localhost') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         return 'http://localhost:3000';
     }
     if (window.__CHAOSBOT_API_BASE__) {
         return window.__CHAOSBOT_API_BASE__;
     }
-    return '/.netlify/functions';
+    // Use /api instead of Netlify functions (api-server.js handles /api routes)
+    return '/api';
 }
 
 const blueprintTemplates = {

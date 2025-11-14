@@ -3,8 +3,8 @@ console.log('⚡ CHAOS BOT TRADING TERMINAL');
 console.log('System initializing...');
 
 // Configuration
-const IS_NETLIFY = window.location.hostname !== 'localhost';
-var API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
+const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+var API_BASE = IS_LOCALHOST ? 'http://localhost:3000/api' : (window.__CHAOSBOT_API_BASE__ || '/api');
 
 // State
 let systemData = {

@@ -12,7 +12,7 @@ class APIClient {
       this.baseURL = 'http://localhost:3000';
     } else {
       // Production - use Netlify functions (relative path uses current protocol)
-      this.baseURL = '/.netlify/functions/api';
+      this.baseURL = '/api';
     }
     
     this.socket = null;

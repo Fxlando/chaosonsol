@@ -7556,6 +7556,7 @@ async function deleteSelectedTokens() {
     
     let deletedCount = 0;
     let failedCount = 0;
+    let deletedDrafts = false;
     
     for (const identifier of selectedIds) {
         try {
@@ -7577,6 +7578,7 @@ async function deleteSelectedTokens() {
                     tokenRegistry.drafts.delete(draftKey);
                     // Persist drafts (removeTokenDraft calls persistTokenDrafts)
                     removeTokenDraft(draftKey);
+                    deletedDrafts = true;
                 }
             } else {
                 // Delete from imported tokens - try all case variations
@@ -7613,9 +7615,8 @@ async function deleteSelectedTokens() {
     // Persist changes - this will save the current state (without deleted tokens)
     persistImportedTokens();
     
-    // Also persist drafts if any were deleted
-    if (selectedIds.some(id => tokenRegistry.drafts.has(id) || 
-        Array.from(tokenRegistry.drafts.keys()).some(key => key.toLowerCase() === id.toLowerCase()))) {
+    // Also persist drafts if any were deleted (removeTokenDraft already calls persistTokenDrafts, but ensure it's called)
+    if (deletedDrafts) {
         persistTokenDrafts();
     }
     

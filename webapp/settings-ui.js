@@ -199,9 +199,63 @@
         populateSettingsForm(event.detail);
     });
 
-    document.addEventListener('chaosSettingsViewOpened', () => {
+    document.addEventListener('chaosSettingsViewOpened', async () => {
         const snapshot = window.settingsManager?.getSettings();
         populateSettingsForm(snapshot);
+        
+        // Try to sync config from .env (backend API) if available
+        try {
+            const apiBase = window.location.hostname === 'localhost' 
+                ? 'http://localhost:3000' 
+                : (window.__CHAOSBOT_API_BASE__ || '/.netlify/functions');
+            const configEndpoint = apiBase.includes('netlify') ? `${apiBase}/config` : `${apiBase}/api/config`;
+            
+            const response = await fetch(configEndpoint);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.config) {
+                    // Merge .env config with existing settings (don't overwrite user changes)
+                    const currentSettings = window.settingsManager.getSettings();
+                    const envConfig = data.config;
+                    
+                    // Only fill in empty fields from .env
+                    const mergedSettings = {
+                        solana: {
+                            ...currentSettings.solana,
+                            rpcHttp: currentSettings.solana?.rpcHttp || envConfig.solana?.rpcHttp || '',
+                            rpcWebsocket: currentSettings.solana?.rpcWebsocket || envConfig.solana?.rpcWebsocket || '',
+                            monitoringRpc: currentSettings.solana?.monitoringRpc || envConfig.solana?.monitoringRpc || '',
+                            priceRpc: currentSettings.solana?.priceRpc || envConfig.solana?.priceRpc || '',
+                            priorityFee: currentSettings.solana?.priorityFee || envConfig.solana?.priorityFee || 0.0005
+                        },
+                        pumpportal: {
+                            ...currentSettings.pumpportal,
+                            apiKey: currentSettings.pumpportal?.apiKey || envConfig.pumpportal?.apiKey || '',
+                            priorityFee: currentSettings.pumpportal?.priorityFee || envConfig.pumpportal?.priorityFee || 0.000001,
+                            pool: currentSettings.pumpportal?.pool || envConfig.pumpportal?.pool || 'pump'
+                        },
+                        shyft: {
+                            ...currentSettings.shyft,
+                            ...envConfig.shyft
+                        }
+                    };
+                    
+                    // Update settings if we got new values from .env
+                    if (envConfig.solana?.rpcHttp || envConfig.pumpportal?.apiKey) {
+                        window.settingsManager.settings = {
+                            ...currentSettings,
+                            ...mergedSettings
+                        };
+                        window.settingsManager.saveSettings();
+                        populateSettingsForm(mergedSettings);
+                        console.log('✅ Synced settings from .env file');
+                    }
+                }
+            }
+        } catch (error) {
+            // Silently fail - .env sync is optional
+            console.debug('Could not sync config from .env (backend may not be running):', error.message);
+        }
     });
 
     document.addEventListener('DOMContentLoaded', () => {

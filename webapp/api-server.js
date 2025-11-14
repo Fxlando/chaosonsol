@@ -1228,6 +1228,33 @@ register('get', '/stats', async () => {
   };
 });
 
+// API endpoint to get config from .env for webapp settings sync
+register('get', '/config', async () => {
+  const pumpPortalConfig = buildPumpPortalConfig();
+  
+  return {
+    success: true,
+    config: {
+      solana: {
+        rpcHttp: process.env.RPC_URL || '',
+        rpcWebsocket: process.env.RPC_URL ? process.env.RPC_URL.replace('https://', 'wss://').replace('http://', 'ws://') : '',
+        monitoringRpc: process.env.RPC_URL_2 ? process.env.RPC_URL_2.replace('https://', 'wss://').replace('http://', 'ws://') : '',
+        priceRpc: process.env.RPC_URL_2 || '',
+        priorityFee: process.env.PRIORITY_FEE ? Number(process.env.PRIORITY_FEE) / 1_000_000_000 : 0.0005
+      },
+      pumpportal: {
+        apiKey: pumpPortalConfig.apiKey || '',
+        priorityFee: pumpPortalConfig.priorityFee || 0.000001,
+        pool: pumpPortalConfig.pool || 'pump'
+      },
+      shyft: {
+        apiKey: '6AC3vTBB5lObDYTm', // Hard-coded default
+        enabled: false
+      }
+    }
+  };
+});
+
 const STATIC_ROOT = path.join(__dirname);
 
 app.use(

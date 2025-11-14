@@ -576,16 +576,25 @@ async function fetchOnChainMetadata(mintAddress) {
 // ============================================================================
 
 // Attach to window for global access
-window.enhancedTokenFetchers = {
-    fetchTokenPriceDetails,
-    fetchPumpFunTradeFeed,
-    fetchPumpFunTokenDetails,
-    fetchJupiterPrice,
-    fetchDexScreenerPrice,
-    calculateOnChainPrice,
-    fetchOnChainTrades,
-    parseTradeFromTransaction
-};
-
-console.log('✅ Enhanced token data fetchers loaded with fallbacks');
+if (typeof window !== 'undefined') {
+    window.enhancedTokenFetchers = {
+        fetchTokenPriceDetails,
+        fetchPumpFunTradeFeed,
+        fetchPumpFunTokenDetails,
+        fetchJupiterPrice,
+        fetchDexScreenerPrice,
+        calculateOnChainPrice,
+        fetchOnChainTrades,
+        parseTradeFromTransaction,
+        getSolanaConnection // Export the RPC connection getter
+    };
+    
+    // Also make getSolanaConnection available globally for easy access
+    window.getSolanaConnectionForPurpose = getSolanaConnection;
+    
+    console.log('✅ Enhanced Token Fetchers loaded - Dedicated RPC support enabled');
+    console.log('   📊 Use getSolanaConnection("price") for market cap/price updates');
+    console.log('   📡 Use getSolanaConnection("monitoring") for trade monitoring');
+    console.log('   🔧 Use getSolanaConnection() for general operations');
+}
 

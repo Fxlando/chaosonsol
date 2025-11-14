@@ -5133,7 +5133,8 @@ const tokenDetailViewState = {
     lastRuntime: null,
     holdingsSource: 'jito',
     activityIntervalId: null,
-    currentActivity: [] // Store current activity feed for WebSocket updates
+    currentActivity: [], // Store current activity feed for WebSocket updates
+    metricsRefreshIntervalId: null // Interval for frequent market cap/price updates
 };
 
 let archivedImportedTokens = new Set();
@@ -6142,6 +6143,55 @@ function stopTokenActivityStream() {
     if (tokenDetailViewState.activityIntervalId) {
         clearInterval(tokenDetailViewState.activityIntervalId);
         tokenDetailViewState.activityIntervalId = null;
+    }
+}
+
+// Frequent refresh for market cap and price updates
+function startMetricsRefresh(mint, solPrice = null) {
+    stopMetricsRefresh(); // Clear any existing interval
+    
+    if (!mint) return;
+    
+    // Refresh every 3 seconds for fast market cap updates
+    tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
+        // Only refresh if we're still on the token detail page for this mint
+        if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
+            stopMetricsRefresh();
+            return;
+        }
+        
+        try {
+            // Get fresh SOL price
+            const currentSolPrice = solPrice || tokenDetailViewState.solPrice || await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
+            if (currentSolPrice) {
+                tokenDetailViewState.solPrice = currentSolPrice;
+            }
+            
+            // Fetch fresh price and market cap data (lightweight - just price/market cap)
+            const priceDetails = await fetchTokenPriceDetails(mint, { solPrice: currentSolPrice });
+            
+            if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null)) {
+                // Update only price and market cap (preserve other metrics)
+                updateTokenMetrics({
+                    priceSol: priceDetails.priceSol,
+                    priceUsd: priceDetails.priceUsd,
+                    marketCapUsd: priceDetails.marketCapUsd,
+                    solPrice: currentSolPrice,
+                    source: priceDetails.source || ''
+                    // Don't update other fields - keep existing values
+                });
+            }
+        } catch (error) {
+            // Silently handle errors - don't spam console
+            console.debug('Metrics refresh failed:', error.message);
+        }
+    }, 3000); // Every 3 seconds for fast updates
+}
+
+function stopMetricsRefresh() {
+    if (tokenDetailViewState.metricsRefreshIntervalId) {
+        clearInterval(tokenDetailViewState.metricsRefreshIntervalId);
+        tokenDetailViewState.metricsRefreshIntervalId = null;
     }
 }
 
@@ -7299,6 +7349,9 @@ async function loadLiveTokenDetail(record) {
         tokenDetailViewState.solPrice = solPrice;
         renderTokenActivity(activity, { isLive: true, solPrice });
         startTokenActivityStream(record.mint);
+        
+        // Start frequent market cap/price refresh (every 3 seconds for fast updates)
+        startMetricsRefresh(record.mint, solPrice);
 
         tokenDetailViewState.lastRuntime = Date.now();
         updateTokenLastRuntime(tokenDetailViewState.lastRuntime);
@@ -8409,6 +8462,7 @@ function handleTokenArchive() {
 function populateTokenDetailView(record) {
     if (!record) return;
     stopTokenActivityStream();
+    stopMetricsRefresh();
     tokenRegistry.current = record;
     tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
     tokenDetailViewState.currentKey = record.mint || record.id || null;

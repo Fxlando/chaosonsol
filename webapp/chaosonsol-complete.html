@@ -3422,9 +3422,10 @@
                 return;
             }
             try {
-                const endpoint = API_BASE.includes('netlify')
-                    ? `${API_BASE}/wallets`
-                    : `${API_BASE}/api/wallets`;
+                // api-server.js handles both /api/wallets and /wallets routes
+                const endpoint = API_BASE.startsWith('http')
+                    ? `${API_BASE}/api/wallets`
+                    : `${API_BASE}/wallets`;
                 const response = await fetch(endpoint);
                 if (!response.ok) throw new Error('Failed to fetch wallets');
                 const payload = await response.json();
@@ -3531,9 +3532,10 @@
             setCreatorWalletStatus('Importing creator wallet…', 'info');
 
             try {
-                const endpoint = API_BASE.includes('netlify')
-                    ? `${API_BASE}/wallets/import`
-                    : `${API_BASE}/api/wallets/import`;
+                // api-server.js handles both /api/wallets/import and /wallets/import routes
+                const endpoint = API_BASE.startsWith('http')
+                    ? `${API_BASE}/api/wallets/import`
+                    : `${API_BASE}/wallets/import`;
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -4158,7 +4160,8 @@
         async function loadTokens() {
             try {
                 addConsoleLog('Loading tokens from blockchain...', 'info');
-                const endpoint = API_BASE.includes('netlify') ? `${API_BASE}/tokens` : `${API_BASE}/api/tokens`;
+                // api-server.js handles both /api/tokens and /tokens routes
+                const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/tokens` : `${API_BASE}/tokens`;
                 const response = await fetch(endpoint);
                 
                 if (!response.ok) {

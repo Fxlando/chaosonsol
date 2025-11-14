@@ -6132,13 +6132,24 @@ async function loadLiveTokenDetail(record) {
         const solPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
         const holdingsSource = tokenDetailViewState.holdingsSource || 'jito';
 
-        const [pumpFunInfo, priceDetails, runtimeAutomations, holdingsResult, activity] = await Promise.all([
+        // Fetch data in parallel, but handle trade feed errors gracefully
+        const [pumpFunInfoResult, priceDetailsResult, runtimeAutomationsResult, holdingsResultResult, activityResult] = await Promise.allSettled([
             fetchPumpFunTokenDetails(record.mint),
             fetchTokenPriceDetails(record.mint, { solPrice }),
             fetchRuntimeAutomationsForMint(record.mint),
             fetchWalletHoldingsForMint(record.mint, { source: holdingsSource }),
-            fetchPumpFunTradeFeed(record.mint, 20)
+            fetchPumpFunTradeFeed(record.mint, 20).catch(error => {
+                // Silently handle trade feed errors - API might be down
+                return [];
+            })
         ]);
+        
+        // Extract values from settled promises
+        const pumpFunInfo = pumpFunInfoResult.status === 'fulfilled' ? pumpFunInfoResult.value : null;
+        const priceDetails = priceDetailsResult.status === 'fulfilled' ? priceDetailsResult.value : { priceSol: null, priceUsd: null, source: '' };
+        const runtimeAutomations = runtimeAutomationsResult.status === 'fulfilled' ? runtimeAutomationsResult.value : { tasks: [], stats: { totalVolume: 0, activeSessions: 0 } };
+        const holdingsResult = holdingsResultResult.status === 'fulfilled' ? holdingsResultResult.value : { holdings: [], summary: { totalTokenBalance: 0, totalHoldingsSol: 0 } };
+        const activity = activityResult.status === 'fulfilled' ? activityResult.value : [];
 
         const priceSol = priceDetails.priceSol ?? null;
         const priceUsd = priceDetails.priceUsd ?? null;

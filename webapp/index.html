@@ -1357,6 +1357,16 @@
                                 <span class="text-sm text-gray-300">Custom — provide a mint or list of mints for the tagging swaps.</span>
                             </label>
                         </div>
+                        <div id="tag-custom-mints-wrapper" class="mt-4 hidden">
+                            <label class="block mb-2 text-sm font-medium">Custom Mint Addresses</label>
+                            <textarea
+                                id="tag-custom-mints"
+                                rows="4"
+                                placeholder="Enter mint addresses (one per line or comma-separated)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            ></textarea>
+                            <p class="text-xs text-gray-500 mt-2">Provide specific token mint addresses to use for tagging. One per line or comma-separated.</p>
+                        </div>
                     </div>
                     
                     <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTagWallets()">
@@ -1488,6 +1498,16 @@
                                 <input type="radio" name="mint-warm" value="custom" class="text-purple-600" />
                                 <span class="text-sm">Custom</span>
                             </label>
+                        </div>
+                        <div id="warm-custom-mints-wrapper" class="mt-4 hidden">
+                            <label class="block mb-2 text-sm font-medium">Custom Mint Addresses</label>
+                            <textarea
+                                id="warm-custom-mints"
+                                rows="4"
+                                placeholder="Enter mint addresses (one per line or comma-separated)"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            ></textarea>
+                            <p class="text-xs text-gray-500 mt-2">Provide specific token mint addresses to use for warming. One per line or comma-separated.</p>
                         </div>
                     </div>
                     

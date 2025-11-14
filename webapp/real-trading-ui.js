@@ -547,28 +547,48 @@ function clearConsole() {
 }
 
 function setupMintSelectionToggle() {
-    const radios = document.querySelectorAll('input[name="mint-selection"]');
-    const customWrapper = document.getElementById('tag-custom-mints-wrapper');
+    // Handle tag page mint selection
+    const tagRadios = document.querySelectorAll('input[name="mint-selection"]');
+    const tagCustomWrapper = document.getElementById('tag-custom-mints-wrapper');
 
-    const toggle = () => {
-        if (!customWrapper) return;
+    const toggleTag = () => {
+        if (!tagCustomWrapper) return;
         const selected = document.querySelector('input[name="mint-selection"]:checked');
         if (selected && selected.value === 'custom') {
-            customWrapper.classList.remove('hidden');
+            tagCustomWrapper.classList.remove('hidden');
         } else {
-            customWrapper.classList.add('hidden');
+            tagCustomWrapper.classList.add('hidden');
         }
     };
 
-    radios.forEach(radio => {
-        radio.addEventListener('change', toggle);
+    tagRadios.forEach(radio => {
+        radio.addEventListener('change', toggleTag);
     });
 
-    toggle();
+    toggleTag();
+
+    // Handle warm page mint selection
+    const warmRadios = document.querySelectorAll('input[name="mint-warm"]');
+    const warmCustomWrapper = document.getElementById('warm-custom-mints-wrapper');
+
+    const toggleWarm = () => {
+        if (!warmCustomWrapper) return;
+        const selected = document.querySelector('input[name="mint-warm"]:checked');
+        if (selected && selected.value === 'custom') {
+            warmCustomWrapper.classList.remove('hidden');
+        } else {
+            warmCustomWrapper.classList.add('hidden');
+        }
+    };
+
+    warmRadios.forEach(radio => {
+        radio.addEventListener('change', toggleWarm);
+    });
+
+    toggleWarm();
 }
 
 const missingGlobalHandlers = [
-    'executeFundWallets',
     'executeWithdrawWallets',
     'executeTagWallets',
     'executeWarmWallets',
@@ -8608,6 +8628,206 @@ registerGlobalHandler('selectFundMode', (mode) => {
     notify(`Funding mode set to ${mode.toUpperCase()}`, 'info');
 });
 
+registerGlobalHandler('executeFundWallets', async () => {
+    const button = document.querySelector('#fund-page button[onclick="executeFundWallets()"]');
+    try {
+        const walletIds = getSelectedWalletIds();
+        if (!walletIds.length) {
+            notify('Select at least one wallet from the table before funding.', 'warning');
+            return;
+        }
+
+        const amountInput = document.getElementById('fund-amount-input');
+        if (!amountInput || !amountInput.value) {
+            notify('Enter a funding amount.', 'error');
+            return;
+        }
+
+        const amount = parseFloat(amountInput.value);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            notify('Enter a valid funding amount greater than zero.', 'error');
+            return;
+        }
+
+        const method = document.querySelector('input[name="fund-method"]:checked')?.value || 'uniform';
+        const mode = uiHelperState.fundMode || 'standard';
+
+        notify(`Funding ${walletIds.length} wallet(s) with ${amount} SOL each...`, 'info');
+        addConsoleLog(`Starting fund: ${walletIds.length} wallet(s) | ${amount} SOL each | Mode: ${mode}`, 'info');
+
+        if (button) {
+            setButtonLoading(button, true, 'Funding...');
+        }
+
+        // Get creator wallet for funding source
+        let creatorWallet = null;
+        let creatorPrivateKey = null;
+
+        // Try to get from creatorWalletState (from real-trading-ui)
+        if (typeof creatorWalletState !== 'undefined' && creatorWalletState.address) {
+            creatorWallet = {
+                address: creatorWalletState.address,
+                publicKey: creatorWalletState.address,
+                id: creatorWalletState.address
+            };
+            // Try to get private key from state if available
+            if (creatorWalletState.privateKey) {
+                creatorPrivateKey = creatorWalletState.privateKey;
+            }
+        }
+
+        // If not found, try to get from wallet operations
+        if (!creatorWallet && typeof window.walletOperations?.getCreatorWallet === 'function') {
+            creatorWallet = window.walletOperations.getCreatorWallet();
+        }
+
+        if (!creatorWallet) {
+            throw new Error('Creator wallet not set. Please set a creator wallet first in Settings or via wallet operations.');
+        }
+
+        // Get creator wallet private key
+        if (!creatorPrivateKey) {
+            creatorPrivateKey = creatorWallet.privateKey || creatorWallet.privateKeyArray;
+        }
+        
+        if (!creatorPrivateKey && window.apiClient) {
+            try {
+                const exportResult = await window.apiClient.request('/wallets/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        walletIds: [creatorWallet.id || creatorWallet.address || creatorWallet.publicKey],
+                        includePrivateKey: true
+                    })
+                });
+                
+                if (exportResult.success && exportResult.wallets && exportResult.wallets[0]) {
+                    creatorPrivateKey = exportResult.wallets[0].privateKeyArray || exportResult.wallets[0].privateKey;
+                }
+            } catch (exportError) {
+                console.warn('Failed to fetch creator wallet private key:', exportError);
+            }
+        }
+
+        if (!creatorPrivateKey) {
+            throw new Error('Creator wallet private key not available. Please re-import the creator wallet.');
+        }
+
+        // Convert private key to format needed
+        let privateKeyString;
+        if (Array.isArray(creatorPrivateKey)) {
+            privateKeyString = JSON.stringify(creatorPrivateKey);
+        } else if (typeof creatorPrivateKey === 'string') {
+            try {
+                JSON.parse(creatorPrivateKey);
+                privateKeyString = creatorPrivateKey;
+            } catch {
+                if (window.bs58) {
+                    const decoded = window.bs58.decode(creatorPrivateKey);
+                    privateKeyString = JSON.stringify(Array.from(decoded));
+                } else {
+                    privateKeyString = creatorPrivateKey;
+                }
+            }
+        } else {
+            throw new Error('Invalid creator wallet private key format');
+        }
+
+        // Get wallet details
+        const wallets = typeof window.walletOperations?.getWallets === 'function' 
+            ? window.walletOperations.getWallets()
+            : [];
+
+        const results = [];
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const walletId of walletIds) {
+            const wallet = wallets.find(w => {
+                const id = w.id || w.address || w.publicKey || w.pubkey;
+                return id === walletId;
+            });
+
+            if (!wallet) {
+                results.push({ walletId, success: false, error: 'Wallet not found' });
+                failCount++;
+                continue;
+            }
+
+            try {
+                const walletAddress = wallet.address || wallet.publicKey || wallet.pubkey;
+                if (!walletAddress) {
+                    results.push({ walletId, success: false, error: 'Wallet address not found' });
+                    failCount++;
+                    continue;
+                }
+
+                // Calculate funding amount based on mode
+                let fundingAmount = amount;
+                if (mode === 'mixer') {
+                    // Add small random variation for mixer mode
+                    const variation = (Math.random() * 0.1 - 0.05) * amount; // ±5% variation
+                    fundingAmount = Math.max(0.001, amount + variation);
+                }
+
+                // Execute transfer using Solana integration
+                if (solanaIntegration && typeof solanaIntegration.transferSOL === 'function') {
+                    const transferResult = await solanaIntegration.transferSOL(
+                        privateKeyString,
+                        walletAddress,
+                        fundingAmount
+                    );
+
+                    if (transferResult.success) {
+                        results.push({
+                            walletId,
+                            success: true,
+                            amount: fundingAmount,
+                            signature: transferResult.signature
+                        });
+                        successCount++;
+                        addConsoleLog(
+                            `✅ Funded ${wallet.name || walletId} with ${fundingAmount.toFixed(4)} SOL | tx: ${transferResult.signature.substring(0, 10)}...`,
+                            'success'
+                        );
+                    } else {
+                        results.push({ walletId, success: false, error: transferResult.error || 'Transfer failed' });
+                        failCount++;
+                        addConsoleLog(`❌ Funding failed for ${wallet.name || walletId}: ${transferResult.error}`, 'error');
+                    }
+                } else {
+                    throw new Error('Solana integration not available');
+                }
+
+                // Small delay between transfers
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (error) {
+                results.push({ walletId, success: false, error: error.message });
+                failCount++;
+                addConsoleLog(`❌ Funding error for ${wallet.name || walletId}: ${error.message}`, 'error');
+            }
+        }
+
+        notify(
+            `Funding complete: ${successCount} successful, ${failCount} failed.`,
+            failCount ? 'warning' : 'success'
+        );
+
+        // Reload wallets to update balances
+        if (typeof window.loadWallets === 'function') {
+            await window.loadWallets();
+        }
+    } catch (error) {
+        console.error('executeFundWallets error:', error);
+        notify(error.message || 'Funding failed. Check console for details.', 'error');
+        addConsoleLog(`❌ Funding failed: ${error.message || error}`, 'error');
+    } finally {
+        if (button) {
+            setButtonLoading(button, false);
+        }
+    }
+});
+
 registerGlobalHandler('selectTagExecutor', (executor) => {
     uiHelperState.tagExecutor = executor;
     const jitoBtn = getElement('tag-jito-btn');
@@ -11644,6 +11864,88 @@ registerGlobalHandler('submitCreatorWalletImport', () => submitCreatorWalletImpo
 registerGlobalHandler('openDocumentation', () => {
     window.open('https://docs.chaosbotonsol.xyz', '_blank', 'noopener');
 });
+
+// Floating window functions (for legacy floating task windows)
+function selectMethod(taskType, method) {
+    const jitoBtn = document.getElementById(`${taskType}-method-jito`);
+    const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
+    
+    if (jitoBtn && rpcBtn) {
+        if (method === 'jito') {
+            jitoBtn.classList.add('active');
+            jitoBtn.classList.remove('bg-neutral-800', 'text-gray-400');
+            jitoBtn.classList.add('bg-purple-600', 'text-white');
+            rpcBtn.classList.remove('active', 'bg-purple-600', 'text-white');
+            rpcBtn.classList.add('bg-neutral-800', 'text-gray-400');
+        } else {
+            rpcBtn.classList.add('active');
+            rpcBtn.classList.remove('bg-neutral-800', 'text-gray-400');
+            rpcBtn.classList.add('bg-purple-600', 'text-white');
+            jitoBtn.classList.remove('active', 'bg-purple-600', 'text-white');
+            jitoBtn.classList.add('bg-neutral-800', 'text-gray-400');
+        }
+    }
+}
+
+function startDrag(event, windowId) {
+    event.preventDefault();
+    const window = document.getElementById(windowId);
+    if (!window) return;
+    
+    const header = event.currentTarget;
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX = event.clientX;
+    let initialY = event.clientY;
+    
+    const drag = (e) => {
+        if (isDragging) {
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+            
+            const rect = window.getBoundingClientRect();
+            const newX = rect.left + currentX;
+            const newY = rect.top + currentY;
+            
+            window.style.left = `${newX}px`;
+            window.style.top = `${newY}px`;
+            
+            initialX = e.clientX;
+            initialY = e.clientY;
+        }
+    };
+    
+    const dragEnd = () => {
+        isDragging = false;
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('mouseup', dragEnd);
+    };
+    
+    isDragging = true;
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+}
+
+function minimizeWindow(windowId) {
+    const window = document.getElementById(windowId);
+    if (window) {
+        window.classList.toggle('minimized');
+    }
+}
+
+function closeFloatingWindow(windowId) {
+    const window = document.getElementById(windowId);
+    if (window) {
+        window.classList.add('hidden');
+    }
+}
+
+window.selectMethod = selectMethod;
+window.startDrag = startDrag;
+window.minimizeWindow = minimizeWindow;
+window.closeFloatingWindow = closeFloatingWindow;
 
 registerGlobalHandler('sharePlatform', async () => {
     const url = window.location.href;

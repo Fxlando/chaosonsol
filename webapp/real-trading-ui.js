@@ -4958,7 +4958,7 @@ function startInstantTradingRefresh() {
         if (rtCurrentView === 'instant') {
             loadInstantTradingData();
         }
-    }, 5000); // Refresh every 5 seconds
+    }, 30000); // Refresh every 30 seconds
 }
 
 function stopInstantTradingRefresh() {
@@ -6377,7 +6377,7 @@ function startTokenActivityStream(mint) {
         });
     });
     
-    // Keep polling as fallback (frequent updates - every 5 seconds for maximum responsiveness)
+    // Keep polling as fallback (every 30 seconds - WebSocket provides instant updates)
     tokenDetailViewState.activityIntervalId = setInterval(async () => {
         if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
             stopTokenActivityStream();
@@ -6407,7 +6407,7 @@ function startTokenActivityStream(mint) {
                 console.debug(`Live trade refresh failed for ${mint}:`, errorMessage);
             }
         }
-    }, 5000); // Update every 5 seconds for maximum responsiveness (WebSocket provides instant updates)
+    }, 30000); // Update every 30 seconds (WebSocket provides instant updates, polling is just backup)
 }
 
 /**

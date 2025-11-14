@@ -2593,6 +2593,10 @@
                                 <i data-lucide="coins" class="w-4 h-4"></i>
                                 <span>Collect Fees</span>
                             </button>
+                            <button id="token-collect-creator-fees-btn" type="button" class="hidden bg-amber-600/80 hover:bg-amber-500 text-white px-4 py-2 rounded-full transition flex items-center gap-2 shadow-lg shadow-amber-500/20" onclick="collectCreatorFees()">
+                                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                <span>Collect Creator Fees</span>
+                            </button>
                             <button id="token-archive-btn" type="button" class="bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-full transition flex items-center gap-2 border border-neutral-800" onclick="handleTokenArchive()">
                                 <i data-lucide="archive" class="w-4 h-4"></i>
                                 <span>Archive</span>
@@ -3644,6 +3648,26 @@
                         </div>
                         <button class="w-full mt-4 bg-blue-700 hover:bg-blue-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectRentFees()">
                             Collect Rent Fees
+                        </button>
+                    </div>
+                    
+                    <div class="bg-neutral-800 rounded-lg p-6 border border-neutral-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold">Creator Fees</h3>
+                            <span class="text-2xl font-bold text-amber-400" id="creator-fees">Available</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">From Tokens</span>
+                                <span class="text-sm font-mono" id="creator-tokens-count">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-400">Last Collected</span>
+                                <span class="text-sm font-mono text-gray-500" id="creator-last">Never</span>
+                            </div>
+                        </div>
+                        <button class="w-full mt-4 bg-amber-700 hover:bg-amber-600 text-white text-sm py-2 px-3 rounded transition" onclick="collectAllCreatorFees()">
+                            Collect All Creator Fees
                         </button>
                     </div>
                     

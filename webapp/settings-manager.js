@@ -106,6 +106,13 @@ class SettingsManager {
                 hideAddresses: false
             },
 
+            // PumpPortal Settings
+            pumpportal: {
+                apiKey: '',
+                priorityFee: 0.000001,
+                pool: 'pump' // 'pump' or 'meteora-dbc'
+            },
+
             // Trading Settings (legacy compatibility)
             trading: {
                 defaultSlippage: 1,

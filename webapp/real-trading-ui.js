@@ -3746,6 +3746,15 @@ async function refreshCollectFeesView(options = {}) {
         metrics.tradingLastCollected = getLastCollectionTimestamp(collectFeesState.history, ['trading', 'all']);
         metrics.rentLastCollected = getLastCollectionTimestamp(collectFeesState.history, ['rent', 'all']);
 
+        // Count launched tokens for creator fees
+        const importedRecords = Array.from(tokenRegistry.imported.values());
+        const launchedTokens = importedRecords.filter(record => {
+            const isDraft = record.type === 'draft' || !record.mint;
+            return !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+        });
+        metrics.creatorTokensCount = launchedTokens.length;
+        metrics.creatorLastCollected = getLastCollectionTimestamp(collectFeesState.history, ['creator', 'all']);
+
         collectFeesState.metrics = metrics;
 
         updateCollectFeesDisplay(metrics);
@@ -3873,7 +3882,9 @@ function updateCollectFeesDisplay(data = {}) {
         rentWallets: Number(data.rentWallets) || 0,
         usdValue: Number(data.usdValue) || 0,
         tradingLastCollected: data.tradingLastCollected || null,
-        rentLastCollected: data.rentLastCollected || null
+        rentLastCollected: data.rentLastCollected || null,
+        creatorTokensCount: Number(data.creatorTokensCount) || 0,
+        creatorLastCollected: data.creatorLastCollected || null
     };
 
     const tradingFeesEl = document.getElementById('trading-fees');
@@ -3884,6 +3895,8 @@ function updateCollectFeesDisplay(data = {}) {
     const tradingLastEl = document.getElementById('trading-last');
     const rentLastEl = document.getElementById('rent-last');
     const usdEl = document.getElementById('fees-usd');
+    const creatorTokensCountEl = document.getElementById('creator-tokens-count');
+    const creatorLastEl = document.getElementById('creator-last');
 
     if (tradingFeesEl) tradingFeesEl.textContent = `${metrics.tradingFees.toFixed(4)} SOL`;
     if (rentFeesEl) rentFeesEl.textContent = `${metrics.rentFees.toFixed(4)} SOL`;
@@ -3891,6 +3904,10 @@ function updateCollectFeesDisplay(data = {}) {
     if (tradingWalletsEl) tradingWalletsEl.textContent = metrics.tradingWallets.toString();
     if (rentWalletsEl) rentWalletsEl.textContent = metrics.rentWallets.toString();
     if (usdEl) usdEl.textContent = `$${metrics.usdValue.toFixed(2)}`;
+    if (creatorTokensCountEl) creatorTokensCountEl.textContent = metrics.creatorTokensCount.toString();
+    if (creatorLastEl) {
+        creatorLastEl.textContent = metrics.creatorLastCollected ? formatTimestamp(metrics.creatorLastCollected) : 'Never';
+    }
 
     if (tradingLastEl) {
         tradingLastEl.textContent = metrics.tradingLastCollected ? formatTimestamp(metrics.tradingLastCollected) : 'Never';
@@ -4114,6 +4131,260 @@ async function collectAllFees(options = {}) {
 async function collectTradingFees() {
     addConsoleLog('💰 Collecting trading fees...', 'info');
     await collectAllFees({ category: 'trading' });
+}
+
+// Collect creator fees from Pump.fun
+async function collectCreatorFees(tokenMint = null, options = {}) {
+    // Get token from current view if not provided
+    if (!tokenMint) {
+        const currentToken = tokenRegistry.current;
+        if (!currentToken || !currentToken.mint) {
+            addConsoleLog('❌ No token selected. Please view a token first.', 'error');
+            alert('No token selected. Please view a token first.');
+            return;
+        }
+        tokenMint = currentToken.mint;
+    }
+
+    // Check if token is launched (not a draft)
+    const tokenRecord = tokenRegistry.imported.get(tokenMint);
+    if (!tokenRecord) {
+        addConsoleLog('❌ Token not found in registry.', 'error');
+        alert('Token not found. Please ensure this is a token you launched.');
+        return;
+    }
+
+    const isDraft = tokenRecord.type === 'draft' || !tokenRecord.mint;
+    if (isDraft) {
+        addConsoleLog('❌ This token has not been launched yet.', 'error');
+        alert('This token has not been launched yet. Only launched tokens can collect creator fees.');
+        return;
+    }
+
+    // Get PumpPortal settings
+    const settings = window.settingsManager?.getSettings() || window.__CHAOS_SETTINGS__ || {};
+    const pumpportalSettings = settings.pumpportal || {};
+    let apiKey = pumpportalSettings.apiKey || options.apiKey || '';
+    const priorityFee = pumpportalSettings.priorityFee ?? 0.000001;
+    const pool = pumpportalSettings.pool || 'pump';
+
+    if (!apiKey) {
+        const userApiKey = prompt('PumpPortal API key is required to collect creator fees.\n\nEnter your PumpPortal API key:');
+        if (!userApiKey || !userApiKey.trim()) {
+            addConsoleLog('❌ API key is required to collect creator fees.', 'error');
+            return;
+        }
+        // Save API key to settings
+        if (window.settingsManager) {
+            const currentSettings = window.settingsManager.getSettings();
+            if (!currentSettings.pumpportal) {
+                currentSettings.pumpportal = {};
+            }
+            currentSettings.pumpportal.apiKey = userApiKey.trim();
+            window.settingsManager.saveSettings(currentSettings);
+        }
+        apiKey = userApiKey.trim();
+    }
+
+    // Show confirmation dialog (unless skipped)
+    if (!options.skipConfirm) {
+        const confirmMessage = `Collect Creator Fees for Token\n\n` +
+            `Token Mint: ${tokenMint.substring(0, 8)}...${tokenMint.substring(tokenMint.length - 8)}\n` +
+            `Priority Fee: ${priorityFee} SOL\n` +
+            `Pool: ${pool}\n\n` +
+            `This will claim all available creator fees from Pump.fun for this token.\n\n` +
+            `Continue?`;
+
+        if (!window.confirm(confirmMessage)) {
+            addConsoleLog('Creator fee collection cancelled.', 'info');
+            return;
+        }
+    }
+
+    addConsoleLog(`💎 Collecting creator fees for ${tokenMint.substring(0, 8)}...`, 'info');
+
+    try {
+        // Build request payload
+        const payload = {
+            action: 'collectCreatorFee',
+            priorityFee: priorityFee,
+            pool: pool
+        };
+
+        // For pump.fun, mint is not needed (collects all at once)
+        // For meteora-dbc, mint is required
+        if (pool === 'meteora-dbc') {
+            payload.mint = tokenMint;
+        }
+
+        // Call PumpPortal Lightning Transaction API
+        const response = await fetch(`https://pumpportal.fun/api/trade?api-key=${encodeURIComponent(apiKey)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || data.message || `API returned status ${response.status}`);
+        }
+
+        // Check for errors in response
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // Success - transaction signature should be in data
+        const signature = data.signature || data.tx || data.transaction;
+        if (signature) {
+            addConsoleLog(`✅ Creator fees collected successfully!`, 'success');
+            addConsoleLog(`   Transaction: https://solscan.io/tx/${signature}`, 'info');
+            
+            const solscanUrl = `https://solscan.io/tx/${signature}`;
+            const viewTx = window.confirm(`Creator fees collected successfully!\n\nTransaction: ${signature}\n\nOpen in Solscan?`);
+            if (viewTx) {
+                window.open(solscanUrl, '_blank', 'noopener');
+            }
+        } else {
+            addConsoleLog(`✅ Creator fee collection request submitted.`, 'success');
+            addConsoleLog(`   Response: ${JSON.stringify(data)}`, 'info');
+        }
+
+    } catch (error) {
+        console.error('Creator fee collection error:', error);
+        addConsoleLog(`❌ Failed to collect creator fees: ${error.message}`, 'error');
+        alert(`Failed to collect creator fees: ${error.message}`);
+    }
+}
+
+// Collect all creator fees from all launched tokens
+async function collectAllCreatorFees() {
+    // Get all launched tokens
+    const importedRecords = Array.from(tokenRegistry.imported.values());
+    const launchedTokens = importedRecords.filter(record => {
+        const isDraft = record.type === 'draft' || !record.mint;
+        return !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+    });
+
+    if (launchedTokens.length === 0) {
+        addConsoleLog('❌ No launched tokens found. Launch a token first to collect creator fees.', 'error');
+        alert('No launched tokens found. Launch a token first to collect creator fees.');
+        return;
+    }
+
+    // Get PumpPortal settings
+    const settings = window.settingsManager?.getSettings() || window.__CHAOS_SETTINGS__ || {};
+    const pumpportalSettings = settings.pumpportal || {};
+    let apiKey = pumpportalSettings.apiKey || '';
+    const priorityFee = pumpportalSettings.priorityFee ?? 0.000001;
+    const pool = pumpportalSettings.pool || 'pump';
+
+    if (!apiKey) {
+        const userApiKey = prompt(`PumpPortal API key is required to collect creator fees.\n\nEnter your PumpPortal API key:`);
+        if (!userApiKey || !userApiKey.trim()) {
+            addConsoleLog('❌ API key is required to collect creator fees.', 'error');
+            return;
+        }
+        // Save API key to settings
+        if (window.settingsManager) {
+            const currentSettings = window.settingsManager.getSettings();
+            if (!currentSettings.pumpportal) {
+                currentSettings.pumpportal = {};
+            }
+            currentSettings.pumpportal.apiKey = userApiKey.trim();
+            window.settingsManager.saveSettings(currentSettings);
+        }
+        apiKey = userApiKey.trim();
+    }
+
+    // Show confirmation dialog
+    const confirmMessage = `Collect Creator Fees from All Tokens\n\n` +
+        `Tokens: ${launchedTokens.length} launched token(s)\n` +
+        `Priority Fee: ${priorityFee} SOL\n` +
+        `Pool: ${pool}\n\n` +
+        `This will claim all available creator fees from Pump.fun for all your launched tokens.\n\n` +
+        `Continue?`;
+
+    if (!window.confirm(confirmMessage)) {
+        addConsoleLog('Creator fee collection cancelled.', 'info');
+        return;
+    }
+
+    addConsoleLog(`💎 Collecting creator fees from ${launchedTokens.length} token(s)...`, 'info');
+
+    let successCount = 0;
+    let failCount = 0;
+    const results = [];
+
+    // For pump.fun, we can collect all at once (no mint needed)
+    // For meteora-dbc, we need to collect per token
+    if (pool === 'pump') {
+        // Collect all at once for pump.fun
+        try {
+            const payload = {
+                action: 'collectCreatorFee',
+                priorityFee: priorityFee,
+                pool: pool
+            };
+
+            const response = await fetch(`https://pumpportal.fun/api/trade?api-key=${encodeURIComponent(apiKey)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                throw new Error(data.error || data.message || `API returned status ${response.status}`);
+            }
+
+            const signature = data.signature || data.tx || data.transaction;
+            if (signature) {
+                successCount = launchedTokens.length;
+                addConsoleLog(`✅ Creator fees collected successfully for all tokens!`, 'success');
+                addConsoleLog(`   Transaction: https://solscan.io/tx/${signature}`, 'info');
+                results.push({ success: true, signature, tokens: launchedTokens.length });
+            } else {
+                addConsoleLog(`✅ Creator fee collection request submitted.`, 'success');
+                results.push({ success: true, response: data, tokens: launchedTokens.length });
+            }
+        } catch (error) {
+            failCount = launchedTokens.length;
+            console.error('Creator fee collection error:', error);
+            addConsoleLog(`❌ Failed to collect creator fees: ${error.message}`, 'error');
+            results.push({ success: false, error: error.message, tokens: launchedTokens.length });
+        }
+    } else {
+        // Collect per token for meteora-dbc
+        for (const token of launchedTokens) {
+            try {
+                await collectCreatorFees(token.mint, { apiKey, skipConfirm: true });
+                successCount++;
+                results.push({ success: true, mint: token.mint });
+            } catch (error) {
+                failCount++;
+                results.push({ success: false, mint: token.mint, error: error.message });
+            }
+        }
+    }
+
+    // Show summary
+    const summary = `Creator Fee Collection Complete\n\n` +
+        `✅ Successful: ${successCount}\n` +
+        `❌ Failed: ${failCount}\n\n` +
+        `${successCount > 0 ? 'Some fees were collected successfully!' : 'All collections failed.'}`;
+
+    alert(summary);
+    addConsoleLog(`📊 Collection summary: ${successCount} success, ${failCount} failed`, successCount > 0 ? 'success' : 'error');
+
+    // Refresh the view
+    await refreshCollectFeesView();
 }
 
 // Collect rent fees
@@ -4350,6 +4621,8 @@ window.applyBlueprintToLaunchFromSelector = applyBlueprintToLaunchFromSelector;
 window.collectAllFees = collectAllFees;
 window.collectTradingFees = collectTradingFees;
 window.collectRentFees = collectRentFees;
+window.collectCreatorFees = collectCreatorFees;
+window.collectAllCreatorFees = collectAllCreatorFees;
 window.toggleAutoCollect = toggleAutoCollect;
 window.generateVanity = generateVanity;
 window.stopVanityGeneration = stopVanityGeneration;
@@ -7346,6 +7619,18 @@ function populateTokenDetailView(record) {
             collectFeesButton.classList.add('hidden');
         } else {
             collectFeesButton.classList.remove('hidden');
+        }
+    }
+
+    // Show/hide Collect Creator Fees button (only for launched tokens)
+    const collectCreatorFeesButton = getElement('token-collect-creator-fees-btn');
+    if (collectCreatorFeesButton) {
+        // Only show for launched tokens (not drafts, not imported)
+        const isLaunched = !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+        if (isLaunched) {
+            collectCreatorFeesButton.classList.remove('hidden');
+        } else {
+            collectCreatorFeesButton.classList.add('hidden');
         }
     }
 

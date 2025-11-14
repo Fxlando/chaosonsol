@@ -434,6 +434,43 @@ async function calculateOnChainPrice(mintAddress) {
 async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
     console.log('🔍 Fetching trade feed for:', mintAddress);
     
+    // Use API Pool Manager if available (intelligent rotation)
+    if (window.apiPoolManager) {
+        try {
+            return await window.apiPoolManager.executeWithFailover('trade', async (api) => {
+                switch (api.url) {
+                    case 'helius':
+                        const heliusTrades = await fetchHeliusEnhancedTrades(mintAddress, limit);
+                        if (heliusTrades && heliusTrades.length > 0) {
+                            return heliusTrades;
+                        }
+                        throw new Error('Helius returned no trades');
+                        
+                    case 'pumpportal':
+                        // PumpPortal is WebSocket-based, not suitable for one-time fetch
+                        throw new Error('PumpPortal is WebSocket-based');
+                        
+                    case 'onchain':
+                        const connection = getSolanaConnection('monitoring');
+                        if (!connection) {
+                            throw new Error('No RPC connection available');
+                        }
+                        const onChainTrades = await fetchOnChainTrades(mintAddress, limit);
+                        if (onChainTrades && onChainTrades.length > 0) {
+                            return onChainTrades;
+                        }
+                        throw new Error('On-chain returned no trades');
+                        
+                    default:
+                        throw new Error(`Unknown trade API: ${api.url}`);
+                }
+            }, { parallel: false }); // Sequential for trades (Helius is fastest, try it first)
+        } catch (error) {
+            console.debug('API Pool Manager trade fetch failed, using legacy fallback:', error.message);
+        }
+    }
+    
+    // Legacy fallback (if API Pool Manager not available)
     // Priority 1: Try Helius Enhanced API (fastest, best parsing)
     try {
         const heliusTrades = await fetchHeliusEnhancedTrades(mintAddress, limit);

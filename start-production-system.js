@@ -22,7 +22,7 @@ console.log('==========================================\n');
 const config = {
     port: process.env.PORT || 3000,
     host: process.env.HOST || '0.0.0.0',
-    rpcUrl: process.env.RPC_URL || 'https://api.mainnet-beta.solana.com',
+    rpcUrl: process.env.RPC_URL || 'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm',
     network: process.env.NETWORK || 'mainnet-beta',
     autoTrade: process.env.AUTO_TRADE === 'true',
     runTests: process.env.RUN_TESTS !== 'false'

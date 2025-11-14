@@ -38,7 +38,7 @@ const config = {
     retries: 3
   },
   solana: {
-    rpcUrl: process.env.RPC_URL || 'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
+    rpcUrl: process.env.RPC_URL || 'https://rpc.shyft.to?api_key=6AC3vTBB5lObDYTm',
     network: process.env.NETWORK || 'mainnet-beta'
   },
   trading: {

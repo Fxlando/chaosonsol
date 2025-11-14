@@ -81,6 +81,11 @@
         Object.entries(SHYFT_FIELDS).forEach(([key, id]) => {
             setInputValue(id, shyft[key]);
         });
+        
+        // Populate Helius Enhanced API settings
+        Object.entries(HELIUS_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, helius[key]);
+        });
 
         // Update endpoint display
         updateShyftEndpoints(shyft.apiKey || '');
@@ -145,12 +150,17 @@
             enabled: get(SHYFT_FIELDS.enabled)?.checked || false,
             apiKey: get(SHYFT_FIELDS.apiKey)?.value.trim() || ''
         };
+        
+        const helius = {
+            apiKey: get(HELIUS_FIELDS.apiKey)?.value.trim() || ''
+        };
 
         return {
             solana,
             customization,
             pumpportal,
-            shyft
+            shyft,
+            helius
         };
     }
 

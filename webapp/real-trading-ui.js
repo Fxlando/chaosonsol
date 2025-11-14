@@ -5387,7 +5387,186 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false } =
     tbody.innerHTML = rows;
 }
 
+// PumpPortal WebSocket Manager
+let pumpPortalWebSocket = null;
+let pumpPortalSubscriptions = new Set(); // Track subscribed token mints
+let pumpPortalReconnectAttempts = 0;
+const PUMPPORTAL_WS_URL = 'wss://pumpportal.fun/api/data';
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY_MS = 3000;
+
+function connectPumpPortalWebSocket() {
+    if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.OPEN) {
+        return; // Already connected
+    }
+
+    try {
+        pumpPortalWebSocket = new WebSocket(PUMPPORTAL_WS_URL);
+
+        pumpPortalWebSocket.onopen = () => {
+            console.log('✅ PumpPortal WebSocket connected');
+            pumpPortalReconnectAttempts = 0;
+            
+            // Re-subscribe to all active subscriptions
+            pumpPortalSubscriptions.forEach(mint => {
+                subscribeToTokenTrades(mint);
+            });
+        };
+
+        pumpPortalWebSocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                handlePumpPortalMessage(data);
+            } catch (error) {
+                console.warn('Failed to parse PumpPortal message:', error);
+            }
+        };
+
+        pumpPortalWebSocket.onerror = (error) => {
+            console.warn('PumpPortal WebSocket error:', error);
+        };
+
+        pumpPortalWebSocket.onclose = () => {
+            console.log('PumpPortal WebSocket closed');
+            pumpPortalWebSocket = null;
+            
+            // Attempt to reconnect if we have active subscriptions
+            if (pumpPortalSubscriptions.size > 0 && pumpPortalReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                pumpPortalReconnectAttempts++;
+                console.log(`Reconnecting to PumpPortal WebSocket (attempt ${pumpPortalReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+                setTimeout(() => {
+                    connectPumpPortalWebSocket();
+                }, RECONNECT_DELAY_MS);
+            }
+        };
+    } catch (error) {
+        console.error('Failed to create PumpPortal WebSocket:', error);
+    }
+}
+
+function subscribeToTokenTrades(mint) {
+    if (!mint) return;
+    
+    if (!pumpPortalWebSocket || pumpPortalWebSocket.readyState !== WebSocket.OPEN) {
+        connectPumpPortalWebSocket();
+        // Wait for connection, then subscribe
+        if (pumpPortalWebSocket) {
+            pumpPortalWebSocket.addEventListener('open', () => {
+                sendPumpPortalSubscribe('subscribeTokenTrade', [mint]);
+                pumpPortalSubscriptions.add(mint);
+            }, { once: true });
+        }
+        return;
+    }
+
+    sendPumpPortalSubscribe('subscribeTokenTrade', [mint]);
+    pumpPortalSubscriptions.add(mint);
+}
+
+function unsubscribeFromTokenTrades(mint) {
+    if (!mint || !pumpPortalSubscriptions.has(mint)) return;
+    
+    if (pumpPortalWebSocket && pumpPortalWebSocket.readyState === WebSocket.OPEN) {
+        sendPumpPortalSubscribe('unsubscribeTokenTrade', [mint]);
+    }
+    
+    pumpPortalSubscriptions.delete(mint);
+    
+    // Close connection if no more subscriptions
+    if (pumpPortalSubscriptions.size === 0 && pumpPortalWebSocket) {
+        pumpPortalWebSocket.close();
+        pumpPortalWebSocket = null;
+    }
+}
+
+function sendPumpPortalSubscribe(method, keys) {
+    if (!pumpPortalWebSocket || pumpPortalWebSocket.readyState !== WebSocket.OPEN) {
+        console.warn('PumpPortal WebSocket not ready for subscription');
+        return;
+    }
+
+    try {
+        const payload = {
+            method: method,
+            keys: keys
+        };
+        pumpPortalWebSocket.send(JSON.stringify(payload));
+    } catch (error) {
+        console.error('Failed to send PumpPortal subscription:', error);
+    }
+}
+
+function handlePumpPortalMessage(data) {
+    // Handle different message types from PumpPortal
+    // PumpPortal sends trade data in various formats - check for trade indicators
+    const isTrade = data.type === 'trade' || 
+                    data.action === 'buy' || 
+                    data.action === 'sell' ||
+                    data.event === 'trade' ||
+                    data.side === 'buy' ||
+                    data.side === 'sell' ||
+                    (data.mint && (data.solAmount || data.tokenAmount));
+    
+    if (isTrade) {
+        const currentMint = tokenRegistry.current?.mint;
+        if (!currentMint) return;
+        
+        // Check if this trade is for the current token
+        const tradeMint = data.mint || data.token || data.tokenMint || data.tokenAddress;
+        if (tradeMint && tradeMint.toLowerCase() === currentMint.toLowerCase()) {
+            // Extract trade data from various possible formats
+            const timestamp = data.timestamp || data.time || data.createdAt || Date.now();
+            const wallet = data.wallet || data.account || data.user || data.authority || data.address || '';
+            const type = data.action === 'buy' || data.side === 'buy' ? 'buy' : 
+                        data.action === 'sell' || data.side === 'sell' ? 'sell' : 'trade';
+            
+            // Try to extract amounts - PumpPortal might use different field names
+            let amountSol = data.solAmount || data.amount || data.sol || data.solIn || null;
+            let amountTokens = data.tokenAmount || data.amountTokens || data.tokens || data.tokenOut || null;
+            
+            // If amounts are strings, try to parse them
+            if (typeof amountSol === 'string') {
+                amountSol = parseFloat(amountSol) || null;
+            }
+            if (typeof amountTokens === 'string') {
+                amountTokens = parseFloat(amountTokens) || null;
+            }
+            
+            // Add to activity feed
+            const activityEntry = {
+                timestamp: typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime() || Date.now(),
+                wallet: wallet,
+                type: type,
+                amountSol: amountSol,
+                amountTokens: amountTokens
+            };
+            
+            // Get current activity and prepend new trade
+            const currentActivity = tokenDetailViewState.currentActivity || [];
+            const updatedActivity = [activityEntry, ...currentActivity].slice(0, 50); // Keep last 50
+            tokenDetailViewState.currentActivity = updatedActivity;
+            
+            renderTokenActivity(updatedActivity, { isLive: true });
+            
+            // Also refresh token metrics if this is a significant trade
+            if (amountSol && amountSol > 0.1) {
+                // Trigger a light refresh of token details
+                if (tokenRegistry.current && tokenRegistry.current.mint === currentMint) {
+                    loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+                }
+            }
+        }
+    }
+}
+
 function stopTokenActivityStream() {
+    // Unsubscribe from WebSocket if active
+    const currentMint = tokenRegistry.current?.mint;
+    if (currentMint) {
+        unsubscribeFromTokenTrades(currentMint);
+    }
+    
+    // Also clear any polling interval (fallback)
     if (tokenDetailViewState.activityIntervalId) {
         clearInterval(tokenDetailViewState.activityIntervalId);
         tokenDetailViewState.activityIntervalId = null;
@@ -5400,6 +5579,19 @@ function startTokenActivityStream(mint) {
         return;
     }
 
+    // Use WebSocket for real-time updates
+    subscribeToTokenTrades(mint);
+    
+    // Fallback: Also do initial fetch and periodic polling as backup
+    fetchPumpFunTradeFeed(mint, 20).then(latest => {
+        renderTokenActivity(latest, { isLive: true });
+        tokenDetailViewState.currentActivity = latest;
+    }).catch(error => {
+        // Silently handle API downtime
+        console.debug('Initial trade feed fetch failed:', error.message);
+    });
+    
+    // Keep polling as fallback (less frequent - every 60 seconds)
     tokenDetailViewState.activityIntervalId = setInterval(async () => {
         if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
             stopTokenActivityStream();
@@ -5409,8 +5601,9 @@ function startTokenActivityStream(mint) {
         try {
             const latest = await fetchPumpFunTradeFeed(mint, 20);
             renderTokenActivity(latest, { isLive: true });
+            tokenDetailViewState.currentActivity = latest;
         } catch (error) {
-            // Silently handle API downtime - don't spam console with expected errors
+            // Silently handle API downtime
             const errorMessage = error.message || String(error);
             const isApiDown = errorMessage.includes('530') || 
                              errorMessage.includes('503') || 
@@ -5422,7 +5615,7 @@ function startTokenActivityStream(mint) {
                 console.debug(`Live trade refresh failed for ${mint}:`, errorMessage);
             }
         }
-    }, 15000);
+    }, 60000); // Reduced to 60 seconds since WebSocket provides real-time updates
 }
 
 async function fetchPumpFunTradeFeed(mint, limit = 20) {

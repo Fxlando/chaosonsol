@@ -5878,7 +5878,9 @@ function connectPumpPortalWebSocket() {
         };
 
         pumpPortalWebSocket.onerror = (error) => {
-            console.warn('PumpPortal WebSocket error:', error);
+            // Silently handle WebSocket errors - connection issues are expected
+            // Browser will log the error anyway, no need to duplicate
+            console.debug('PumpPortal WebSocket error (expected):', error);
         };
 
         pumpPortalWebSocket.onclose = () => {
@@ -6264,6 +6266,7 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
             }
     } catch (error) {
             // Silently handle network errors and 5xx errors - API might be down
+            // Browser will log these in console anyway, no need to duplicate
             const errorMessage = error.message || String(error);
             const isApiDown = errorMessage.includes('530') || 
                              errorMessage.includes('503') || 
@@ -6274,7 +6277,8 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
                              errorMessage.includes('NetworkError') ||
                              errorMessage.includes('aborted');
             
-            // Only log unexpected errors - all expected API failures are silent
+            // Don't log expected errors - browser console already shows them
+            // Only log truly unexpected errors at debug level
             if (!isApiDown) {
                 console.debug(`Trade feed fetch error (${endpoint}):`, errorMessage);
             }

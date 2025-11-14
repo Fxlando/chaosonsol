@@ -4313,6 +4313,102 @@ async function collectCreatorFees(tokenMint = null, options = {}) {
     }
 }
 
+// Check available creator fees from Pump.fun
+async function checkCreatorFees() {
+    // Get all launched tokens
+    const importedRecords = Array.from(tokenRegistry.imported.values());
+    const launchedTokens = importedRecords.filter(record => {
+        const isDraft = record.type === 'draft' || !record.mint;
+        return !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+    });
+
+    if (launchedTokens.length === 0) {
+        addConsoleLog('ℹ️ No launched tokens found. Launch a token first to earn creator fees.', 'info');
+        alert('No launched tokens found. Launch a token first to earn creator fees.');
+        return;
+    }
+
+    addConsoleLog(`🔍 Checking creator fees for ${launchedTokens.length} token(s)...`, 'info');
+
+    // Get PumpPortal settings
+    const settings = window.settingsManager?.getSettings() || window.__CHAOS_SETTINGS__ || {};
+    const pumpportalSettings = settings.pumpportal || {};
+    const apiKey = pumpportalSettings.apiKey || '';
+
+    if (!apiKey) {
+        const info = `To check creator fees, you need a PumpPortal API key.\n\n` +
+            `Creator fees are earned from trading activity on your tokens.\n` +
+            `You can check fees directly on Pump.fun or collect them using the "Collect All" button.\n\n` +
+            `Would you like to:\n` +
+            `1. Open Pump.fun to check fees manually?\n` +
+            `2. Enter your API key to check programmatically?`;
+        
+        const choice = window.confirm(info + '\n\nOK = Open Pump.fun\nCancel = Enter API Key');
+        
+        if (choice) {
+            // Open Pump.fun for each token
+            launchedTokens.forEach(token => {
+                if (token.mint) {
+                    window.open(`https://pump.fun/coin/${token.mint}`, '_blank', 'noopener');
+                }
+            });
+            return;
+        } else {
+            const userApiKey = prompt('Enter your PumpPortal API key:');
+            if (!userApiKey || !userApiKey.trim()) {
+                return;
+            }
+            // Save API key
+            if (window.settingsManager) {
+                const currentSettings = window.settingsManager.getSettings();
+                if (!currentSettings.pumpportal) {
+                    currentSettings.pumpportal = {};
+                }
+                currentSettings.pumpportal.apiKey = userApiKey.trim();
+                window.settingsManager.saveSettings(currentSettings);
+            }
+        }
+    }
+
+    // Note: PumpPortal API doesn't have a direct endpoint to check available fees
+    // The fees are collected all at once, so we can't check individual amounts
+    // We'll show information about the tokens and provide links
+    
+    let message = `Creator Fees Information\n\n` +
+        `You have ${launchedTokens.length} launched token(s):\n\n`;
+    
+    launchedTokens.slice(0, 10).forEach((token, index) => {
+        const name = token.name || token.symbol || 'Unnamed Token';
+        const mint = token.mint || 'Unknown';
+        message += `${index + 1}. ${name}\n   ${mint.substring(0, 8)}...${mint.substring(mint.length - 8)}\n\n`;
+    });
+    
+    if (launchedTokens.length > 10) {
+        message += `... and ${launchedTokens.length - 10} more token(s)\n\n`;
+    }
+    
+    message += `Creator fees are earned from trading activity on Pump.fun.\n` +
+        `Fees are collected all at once for all your tokens.\n\n` +
+        `To check fees:\n` +
+        `• Visit each token's page on Pump.fun\n` +
+        `• Or use "Collect All" to attempt collection\n\n` +
+        `Would you like to open all token pages on Pump.fun?`;
+    
+    const openPages = window.confirm(message);
+    if (openPages) {
+        launchedTokens.forEach((token, index) => {
+            setTimeout(() => {
+                if (token.mint) {
+                    window.open(`https://pump.fun/coin/${token.mint}`, '_blank', 'noopener');
+                }
+            }, index * 500); // Stagger opens to avoid popup blocking
+        });
+        addConsoleLog(`✅ Opening ${launchedTokens.length} token page(s) on Pump.fun...`, 'info');
+    } else {
+        addConsoleLog(`ℹ️ Use "Collect All Creator Fees" to attempt collection. Fees are collected all at once.`, 'info');
+    }
+}
+
 // Collect all creator fees from all launched tokens
 async function collectAllCreatorFees(options = {}) {
     // Get all launched tokens

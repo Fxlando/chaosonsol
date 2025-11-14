@@ -119,7 +119,13 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
             };
         }
     } catch (error) {
-        console.debug('⚠️ Jupiter price fetch failed:', error.message);
+        // Only log non-network errors (DNS errors are handled silently in fetchJupiterPrice)
+        const errorMsg = error.message || '';
+        if (!errorMsg.includes('ERR_NAME_NOT_RESOLVED') && 
+            !errorMsg.includes('ERR_INTERNET_DISCONNECTED') &&
+            !errorMsg.includes('Failed to fetch')) {
+            console.debug('⚠️ Jupiter price fetch failed:', error.message);
+        }
     }
 
     // Try DexScreener as fallback
@@ -212,9 +218,22 @@ async function fetchJupiterPrice(mintAddress) {
             marketCap: null // Jupiter doesn't provide this
         };
     } catch (error) {
+        // Silently handle DNS/network errors - these are expected when Jupiter is down
+        // Only throw if it's a timeout or other non-network error
         if (error.name === 'AbortError') {
             throw new Error('Jupiter request timeout');
         }
+        
+        // Check for DNS/network errors (ERR_NAME_NOT_RESOLVED, ERR_INTERNET_DISCONNECTED, etc.)
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch') ||
+            errorMsg.includes('NetworkError')) {
+            // Silently fail - fallback will be used
+            return null;
+        }
+        
         throw new Error(`Jupiter fetch failed: ${error.message}`);
     }
 }

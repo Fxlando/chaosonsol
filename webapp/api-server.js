@@ -1232,14 +1232,19 @@ register('get', '/stats', async () => {
 register('get', '/config', async () => {
   const pumpPortalConfig = buildPumpPortalConfig();
   
+  // Get dedicated RPCs from .env (with fallbacks)
+  const monitoringRpcWs = process.env.MONITORING_RPC_WSS || 
+    (process.env.RPC_URL_2 ? process.env.RPC_URL_2.replace('https://', 'wss://').replace('http://', 'ws://') : '');
+  const priceRpcHttp = process.env.PRICE_RPC_HTTP || process.env.RPC_URL_2 || '';
+  
   return {
     success: true,
     config: {
       solana: {
         rpcHttp: process.env.RPC_URL || '',
         rpcWebsocket: process.env.RPC_URL ? process.env.RPC_URL.replace('https://', 'wss://').replace('http://', 'ws://') : '',
-        monitoringRpc: process.env.RPC_URL_2 ? process.env.RPC_URL_2.replace('https://', 'wss://').replace('http://', 'ws://') : '',
-        priceRpc: process.env.RPC_URL_2 || '',
+        monitoringRpc: monitoringRpcWs,
+        priceRpc: priceRpcHttp,
         priorityFee: process.env.PRIORITY_FEE ? Number(process.env.PRIORITY_FEE) / 1_000_000_000 : 0.0005
       },
       pumpportal: {

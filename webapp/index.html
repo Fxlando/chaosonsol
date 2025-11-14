@@ -4095,6 +4095,41 @@
                         </div>
                     </section>
 
+                    <!-- Birdeye API Section -->
+                    <section>
+                        <div class="mb-6">
+                            <h2 class="text-xl font-semibold mb-2">Birdeye API</h2>
+                            <p class="text-sm text-gray-400">
+                                Configure Birdeye API for enhanced token metadata fallback. 
+                                Improves reliability when fetching token name, symbol, and image.
+                                Get your API key from <a href="https://birdeye.so" target="_blank" class="text-green-400 hover:text-green-300 underline">birdeye.so</a>
+                            </p>
+                            <div class="mt-3 bg-green-900/20 border border-green-700/50 rounded-lg p-3">
+                                <p class="text-xs text-green-200">
+                                    <strong>Note:</strong> Birdeye API provides:
+                                    <br>• Higher rate limits (100+ requests/minute)
+                                    <br>• More reliable token metadata fetching
+                                    <br>• Better fallback when other APIs fail
+                                    <br>• Improved token import success rate
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block mb-2 text-sm font-medium">Birdeye API Key</label>
+                            <input
+                                type="text"
+                                id="birdeye-api-key"
+                                placeholder="Enter your Birdeye API key"
+                                value="9ddbf4282f714067a229ad9caedd1b41"
+                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm font-mono focus:outline-none focus:border-neutral-600"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">
+                                Your Birdeye API key. Used as a fallback for token metadata when other sources fail.
+                            </p>
+                        </div>
+                    </section>
+
                     <!-- Shyft RPC Monitoring Section -->
                     <section>
                         <div class="mb-6">

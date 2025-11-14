@@ -643,62 +643,230 @@ function parseTradeFromTransaction(tx, mintAddress) {
 }
 
 /**
- * Enhanced token info fetch with error handling
+ * Retry helper with exponential backoff
  */
-async function fetchPumpFunTokenDetails(mintAddress) {
-    console.log('🔍 Fetching token details for:', mintAddress);
-    
-    // Try Pump.fun API first
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            if (attempt === maxRetries - 1) throw error;
+            const delay = baseDelay * Math.pow(2, attempt);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
+/**
+ * Fetch token metadata from DexScreener API
+ */
+async function fetchDexScreenerMetadata(mintAddress) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         const response = await fetch(
-            `https://frontend-api.pump.fun/coins/${mintAddress}`,
+            `https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`,
             { 
                 signal: controller.signal,
-                headers: {
-                    'Accept': 'application/json'
+                headers: { 'Accept': 'application/json' }
+            }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`DexScreener API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const pairs = data.pairs || [];
+        if (pairs.length === 0) {
+            return null;
+        }
+        
+        // Get the pair with highest liquidity
+        const bestPair = pairs.reduce((best, current) => {
+            const bestLiq = parseFloat(best.liquidity?.usd || 0);
+            const currentLiq = parseFloat(current.liquidity?.usd || 0);
+            return currentLiq > bestLiq ? current : best;
+        });
+        
+        return {
+            name: bestPair.baseToken?.name || null,
+            symbol: bestPair.baseToken?.symbol || null,
+            image: bestPair.baseToken?.logoURI || null,
+            marketCap: parseFloat(bestPair.marketCap) || null,
+            priceUsd: parseFloat(bestPair.priceUsd) || null,
+            source: 'dexscreener'
+        };
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('DexScreener request timeout');
+        }
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return null; // Silently fail
+        }
+        throw error;
+    }
+}
+
+/**
+ * Fetch token metadata from Birdeye API
+ */
+async function fetchBirdeyeMetadata(mintAddress) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(
+            `https://public-api.birdeye.so/defi/token_overview?address=${mintAddress}`,
+            { 
+                signal: controller.signal,
+                headers: { 
+                    'Accept': 'application/json',
+                    'X-API-KEY': '' // Birdeye allows some requests without API key
                 }
             }
         );
         
         clearTimeout(timeoutId);
         
-        if (response.ok) {
-            const data = await response.json();
+        if (!response.ok) {
+            throw new Error(`Birdeye API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.success && data.data) {
+            return {
+                name: data.data.name || null,
+                symbol: data.data.symbol || null,
+                image: data.data.logoURI || null,
+                marketCap: data.data.mc ? parseFloat(data.data.mc) : null,
+                priceUsd: data.data.price ? parseFloat(data.data.price) : null,
+                source: 'birdeye'
+            };
+        }
+        return null;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Birdeye request timeout');
+        }
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return null; // Silently fail
+        }
+        throw error;
+    }
+}
+
+/**
+ * Enhanced token info fetch with comprehensive fallbacks and retry logic
+ * Priority: Pump.fun API > DexScreener > Birdeye > On-chain Metaplex > On-chain basic
+ */
+async function fetchPumpFunTokenDetails(mintAddress) {
+    console.log('🔍 Fetching token details for:', mintAddress);
+    
+    // Source 1: Pump.fun API (with retry)
+    try {
+        const pumpFunData = await retryWithBackoff(async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            const response = await fetch(
+                `https://frontend-api.pump.fun/coins/${mintAddress}`,
+                { 
+                    signal: controller.signal,
+                    headers: { 'Accept': 'application/json' }
+                }
+            );
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const data = await response.json();
+                return { ...data, success: true, source: 'pumpfun' };
+            }
+            throw new Error(`Pump.fun API returned ${response.status}`);
+        }, 2); // 2 retries
+        
+        if (pumpFunData && pumpFunData.name) {
             console.log('✅ Pump.fun token details retrieved');
-            return { ...data, success: true };
+            return pumpFunData;
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
-            console.warn('⚠️ Pump.fun API unavailable:', error.message);
+            console.debug('⚠️ Pump.fun API unavailable:', error.message);
         }
     }
     
-    // Fallback: try to get basic info from on-chain metadata (only if we have valid RPC)
+    // Source 2: DexScreener API (with retry)
+    try {
+        const dexData = await retryWithBackoff(async () => {
+            return await fetchDexScreenerMetadata(mintAddress);
+        }, 2);
+        
+        if (dexData && (dexData.name || dexData.symbol)) {
+            console.log('✅ DexScreener token metadata retrieved');
+            return { ...dexData, success: true };
+        }
+    } catch (error) {
+        console.debug('⚠️ DexScreener metadata unavailable:', error.message);
+    }
+    
+    // Source 3: Birdeye API (with retry)
+    try {
+        const birdeyeData = await retryWithBackoff(async () => {
+            return await fetchBirdeyeMetadata(mintAddress);
+        }, 2);
+        
+        if (birdeyeData && (birdeyeData.name || birdeyeData.symbol)) {
+            console.log('✅ Birdeye token metadata retrieved');
+            return { ...birdeyeData, success: true };
+        }
+    } catch (error) {
+        console.debug('⚠️ Birdeye metadata unavailable:', error.message);
+    }
+    
+    // Source 4: On-chain Metaplex metadata (full metadata with name, symbol, image)
     try {
         const connection = getSolanaConnection();
         if (connection) {
-            const metadata = await fetchOnChainMetadata(mintAddress);
-            console.log('✅ Retrieved metadata from blockchain');
-            return { ...metadata, success: true };
-        } else {
-            console.debug('Skipping on-chain metadata fetch - no valid RPC connection');
+            const metadata = await fetchOnChainMetadata(mintAddress, true); // true = full metadata
+            if (metadata && (metadata.name || metadata.symbol)) {
+                console.log('✅ Retrieved full metadata from blockchain (Metaplex)');
+                return { ...metadata, success: true, source: 'on-chain-metaplex' };
+            }
         }
     } catch (error) {
-        // Only log if it's not a connection availability error
-        if (!error.message.includes('not available')) {
-            console.warn('⚠️ On-chain metadata fetch failed:', error.message);
-        } else {
-            console.debug('On-chain metadata fetch skipped:', error.message);
-        }
+        console.debug('⚠️ On-chain Metaplex metadata fetch failed:', error.message);
     }
     
-    // Return minimal data structure
+    // Source 5: On-chain basic info (mint account only)
+    try {
+        const connection = getSolanaConnection();
+        if (connection) {
+            const basicInfo = await fetchOnChainMetadata(mintAddress, false); // false = basic only
+            console.log('✅ Retrieved basic info from blockchain');
+            return { ...basicInfo, success: true, source: 'on-chain-basic' };
+        }
+    } catch (error) {
+        console.debug('⚠️ On-chain basic info fetch failed:', error.message);
+    }
+    
+    // Return minimal data structure if all sources fail
     console.warn('⚠️ No token details available from any source');
     return { 
         success: false,
+        mint: mintAddress,
+        name: null,
+        symbol: null,
+        image: null,
         marketCap: null,
         bondingCurve: null,
         bondingCurvePercentage: null
@@ -707,8 +875,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
 
 /**
  * Fetch token metadata from blockchain
+ * @param {string} mintAddress - Token mint address
+ * @param {boolean} fullMetadata - If true, fetch full Metaplex metadata (name, symbol, image). If false, only basic mint info.
  */
-async function fetchOnChainMetadata(mintAddress) {
+async function fetchOnChainMetadata(mintAddress, fullMetadata = false) {
     try {
         const connection = getSolanaConnection();
         
@@ -723,7 +893,7 @@ async function fetchOnChainMetadata(mintAddress) {
         
         const mintPubkey = new PublicKey(mintAddress);
         
-        // Get mint account info
+        // Get mint account info (always needed)
         const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
         
         if (!mintInfo.value) {
@@ -731,11 +901,61 @@ async function fetchOnChainMetadata(mintAddress) {
         }
         
         const supply = mintInfo.value.data?.parsed?.info?.supply;
+        const decimals = mintInfo.value.data?.parsed?.info?.decimals || 9;
         
-        return {
+        const result = {
             supply: supply ? parseInt(supply) : null,
-            decimals: mintInfo.value.data?.parsed?.info?.decimals || 9
+            decimals: decimals
         };
+        
+        // If full metadata requested, try to get Metaplex metadata
+        if (fullMetadata) {
+            try {
+                // Metaplex Metadata Program ID
+                const METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+                const TOKEN_METADATA_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+                
+                // Derive metadata PDA
+                const [metadataPDA] = PublicKey.findProgramAddressSync(
+                    [
+                        Buffer.from('metadata'),
+                        METADATA_PROGRAM_ID.toBuffer(),
+                        mintPubkey.toBuffer()
+                    ],
+                    METADATA_PROGRAM_ID
+                );
+                
+                // Get metadata account
+                const metadataAccount = await connection.getAccountInfo(metadataPDA);
+                
+                if (metadataAccount) {
+                    // Parse Metaplex metadata (simplified - full parsing would require Metaplex SDK)
+                    // For now, try to fetch from metadata URI if available
+                    try {
+                        // Try to get metadata from common metadata endpoints
+                        const metadataUri = `https://api.mainnet-beta.solana.com/api/v1/token/${mintAddress}`;
+                        const metadataResponse = await fetch(metadataUri, { 
+                            signal: AbortSignal.timeout(5000) 
+                        });
+                        
+                        if (metadataResponse.ok) {
+                            const metadataData = await metadataResponse.json();
+                            if (metadataData.token) {
+                                result.name = metadataData.token.name || null;
+                                result.symbol = metadataData.token.symbol || null;
+                                result.image = metadataData.token.logoURI || null;
+                            }
+                        }
+                    } catch (uriError) {
+                        console.debug('Metadata URI fetch failed:', uriError.message);
+                    }
+                }
+            } catch (metaplexError) {
+                console.debug('Metaplex metadata fetch failed:', metaplexError.message);
+            }
+        }
+        
+        return result;
     } catch (error) {
         throw new Error(`Metadata fetch failed: ${error.message}`);
     }

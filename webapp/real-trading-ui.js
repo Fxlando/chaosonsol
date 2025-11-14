@@ -3252,34 +3252,64 @@ async function executeImportToken() {
         setButtonLoading(button, true, 'Importing token…');
         await ensureApiClientReady();
 
-        addConsoleLog(`📥 Importing token ${mintAddress} from Pump.fun...`, 'info');
-        notify('Fetching live token metadata from Pump.fun…', 'info');
+        addConsoleLog(`📥 Importing token ${mintAddress}...`, 'info');
+        notify('Fetching token metadata from multiple sources…', 'info');
 
-        const response = await window.apiClient.importToken(mintAddress, { platform });
-
-        if (!response?.success) {
-            throw new Error(response?.error || 'Import request failed');
+        // Try backend API first
+        let response = null;
+        let info = {};
+        
+        try {
+            response = await window.apiClient.importToken(mintAddress, { platform });
+            if (response?.success && response.token) {
+                info = response.token;
+            }
+        } catch (apiError) {
+            console.debug('Backend API import failed, trying frontend fallbacks:', apiError.message);
         }
-
-        const info = response.token || {};
+        
+        // Enhanced frontend metadata fetching with multiple fallbacks
+        // This ensures we get name, symbol, and image even if backend fails
+        if (!info.name || !info.symbol || !info.image) {
+            try {
+                const enhancedMetadata = await fetchPumpFunTokenDetails(mintAddress);
+                if (enhancedMetadata) {
+                    // Merge enhanced metadata, prioritizing existing values
+                    info = {
+                        ...info,
+                        name: info.name || enhancedMetadata.name || null,
+                        symbol: info.symbol || enhancedMetadata.symbol || null,
+                        image: info.image || enhancedMetadata.image || enhancedMetadata.logoURI || null,
+                        description: info.description || enhancedMetadata.description || null,
+                        marketCap: info.marketCap || enhancedMetadata.marketCap || null,
+                        price: info.price || enhancedMetadata.priceUsd || null,
+                        website: info.website || enhancedMetadata.website || null,
+                        twitter: info.twitter || enhancedMetadata.twitter || null,
+                        telegram: info.telegram || enhancedMetadata.telegram || null
+                    };
+                }
+            } catch (metadataError) {
+                console.debug('Enhanced metadata fetch failed:', metadataError.message);
+            }
+        }
 
         const record = {
             mint: info.mint || mintAddress,
             name: info.name || 'Imported Token',
-            symbol: info.symbol || '',
+            symbol: info.symbol || mintAddress.slice(0, 4).toUpperCase() || '',
             description: info.description || '',
             image: info.image || '',
             status: 'Imported',
             type: 'imported',
-            launchpad: 'Pump.fun',
-            metadataUri: info.metadataUri || response.source?.metadataUri || '',
-            website: info.website || response.source?.website,
-            twitter: info.twitter || response.source?.twitter,
-            telegram: info.telegram || response.source?.telegram,
-            marketCap: info.marketCap,
-            price: info.price,
-            totalSupply: info.totalSupply,
-            decimals: info.decimals
+            launchpad: platform || 'Pump.fun',
+            metadataUri: info.metadataUri || response?.source?.metadataUri || '',
+            website: info.website || response?.source?.website || null,
+            twitter: info.twitter || response?.source?.twitter || null,
+            telegram: info.telegram || response?.source?.telegram || null,
+            marketCap: info.marketCap || null,
+            price: info.price || null,
+            totalSupply: info.totalSupply || info.supply || null,
+            decimals: info.decimals || 9
         };
 
         registerImportedToken(record);

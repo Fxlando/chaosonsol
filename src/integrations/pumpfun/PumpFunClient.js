@@ -16,6 +16,7 @@ import {
   createAssociatedTokenAccountInstruction,
   getAccount
 } from '@solana/spl-token';
+import { Metadata } from '@metaplex-foundation/mpl-token-metadata';
 import axios from 'axios';
 import bs58 from 'bs58';
 import { API_ENDPOINTS, PROGRAM_IDS } from '../../config/constants.js';
@@ -45,6 +46,7 @@ export class PumpFunClient {
     this.accountManager = new AccountManager(this.connection);
     this.cache = new Map();
     this.isInitialized = false;
+    this.metadataProgramId = new PublicKey(PROGRAM_IDS.METAPLEX_METADATA_PROGRAM);
     
     this.initialize();
   }
@@ -94,6 +96,17 @@ export class PumpFunClient {
       });
 
       if (response.data) {
+        const totalSupplyRaw = Number(response.data.total_supply) || 0;
+        const decimals = typeof response.data.decimals === 'number'
+          ? response.data.decimals
+          : (response.data.decimals ? Number(response.data.decimals) : 9);
+        const marketCap = typeof response.data.usd_market_cap === 'number'
+          ? response.data.usd_market_cap
+          : (response.data.usd_market_cap ? Number(response.data.usd_market_cap) : null);
+        const price = marketCap && totalSupplyRaw > 0
+          ? marketCap / (totalSupplyRaw / Math.pow(10, decimals))
+          : null;
+
         const metadataUri =
           response.data.metadata_uri ||
           response.data.metadataUri ||
@@ -116,10 +129,10 @@ export class PumpFunClient {
           twitter: unpackSocial('twitter'),
           telegram: unpackSocial('telegram'),
           website: unpackSocial('website'),
-          marketCap: response.data.usd_market_cap || 0,
-          price: response.data.usd_market_cap / (response.data.total_supply / Math.pow(10, response.data.decimals)) || 0,
-          totalSupply: response.data.total_supply || 0,
-          decimals: response.data.decimals || 9,
+          marketCap,
+          price,
+          totalSupply: totalSupplyRaw,
+          decimals,
           bondingCurve: response.data.bonding_curve || null,
           isComplete: response.data.complete || false,
           createdTimestamp: response.data.created_timestamp || 0,
@@ -131,6 +144,12 @@ export class PumpFunClient {
       }
     } catch (error) {
       logger.warn('PumpFun API failed:', error.message);
+    }
+
+    const onChainFallback = await this.fetchOnChainTokenInfo(tokenMint);
+    if (onChainFallback) {
+      this.cache.set(cacheKey, { data: onChainFallback, timestamp: Date.now() });
+      return onChainFallback;
     }
 
     return {
@@ -152,6 +171,100 @@ export class PumpFunClient {
     }
 
     return uri;
+  }
+
+  sanitizeString(value) {
+    if (!value || typeof value !== 'string') {
+      return '';
+    }
+
+    return value.replace(/\0/g, '').trim();
+  }
+
+  async fetchOnChainTokenInfo(tokenMint) {
+    try {
+      const mintKey = new PublicKey(tokenMint);
+      const [metadataPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('metadata'), this.metadataProgramId.toBuffer(), mintKey.toBuffer()],
+        this.metadataProgramId
+      );
+
+      const accountInfo = await this.connection.getAccountInfo(metadataPda);
+      if (!accountInfo) {
+        logger.warn(`No on-chain metadata account found for mint ${tokenMint}`);
+        return null;
+      }
+
+      const [metadata] = Metadata.deserialize(accountInfo.data);
+      const tokenMetadata = metadata.data;
+
+      const metadataUri = this.resolveMetadataUri(
+        this.sanitizeString(tokenMetadata.uri)
+      );
+      const name = this.sanitizeString(tokenMetadata.name) || 'Unknown';
+      const symbol = this.sanitizeString(tokenMetadata.symbol) || 'UNK';
+
+      let decimals = 9;
+      let totalSupply = 0;
+
+      try {
+        const supplyInfo = await this.connection.getTokenSupply(mintKey);
+        if (supplyInfo?.value) {
+          decimals = typeof supplyInfo.value.decimals === 'number'
+            ? supplyInfo.value.decimals
+            : decimals;
+
+          if (typeof supplyInfo.value.uiAmount === 'number') {
+            totalSupply = supplyInfo.value.uiAmount;
+          } else if (supplyInfo.value.amount) {
+            totalSupply = Number(supplyInfo.value.amount) / Math.pow(10, decimals);
+          }
+        }
+      } catch (supplyError) {
+        logger.warn(`Unable to fetch token supply for ${tokenMint}:`, supplyError.message);
+      }
+
+      if (!totalSupply) {
+        try {
+          const parsedInfo = await this.connection.getParsedAccountInfo(mintKey);
+          const mintInfo = parsedInfo?.value?.data?.parsed?.info;
+          if (mintInfo) {
+            decimals = typeof mintInfo.decimals === 'number'
+              ? mintInfo.decimals
+              : decimals;
+            if (mintInfo.supply) {
+              totalSupply = Number(mintInfo.supply) / Math.pow(10, decimals);
+            }
+          }
+        } catch (parsedError) {
+          logger.warn(`Unable to parse mint account for ${tokenMint}:`, parsedError.message);
+        }
+      }
+
+      return {
+        mint: tokenMint,
+        name,
+        symbol,
+        description: '',
+        image: '',
+        metadataUri,
+        twitter: null,
+        telegram: null,
+        website: null,
+        marketCap: null,
+        price: null,
+        totalSupply,
+        decimals,
+        bondingCurve: null,
+        isComplete: null,
+        createdTimestamp: null,
+        success: true,
+        source: 'on-chain'
+      };
+    } catch (error) {
+      logger.error(`On-chain metadata fallback failed for ${tokenMint}:`, error);
+      return null;
+    }
   }
 
   async fetchMetadataFromUri(metadataUri) {

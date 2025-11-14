@@ -756,18 +756,150 @@ class MultiWalletManager {
 
     // ==================== HELPER FUNCTIONS ====================
     
-    async executeBuy(privateKey, tokenMint, amount) {
-        // TODO: Implement actual buy logic with Jupiter/Raydium
-        console.log(`💰 Buy: ${amount} SOL of ${tokenMint}`);
-        await this.sleep(100);
-        return 'mock_buy_signature_' + Date.now();
+    /**
+     * Get wallet public key from private key
+     */
+    getWalletPublicKey(privateKey) {
+        try {
+            // Try to find wallet in solana.wallets first
+            if (this.solana && Array.isArray(this.solana.wallets)) {
+                const wallet = this.solana.wallets.find(w => 
+                    w.privateKey === privateKey || 
+                    JSON.stringify(w.privateKey) === JSON.stringify(privateKey)
+                );
+                if (wallet) {
+                    return wallet.publicKey || wallet.address || wallet.id;
+                }
+            }
+
+            // Derive public key from private key using Solana Web3
+            if (window.solanaWeb3 && window.solanaWeb3.Keypair) {
+                const { Keypair } = window.solanaWeb3;
+                let secretKey;
+                
+                // Handle different private key formats
+                if (typeof privateKey === 'string') {
+                    try {
+                        // Try parsing as JSON array
+                        secretKey = Uint8Array.from(JSON.parse(privateKey));
+                    } catch {
+                        // Try base58
+                        if (window.bs58) {
+                            secretKey = window.bs58.decode(privateKey);
+                        } else {
+                            throw new Error('bs58 library not available');
+                        }
+                    }
+                } else if (Array.isArray(privateKey)) {
+                    secretKey = Uint8Array.from(privateKey);
+                } else if (privateKey instanceof Uint8Array) {
+                    secretKey = privateKey;
+                } else {
+                    throw new Error('Invalid private key format');
+                }
+
+                const keypair = Keypair.fromSecretKey(secretKey);
+                return keypair.publicKey.toString();
+            }
+
+            throw new Error('Solana Web3.js not available');
+        } catch (error) {
+            console.error('Error deriving wallet public key:', error);
+            throw new Error(`Failed to get wallet public key: ${error.message}`);
+        }
     }
 
+    /**
+     * Execute real buy transaction using API client
+     */
+    async executeBuy(privateKey, tokenMint, amount) {
+        try {
+            console.log(`💰 Executing buy: ${amount} SOL of ${tokenMint}`);
+            
+            // Get wallet public key (used as walletId)
+            const walletId = this.getWalletPublicKey(privateKey);
+            
+            // Ensure API client is available and initialized
+            if (!window.apiClient) {
+                throw new Error('API client not available. Make sure the site is fully loaded.');
+            }
+
+            if (!window.apiClient.isConnected) {
+                console.log('Initializing API client...');
+                await window.apiClient.initialize();
+            }
+
+            // Execute buy via API client
+            const result = await window.apiClient.buyToken(
+                walletId,
+                tokenMint,
+                amount,
+                {
+                    executor: 'jito', // Use Jito for faster execution
+                    slippage: 1.0 // 1% slippage
+                }
+            );
+
+            if (result && result.success) {
+                const signature = result.signature || result.txSignature || result.transactionSignature;
+                console.log(`✅ Buy successful! Signature: ${signature}`);
+                return signature;
+            } else {
+                const errorMsg = result?.error || result?.message || 'Buy transaction failed';
+                console.error(`❌ Buy failed: ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
+        } catch (error) {
+            console.error('❌ Error executing buy:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Execute real sell transaction using API client
+     */
     async executeSell(privateKey, tokenMint, amount) {
-        // TODO: Implement actual sell logic with Jupiter/Raydium
-        console.log(`💸 Sell: ${amount} SOL worth of ${tokenMint}`);
-        await this.sleep(100);
-        return 'mock_sell_signature_' + Date.now();
+        try {
+            console.log(`💸 Executing sell: ${amount} tokens of ${tokenMint}`);
+            
+            // Get wallet public key (used as walletId)
+            const walletId = this.getWalletPublicKey(privateKey);
+            
+            // Ensure API client is available and initialized
+            if (!window.apiClient) {
+                throw new Error('API client not available. Make sure the site is fully loaded.');
+            }
+
+            if (!window.apiClient.isConnected) {
+                console.log('Initializing API client...');
+                await window.apiClient.initialize();
+            }
+
+            // Execute sell via API client
+            // Note: amount is in tokens (not SOL) for sell operations
+            const result = await window.apiClient.sellToken(
+                walletId,
+                tokenMint,
+                amount,
+                {
+                    executor: 'jito', // Use Jito for faster execution
+                    slippage: 1.0 // 1% slippage
+                }
+            );
+
+            if (result && result.success) {
+                const signature = result.signature || result.txSignature || result.transactionSignature;
+                console.log(`✅ Sell successful! Signature: ${signature}`);
+                return signature;
+            } else {
+                const errorMsg = result?.error || result?.message || 'Sell transaction failed';
+                console.error(`❌ Sell failed: ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
+        } catch (error) {
+            console.error('❌ Error executing sell:', error);
+            throw error;
+        }
     }
 
     sleep(ms) {

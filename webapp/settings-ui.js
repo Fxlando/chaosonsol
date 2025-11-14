@@ -38,6 +38,10 @@
         apiKey: 'helius-api-key'
     };
 
+    const BIRDEYE_FIELDS = {
+        apiKey: 'birdeye-api-key'
+    };
+
     function parseNumber(value, fallback = 0) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -66,7 +70,7 @@
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {}, birdeye = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
@@ -85,6 +89,11 @@
         // Populate Helius Enhanced API settings
         Object.entries(HELIUS_FIELDS).forEach(([key, id]) => {
             setInputValue(id, helius[key]);
+        });
+
+        // Populate Birdeye API settings
+        Object.entries(BIRDEYE_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, birdeye[key]);
         });
 
         // Update endpoint display
@@ -155,12 +164,17 @@
             apiKey: get(HELIUS_FIELDS.apiKey)?.value.trim() || ''
         };
 
+        const birdeye = {
+            apiKey: get(BIRDEYE_FIELDS.apiKey)?.value.trim() || ''
+        };
+
         return {
             solana,
             customization,
             pumpportal,
             shyft,
-            helius
+            helius,
+            birdeye
         };
     }
 
@@ -172,7 +186,7 @@
         }
 
         const settingsPatch = collectSettingsFromForm();
-        const { solana, customization, shyft, helius } = settingsPatch;
+        const { solana, customization, shyft, helius, birdeye } = settingsPatch;
 
         const rpcResult = await window.settingsManager.updateSolana(solana);
         if (!rpcResult.success) {
@@ -219,11 +233,26 @@
             window.settingsManager.settings = currentSettings;
             window.settingsManager.saveSettings();
         }
+
+        // Save Birdeye settings
+        if (window.settingsManager.updateBirdeye) {
+            window.settingsManager.updateBirdeye(birdeye);
+        } else {
+            // Fallback: manually update and save
+            const currentSettings = window.settingsManager.getSettings();
+            currentSettings.birdeye = {
+                ...(currentSettings.birdeye || {}),
+                ...birdeye
+            };
+            window.settingsManager.settings = currentSettings;
+            window.settingsManager.saveSettings();
+        }
         
         // Force a re-read to verify it was saved
         const verifySettings = window.settingsManager.getSettings();
         console.log('✅ Shyft settings saved:', verifySettings?.shyft);
         console.log('✅ Helius settings saved:', verifySettings?.helius);
+        console.log('✅ Birdeye settings saved:', verifySettings?.birdeye);
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');

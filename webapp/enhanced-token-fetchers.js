@@ -715,10 +715,38 @@ async function fetchDexScreenerMetadata(mintAddress) {
 }
 
 /**
+ * Get Birdeye API key from settings
+ */
+function getBirdeyeApiKey() {
+    try {
+        // Try settingsManager first
+        if (window.settingsManager?.settings?.birdeye?.apiKey) {
+            return window.settingsManager.settings.birdeye.apiKey.trim();
+        }
+        
+        // Fallback to localStorage
+        const saved = localStorage.getItem('chaosbot_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            if (settings.birdeye?.apiKey) {
+                return settings.birdeye.apiKey.trim();
+            }
+        }
+        
+        // Default API key
+        return '9ddbf4282f714067a229ad9caedd1b41';
+    } catch (error) {
+        console.debug('Error getting Birdeye API key:', error);
+        return '9ddbf4282f714067a229ad9caedd1b41'; // Default fallback
+    }
+}
+
+/**
  * Fetch token metadata from Birdeye API
  */
 async function fetchBirdeyeMetadata(mintAddress) {
     try {
+        const apiKey = getBirdeyeApiKey();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
@@ -728,7 +756,7 @@ async function fetchBirdeyeMetadata(mintAddress) {
                 signal: controller.signal,
                 headers: { 
                     'Accept': 'application/json',
-                    'X-API-KEY': '' // Birdeye allows some requests without API key
+                    'X-API-KEY': apiKey || '' // Use API key from settings
                 }
             }
         );

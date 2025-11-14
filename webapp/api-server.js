@@ -1270,6 +1270,9 @@ register('get', '/config', async () => {
       },
       helius: {
         apiKey: heliusApiKey
+      },
+      birdeye: {
+        apiKey: process.env.BIRDEYE_API_KEY || '9ddbf4282f714067a229ad9caedd1b41'
       }
     }
   };

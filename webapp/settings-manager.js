@@ -66,6 +66,11 @@ class SettingsManager {
                 apiKey: '' // Helius API key for Enhanced Transaction APIs
             },
 
+            // Birdeye API (optional - for token metadata fallback)
+            birdeye: {
+                apiKey: '9ddbf4282f714067a229ad9caedd1b41' // Birdeye API key for token metadata
+            },
+
             // Jito Settings
             jito: {
                 location: 'New York',
@@ -395,6 +400,20 @@ class SettingsManager {
         const saved = this.saveSettings();
         if (saved) {
             console.log('✅ Helius Enhanced API settings updated and saved');
+        }
+        this.applySettings();
+        this.publish();
+        return true;
+    }
+
+    updateBirdeye(config = {}) {
+        if (!this.settings.birdeye) {
+            this.settings.birdeye = {};
+        }
+        this.settings.birdeye = this.deepMerge(this.settings.birdeye, config);
+        const saved = this.saveSettings();
+        if (saved) {
+            console.log('✅ Birdeye API settings updated and saved');
         }
         this.applySettings();
         this.publish();

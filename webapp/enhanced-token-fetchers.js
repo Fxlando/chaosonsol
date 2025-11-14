@@ -142,7 +142,14 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
             };
         }
     } catch (error) {
-        console.debug('⚠️ DexScreener price fetch failed:', error.message);
+        // Only log non-network errors (network errors are handled silently in fetchDexScreenerPrice)
+        const errorMsg = error.message || '';
+        if (!errorMsg.includes('ERR_NAME_NOT_RESOLVED') && 
+            !errorMsg.includes('ERR_INTERNET_DISCONNECTED') &&
+            !errorMsg.includes('Failed to fetch') &&
+            !errorMsg.includes('temporarily unavailable')) {
+            console.debug('⚠️ DexScreener price fetch failed:', error.message);
+        }
     }
 
     // Try on-chain calculation as last resort (only if we have valid RPC)
@@ -820,6 +827,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                 const data = await response.json();
                 return { ...data, success: true, source: 'pumpfun' };
             }
+            // Handle Cloudflare 530 errors gracefully (service unavailable)
+            if (response.status === 530) {
+                throw new Error('Pump.fun API temporarily unavailable (530)');
+            }
             throw new Error(`Pump.fun API returned ${response.status}`);
         }, 2); // 2 retries
         
@@ -829,7 +840,12 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
-            console.debug('⚠️ Pump.fun API unavailable:', error.message);
+            // Silently handle 530 errors (expected when Pump.fun is down)
+            if (error.message && error.message.includes('530')) {
+                console.debug('⚠️ Pump.fun API temporarily unavailable (530) - using fallbacks');
+            } else {
+                console.debug('⚠️ Pump.fun API unavailable:', error.message);
+            }
         }
     }
     

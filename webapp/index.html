@@ -2733,6 +2733,10 @@
                                         <i data-lucide="sparkles" class="w-4 h-4"></i>
                                         <span>Add Blueprint</span>
                                     </button>
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-orange-600/80 text-white hover:bg-orange-500 transition border border-orange-500/40" onclick="showBumpTask()">
+                                        <i data-lucide="zap" class="w-4 h-4"></i>
+                                        <span>Bump</span>
+                                    </button>
                                     <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showSellBuybackTask()">
                                         <i data-lucide="repeat-2" class="w-4 h-4"></i>
                                         <span>Sell Buyback</span>
@@ -3018,56 +3022,80 @@
         </div>
 
         <!-- Bump Task Window -->
-        <div id="bump-window" class="floating-window hidden" style="position: fixed; top: 200px; left: 300px; z-index: 1000;">
+        <div id="bump-window" class="floating-window hidden" style="position: fixed; top: 200px; left: 300px; z-index: 1000; width: 600px; max-width: 90vw;">
             <div class="floating-window-content">
                 <div class="floating-window-header" onmousedown="startDrag(event, 'bump-window')">
-                    <h2 class="text-lg font-semibold">Bump Task</h2>
+                    <div class="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap w-5 h-5 text-orange-400"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"></path></svg>
+                        <h2 class="text-lg font-semibold">Bump</h2>
+                    </div>
                     <div class="flex gap-2">
                         <button class="floating-window-minimize" onclick="minimizeWindow('bump-window')">_</button>
                         <button class="floating-window-close" onclick="closeFloatingWindow('bump-window')">&times;</button>
                     </div>
                 </div>
                 <div class="floating-window-body">
+                    <p class="text-xs text-gray-400 mb-4">Bumps temporarily bring your coin to the front page of pumpfun. Bumps are a series of micro transactions with the goal of keeping your coin active in terms of having a recent trade.</p>
+                    
+                    <!-- Buy Amount Section -->
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Method</label>
-                        <div class="flex gap-2">
-                            <button id="bump-method-jito" class="method-btn active" onclick="selectMethod('bump', 'jito')">Jito</button>
-                            <button id="bump-method-rpc" class="method-btn" onclick="selectMethod('bump', 'rpc')">RPC</button>
-                        </div>
+                        <label class="block mb-2 text-sm font-medium text-white">Enter Buy Amount</label>
+                        <input type="number" id="bump-amount" value="0.02" step="0.001" min="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 text-white" />
+                        <p class="text-xs text-gray-500 mt-1">Enter a buy amount for the bumps. Typically bumps are around 0.02 SOL</p>
                     </div>
                     
+                    <!-- Iterations Section -->
+                    <div class="mb-4">
+                        <label class="block mb-2 text-sm font-medium text-white">Enter Iterations</label>
+                        <input type="number" id="bump-iterations" value="15" min="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 text-white" />
+                        <p class="text-xs text-gray-500 mt-1">Enter how many iterations of bumps do you want to run. You wont be able to stop these once initiated unless you close the app</p>
+                    </div>
+                    
+                    <!-- Min and Max Delay Section -->
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block mb-1 text-sm font-medium">Bump Amount (SOL)</label>
-                            <input type="number" id="bump-amount" value="0.01" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-2 text-sm font-medium text-white">Enter Min Delay</label>
+                            <input type="number" id="bump-min-delay" value="3" min="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 text-white" />
+                            <p class="text-xs text-gray-500 mt-1">The minimum delay in seconds between each bump.</p>
                         </div>
                         <div>
-                            <label class="block mb-1 text-sm font-medium">Bump Count</label>
-                            <input type="number" id="bump-count" value="3" min="1" max="10" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
+                            <label class="block mb-2 text-sm font-medium text-white">Enter Max Delay</label>
+                            <input type="number" id="bump-max-delay" value="8" min="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600 text-white" />
+                            <p class="text-xs text-gray-500 mt-1">The maximum delay in seconds between each bump.</p>
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-3 mb-4">
-                        <div>
-                            <label class="block mb-1 text-sm font-medium">Min Delay (seconds)</label>
-                            <input type="number" id="bump-min-delay" value="5" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                        <div>
-                            <label class="block mb-1 text-sm font-medium">Max Delay (seconds)</label>
-                            <input type="number" id="bump-max-delay" value="15" class="w-full bg-black border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-neutral-600" />
-                        </div>
-                    </div>
-                    
+                    <!-- Select Wallets Section -->
                     <div class="mb-4">
-                        <label class="block mb-2 text-sm font-medium">Wallets to Use</label>
-                        <div class="space-y-1 max-h-24 overflow-y-auto" id="bump-wallet-list">
-                            <div class="text-xs text-gray-500">Wallets will appear once loaded.</div>
+                        <label class="block mb-2 text-sm font-medium text-white">Select Wallets</label>
+                        <p class="text-xs text-gray-500 mb-2">Select the wallets that you want to use for the bumps. The selected wallets will be randomly rotated to fulfill the total number of iterations. For example, if you set 15 iterations across 3 wallets, the system will still execute 15 swaps in total, distributing them among all 3 wallets.</p>
+                        <div class="border border-neutral-700 rounded-lg overflow-hidden">
+                            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-neutral-900 border-b border-neutral-800">
+                                        <tr>
+                                            <th class="text-left py-2 px-3 text-xs text-gray-400 font-medium"></th>
+                                            <th class="text-left py-2 px-3 text-xs text-gray-400 font-medium">Wallet</th>
+                                            <th class="text-left py-2 px-3 text-xs text-gray-400 font-medium">Address</th>
+                                            <th class="text-left py-2 px-3 text-xs text-gray-400 font-medium">Balance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="bump-wallets-list" class="divide-y divide-neutral-800">
+                                        <tr>
+                                            <td colspan="4" class="py-4 text-center text-xs text-gray-500">Loading wallets...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <p class="text-xs text-gray-400" id="bump-selected-count">0 wallets selected</p>
                         </div>
                     </div>
                 </div>
                 <div class="floating-window-footer">
-                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-2 rounded text-sm transition" onclick="closeFloatingWindow('bump-window')">Cancel</button>
-                    <button class="bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm transition" onclick="executeBumpTask()">Start Task</button>
+                    <button class="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded text-sm transition" onclick="closeFloatingWindow('bump-window')">Cancel</button>
+                    <button class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm transition font-medium" onclick="executeBumpTask()">Bump</button>
                 </div>
             </div>
         </div>

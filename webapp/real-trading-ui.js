@@ -5825,6 +5825,42 @@ async function fetchRuntimeAutomationsForMint(mint) {
         });
     }
 
+    // Add Bump task if running
+    if (bumpTaskConfig.running && bumpTaskConfig.tokenMint === mint) {
+        const walletCount = bumpTaskConfig.walletIds.length;
+        const statusLabel = bumpTaskConfig.running ? 'Running' : 'Stopped';
+        const statusClass = bumpTaskConfig.running 
+            ? 'bg-emerald-900/60 text-emerald-200' 
+            : 'bg-neutral-800 text-gray-300';
+        
+        tasks.push({
+            key: bumpTaskConfig.taskId || `bump-${mint}`,
+            source: 'runtime',
+            type: 'bump',
+            title: 'Bump',
+            subtitle: `${bumpTaskConfig.currentIteration}/${bumpTaskConfig.iterations} iterations • ${bumpTaskConfig.buyAmount} SOL each • ${walletCount} wallet(s)`,
+            icon: 'zap',
+            iconBackground: 'bg-orange-900/60',
+            statusLabel,
+            statusClass,
+            statusState: bumpTaskConfig.running ? 'running' : 'paused',
+            metadata: {
+                type: 'bump',
+                tokenMint: mint,
+                config: { ...bumpTaskConfig }
+            },
+            actions: [
+                {
+                    type: 'stop',
+                    icon: 'square',
+                    label: 'Stop',
+                    intent: 'red',
+                    disabled: !bumpTaskConfig.running
+                }
+            ]
+        });
+    }
+
     // Add Bulk Sell task if running
     if (bulkSellTaskConfig.running && bulkSellTaskConfig.tokenMint === mint) {
         const walletCount = bulkSellTaskConfig.walletIds.length;
@@ -6170,6 +6206,12 @@ async function handleRuntimeTaskAction(action, taskKey) {
             }
             await window.apiClient.removeSmartSellPosition(walletId, tokenMint || tokenRegistry.current.mint);
             notify('Smart Sell automation stopped.', 'success');
+        } else if (task.type === 'bump') {
+            if (action === 'stop' || action === 'pause') {
+                stopBumpTask();
+            } else {
+                notify('Bump task can only be stopped.', 'info');
+            }
         } else if (task.type === 'bulkSell') {
             if (action === 'stop' || action === 'pause') {
                 stopBulkSellTask();
@@ -7411,10 +7453,313 @@ registerGlobalHandler('showAddVolumeTask', () => openTokenAutomationConfigurator
 registerGlobalHandler('showBulkSellTask', configureBulkSellTask);
 registerGlobalHandler('selectBulkSellMethod', selectBulkSellMethod);
 registerGlobalHandler('updateBulkSellWalletSelection', updateBulkSellWalletSelection);
-registerGlobalHandler('showBumpTask', () => openTokenAutomationConfigurator('bump'));
+registerGlobalHandler('showBumpTask', configureBumpTask);
 registerGlobalHandler('showSellBuybackTask', configureSellBuybackTask);
 registerGlobalHandler('updateSellBuybackBuyWalletSelection', updateSellBuybackBuyWalletSelection);
 registerGlobalHandler('updateSellBuybackBuyAmount', updateSellBuybackBuyAmount);
+// Bump Task Configuration and Execution
+let bumpTaskConfig = {
+    buyAmount: 0.02,
+    iterations: 15,
+    minDelay: 3,
+    maxDelay: 8,
+    walletIds: [],
+    running: false,
+    tokenMint: null,
+    taskId: null,
+    currentIteration: 0
+};
+
+function configureBumpTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before configuring Bump task.', 'warning');
+        return;
+    }
+
+    // Open configuration modal or show floating window
+    const window = document.getElementById('bump-window');
+    if (window) {
+        window.classList.remove('hidden');
+        
+        // Populate with current config
+        const buyAmountInput = document.getElementById('bump-amount');
+        const iterationsInput = document.getElementById('bump-iterations');
+        const minDelayInput = document.getElementById('bump-min-delay');
+        const maxDelayInput = document.getElementById('bump-max-delay');
+        
+        if (buyAmountInput) buyAmountInput.value = bumpTaskConfig.buyAmount || 0.02;
+        if (iterationsInput) iterationsInput.value = bumpTaskConfig.iterations || 15;
+        if (minDelayInput) minDelayInput.value = bumpTaskConfig.minDelay || 3;
+        if (maxDelayInput) maxDelayInput.value = bumpTaskConfig.maxDelay || 8;
+        
+        // Load wallets
+        loadBumpWallets();
+    } else {
+        // Fallback: navigate to create token view
+        openTokenAutomationConfigurator('bump');
+    }
+}
+
+async function loadBumpWallets() {
+    const walletList = document.getElementById('bump-wallets-list');
+    if (!walletList) return;
+    
+    try {
+        const wallets = collectBlueprintWallets();
+        if (!wallets || wallets.length === 0) {
+            walletList.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-xs text-gray-500">No wallets available. Load wallets first.</td></tr>';
+            return;
+        }
+        
+        // Get SOL balances for wallets
+        const walletsWithBalances = await Promise.all(
+            wallets.map(async (wallet) => {
+                const address = wallet.address || wallet.publicKey || '';
+                let solBalance = 0;
+                try {
+                    if (solanaIntegration?.getBalance) {
+                        solBalance = await solanaIntegration.getBalance(address);
+                    }
+                } catch (error) {
+                    console.warn(`Failed to get balance for ${address}:`, error);
+                }
+                return { ...wallet, solBalance };
+            })
+        );
+        
+        walletList.innerHTML = walletsWithBalances.map(wallet => {
+            const id = wallet.id || wallet.address || wallet.publicKey || '';
+            const name = wallet.name || 'Unnamed';
+            const address = wallet.address || wallet.publicKey || '';
+            const truncated = address.length > 20 ? `${address.substring(0, 4)}...${address.substring(address.length - 4)}` : address;
+            const solBalance = wallet.solBalance || 0;
+            const balanceDisplay = solBalance < 0.01 ? '<0.01 SOL' : `${solBalance.toFixed(2)} SOL`;
+            
+            // Check if this wallet is already selected
+            const isChecked = bumpTaskConfig.walletIds.includes(id) ? 'checked' : '';
+            
+            return `
+                <tr class="hover:bg-neutral-900/50 transition">
+                    <td class="py-2 px-3">
+                        <input type="checkbox" 
+                            class="bump-wallet-checkbox" 
+                            data-wallet-id="${escapeHtml(id)}"
+                            ${isChecked}
+                            onchange="updateBumpWalletSelection(this)"
+                        />
+                    </td>
+                    <td class="py-2 px-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${getWalletEmoji(name)}</span>
+                            <span class="text-xs font-medium text-white">${escapeHtml(name)}</span>
+                        </div>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-400 font-mono">${escapeHtml(truncated)}</span>
+                    </td>
+                    <td class="py-2 px-3">
+                        <span class="text-xs text-gray-300">${balanceDisplay}</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        updateBumpSelectedCount();
+    } catch (error) {
+        console.error('Failed to load bump wallets:', error);
+        walletList.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-xs text-red-400">Failed to load wallets.</td></tr>';
+    }
+}
+
+function updateBumpWalletSelection(checkbox) {
+    const walletId = checkbox.dataset.walletId;
+    
+    if (checkbox.checked) {
+        if (!bumpTaskConfig.walletIds.includes(walletId)) {
+            bumpTaskConfig.walletIds.push(walletId);
+        }
+    } else {
+        bumpTaskConfig.walletIds = bumpTaskConfig.walletIds.filter(id => id !== walletId);
+    }
+    
+    updateBumpSelectedCount();
+}
+
+function updateBumpSelectedCount() {
+    const countEl = document.getElementById('bump-selected-count');
+    if (countEl) {
+        const count = bumpTaskConfig.walletIds.length;
+        countEl.textContent = `${count} wallet${count === 1 ? '' : 's'} selected`;
+    }
+}
+
+async function executeBumpTask() {
+    const current = tokenRegistry.current;
+    if (!current || !current.mint) {
+        notify('Select a token before starting Bump task.', 'warning');
+        return;
+    }
+
+    try {
+        await ensureApiClientReady();
+    } catch (error) {
+        notify(`Backend unavailable: ${error.message || error}`, 'error');
+        return;
+    }
+
+    // Get configuration from inputs
+    const buyAmountInput = document.getElementById('bump-amount');
+    const iterationsInput = document.getElementById('bump-iterations');
+    const minDelayInput = document.getElementById('bump-min-delay');
+    const maxDelayInput = document.getElementById('bump-max-delay');
+    
+    bumpTaskConfig.buyAmount = Number(buyAmountInput?.value) || 0.02;
+    bumpTaskConfig.iterations = Number(iterationsInput?.value) || 15;
+    bumpTaskConfig.minDelay = Number(minDelayInput?.value) || 3;
+    bumpTaskConfig.maxDelay = Number(maxDelayInput?.value) || 8;
+    
+    // Get selected wallets from checkboxes
+    const selectedCheckboxes = document.querySelectorAll('.bump-wallet-checkbox:checked');
+    bumpTaskConfig.walletIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.walletId);
+    
+    if (bumpTaskConfig.walletIds.length === 0) {
+        notify('Select at least one wallet for Bump task.', 'warning');
+        return;
+    }
+
+    if (bumpTaskConfig.running) {
+        notify('Bump task is already running.', 'warning');
+        return;
+    }
+
+    // Validate configuration
+    if (bumpTaskConfig.buyAmount <= 0) {
+        notify('Buy amount must be greater than 0.', 'error');
+        return;
+    }
+    
+    if (bumpTaskConfig.iterations < 1) {
+        notify('Iterations must be at least 1.', 'error');
+        return;
+    }
+    
+    if (bumpTaskConfig.minDelay < 0 || bumpTaskConfig.maxDelay < 0 || bumpTaskConfig.minDelay > bumpTaskConfig.maxDelay) {
+        notify('Min delay must be less than or equal to max delay.', 'error');
+        return;
+    }
+
+    bumpTaskConfig.running = true;
+    bumpTaskConfig.tokenMint = current.mint;
+    bumpTaskConfig.taskId = `bump-${Date.now()}`;
+    bumpTaskConfig.currentIteration = 0;
+
+    notify('Bump task started! This cannot be stopped once initiated.', 'success');
+    addConsoleLog(`🔄 Starting Bump: ${bumpTaskConfig.iterations} iterations, ${bumpTaskConfig.buyAmount} SOL each, ${bumpTaskConfig.walletIds.length} wallet(s)`, 'info');
+
+    // Close the configuration window
+    closeFloatingWindow('bump-window');
+
+    // Start the task execution
+    runBumpTask().catch(error => {
+        console.error('Bump task failed:', error);
+        notify(`Bump task failed: ${error.message}`, 'error');
+        bumpTaskConfig.running = false;
+        if (tokenRegistry.current) {
+            loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+        }
+    });
+}
+
+async function runBumpTask() {
+    const { tokenMint, walletIds, buyAmount, iterations, minDelay, maxDelay } = bumpTaskConfig;
+    
+    if (!tokenMint || !walletIds || walletIds.length === 0) {
+        throw new Error('Invalid Bump configuration');
+    }
+
+    // Get wallets
+    const allWallets = collectBlueprintWallets();
+    const wallets = allWallets.filter(w => {
+        const id = w.id || w.address || w.publicKey || '';
+        return walletIds.includes(id);
+    });
+
+    if (wallets.length === 0) {
+        throw new Error('No valid wallets found for Bump task');
+    }
+
+    addConsoleLog(`📊 Bump: Executing ${iterations} bumps with ${wallets.length} wallet(s)...`, 'info');
+
+    // Execute bumps with random wallet rotation
+    for (let i = 0; i < iterations; i++) {
+        if (!bumpTaskConfig.running) {
+            addConsoleLog('Bump task stopped.', 'warning');
+            break;
+        }
+
+        bumpTaskConfig.currentIteration = i + 1;
+
+        // Randomly select a wallet from the selected wallets
+        const randomIndex = Math.floor(Math.random() * wallets.length);
+        const wallet = wallets[randomIndex];
+        const walletId = wallet.id || wallet.address || wallet.publicKey || '';
+        const walletAddress = wallet.address || wallet.publicKey || '';
+        const walletName = wallet.name || 'Unnamed';
+
+        try {
+            addConsoleLog(`⚡ Bump ${i + 1}/${iterations}: Buying ${buyAmount} SOL from ${walletName}...`, 'info');
+
+            const buyResponse = await window.apiClient.buyToken(
+                walletId,
+                tokenMint,
+                buyAmount,
+                { executor: 'jito' } // Use Jito for faster execution
+            );
+
+            if (buyResponse?.success) {
+                addConsoleLog(`✅ Bump ${i + 1}/${iterations} completed from ${walletName}`, 'success');
+            } else {
+                addConsoleLog(`❌ Bump ${i + 1}/${iterations} failed from ${walletName}: ${buyResponse?.error || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            console.error(`Error executing bump ${i + 1} from wallet ${wallet.id || wallet.address}:`, error);
+            addConsoleLog(`❌ Error in bump ${i + 1}: ${error.message}`, 'error');
+        }
+
+        // Random delay between bumps (except for the last one)
+        if (i < iterations - 1) {
+            const delay = minDelay + Math.random() * (maxDelay - minDelay);
+            const delaySeconds = Math.round(delay * 10) / 10; // Round to 1 decimal place
+            addConsoleLog(`⏳ Waiting ${delaySeconds}s before next bump...`, 'info');
+            await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        }
+    }
+
+    addConsoleLog(`✅ Bump task completed! ${bumpTaskConfig.currentIteration}/${iterations} bumps executed`, 'success');
+    bumpTaskConfig.running = false;
+
+    // Refresh token details
+    if (tokenRegistry.current) {
+        await loadLiveTokenDetail(tokenRegistry.current);
+    }
+}
+
+function stopBumpTask() {
+    if (!bumpTaskConfig.running) {
+        notify('Bump task is not running.', 'info');
+        return;
+    }
+
+    bumpTaskConfig.running = false;
+    notify('Bump task stopped.', 'success');
+    addConsoleLog('🛑 Bump task stopped by user.', 'info');
+    
+    if (tokenRegistry.current) {
+        loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
+    }
+}
+
 // Bulk Sell Task Configuration and Execution
 let bulkSellTaskConfig = {
     method: 'jito-individual', // 'jito-individual', 'jito-bundle', 'rpc-individual'
@@ -13081,7 +13426,9 @@ function handleAutomationTask(taskName, automationOptions) {
 registerGlobalHandler('executeAddVolumeTask', () => handleAutomationTask('Volume generation', { volumeBot: true }));
 registerGlobalHandler('executeBulkSellTask', executeBulkSellTask);
 registerGlobalHandler('stopBulkSellTask', stopBulkSellTask);
-registerGlobalHandler('executeBumpTask', () => handleAutomationTask('Bump'));
+registerGlobalHandler('executeBumpTask', executeBumpTask);
+registerGlobalHandler('updateBumpWalletSelection', updateBumpWalletSelection);
+registerGlobalHandler('stopBumpTask', stopBumpTask);
 registerGlobalHandler('executeSellBuybackTask', () => handleAutomationTask('Sell/Buyback', { smartSell: true, volumeBot: true }));
 
 registerGlobalHandler('refreshFeeWallet', async () => {

@@ -261,12 +261,27 @@
             window.settingsManager.settings = currentSettings;
             window.settingsManager.saveSettings();
         }
+
+        // Save Moralis settings
+        if (window.settingsManager.updateMoralis) {
+            window.settingsManager.updateMoralis(moralis);
+        } else {
+            // Fallback: manually update and save
+            const currentSettings = window.settingsManager.getSettings();
+            currentSettings.moralis = {
+                ...(currentSettings.moralis || {}),
+                ...moralis
+            };
+            window.settingsManager.settings = currentSettings;
+            window.settingsManager.saveSettings();
+        }
         
         // Force a re-read to verify it was saved
         const verifySettings = window.settingsManager.getSettings();
         console.log('✅ Shyft settings saved:', verifySettings?.shyft);
         console.log('✅ Helius settings saved:', verifySettings?.helius);
         console.log('✅ Birdeye settings saved:', verifySettings?.birdeye);
+        console.log('✅ Moralis settings saved:', verifySettings?.moralis);
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');

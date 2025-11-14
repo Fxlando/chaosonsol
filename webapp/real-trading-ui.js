@@ -6205,7 +6205,7 @@ async function fetchPumpFunTradeFeed(mint, limit = 20) {
             if (collectedEntries.length >= normalizedLimit) {
                 break;
             }
-        } catch (error) {
+    } catch (error) {
             // Silently handle network errors and 5xx errors - API might be down
             const errorMessage = error.message || String(error);
             const isApiDown = errorMessage.includes('530') || 
@@ -7120,7 +7120,7 @@ function tokenAvatar(record) {
         // Use pump.fun logo as fallback for tokens without images
         return `
             <div class="w-10 h-10 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
-                <img src="${pumpFunLogo}" alt="Token" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-2xl\\'>🪙</span>';" />
+                <img src="${pumpFunLogo}" alt="Token" class="w-full h-full object-cover" loading="lazy" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-2xl\\'>🪙</span>';" />
             </div>
         `;
     }
@@ -7128,7 +7128,7 @@ function tokenAvatar(record) {
     const imageUrl = resolveImageUrl(record.image) || record.image;
     return `
         <div class="w-10 h-10 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
-            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='${pumpFunLogo}';" />
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover" loading="lazy" onerror="this.onerror=null; this.src='${pumpFunLogo}'; this.onerror=function(){this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-2xl\\'>🪙</span>';};" />
         </div>
     `;
 }

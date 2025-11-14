@@ -6933,7 +6933,7 @@ async function loadLiveTokenDetail(record) {
         }
 
         // Log data for debugging
-        console.log('Token metrics data:', {
+        const metricsData = {
             priceSol,
             priceUsd,
             marketCapUsd,
@@ -6946,7 +6946,19 @@ async function loadLiveTokenDetail(record) {
             profitLossSol,
             solPrice,
             source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')
-        });
+        };
+        console.log('Token metrics data:', metricsData);
+        
+        // Provide helpful feedback about missing data
+        if (holdingsSummary.totalTokenBalance === 0) {
+            console.info('ℹ️ No token holdings found. Make sure wallets are loaded and contain tokens for this mint.');
+        }
+        if (marketCapUsd === null) {
+            console.debug('ℹ️ Market cap unavailable - Pump.fun API may be down or token not fully launched.');
+        }
+        if (bondingPercent === null) {
+            console.debug('ℹ️ Bonding curve data unavailable - token may have completed bonding or API unavailable.');
+        }
 
         updateTokenMetrics({
             priceSol,

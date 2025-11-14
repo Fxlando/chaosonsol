@@ -79,18 +79,38 @@ function getSolanaConnection(purpose = null) {
 
 /**
  * Enhanced token price fetching with multiple fallback sources
- * Priority: Jupiter > DexScreener > On-chain calculation
+ * Priority: On-chain (fastest, uses dedicated RPC) > Jupiter > DexScreener
+ * Optimized for frequent updates without hitting rate limits
  */
-async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
-    console.log('🔍 Fetching price for:', mintAddress);
+async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnChain = false } = {}) {
+    // If preferOnChain is true, try on-chain first (fastest, no rate limits)
+    if (preferOnChain) {
+        try {
+            const connection = getSolanaConnection('price');
+            if (connection) {
+                const onChainData = await calculateOnChainPrice(mintAddress);
+                if (onChainData && onChainData.priceSol) {
+                    const priceSol = onChainData.priceSol;
+                    const priceUsd = solPrice ? priceSol * solPrice : null;
+                    return {
+                        priceSol,
+                        priceUsd,
+                        marketCapUsd: null,
+                        source: 'on-chain'
+                    };
+                }
+            }
+        } catch (error) {
+            console.debug('On-chain price calculation failed, trying external APIs:', error.message);
+        }
+    }
     
-    // Try Jupiter first (most reliable)
+    // Try Jupiter first (most reliable for market cap)
     try {
         const jupiterData = await fetchJupiterPrice(mintAddress);
         if (jupiterData && jupiterData.price) {
             const priceSol = jupiterData.price;
             const priceUsd = solPrice ? priceSol * solPrice : null;
-            console.log('✅ Jupiter price:', { priceSol, priceUsd });
             return {
                 priceSol,
                 priceUsd,
@@ -99,7 +119,7 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
             };
         }
     } catch (error) {
-        console.warn('⚠️ Jupiter price fetch failed:', error.message);
+        console.debug('⚠️ Jupiter price fetch failed:', error.message);
     }
 
     // Try DexScreener as fallback
@@ -108,7 +128,6 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
         if (dexData && dexData.priceUsd) {
             const priceUsd = dexData.priceUsd;
             const priceSol = solPrice ? priceUsd / solPrice : null;
-            console.log('✅ DexScreener price:', { priceSol, priceUsd });
             return {
                 priceSol,
                 priceUsd,
@@ -117,7 +136,7 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
             };
         }
     } catch (error) {
-        console.warn('⚠️ DexScreener price fetch failed:', error.message);
+        console.debug('⚠️ DexScreener price fetch failed:', error.message);
     }
 
     // Try on-chain calculation as last resort (only if we have valid RPC)
@@ -129,7 +148,6 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
             if (onChainData && onChainData.priceSol) {
                 const priceSol = onChainData.priceSol;
                 const priceUsd = solPrice ? priceSol * solPrice : null;
-                console.log('✅ On-chain price:', { priceSol, priceUsd });
                 return {
                     priceSol,
                     priceUsd,
@@ -143,7 +161,7 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null } = {}) {
     } catch (error) {
         // Only log if it's not a connection availability error
         if (!error.message.includes('not available')) {
-            console.warn('⚠️ On-chain price calculation failed:', error.message);
+            console.debug('⚠️ On-chain price calculation failed:', error.message);
         } else {
             console.debug('On-chain price calculation skipped:', error.message);
         }

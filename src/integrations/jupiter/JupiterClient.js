@@ -268,12 +268,12 @@ export class JupiterClient {
         throw enrichAxiosError(error, endpoint || requestUrl.pathname || requestUrl.hostname);
       }
 
-      logger.warn(`Primary Jupiter request failed due to DNS resolution (${requestUrl.hostname}). Attempting DoH fallback...`);
+      logger.debug(`Primary Jupiter request failed due to DNS resolution (${requestUrl.hostname}). Attempting DoH fallback...`);
       let fallbackIp = await this.resolveHostViaDoh(requestUrl.hostname);
       if (!fallbackIp) {
         fallbackIp = this.getStaticFallbackIp();
         if (fallbackIp) {
-          logger.warn(`Using configured static Jupiter IP override ${fallbackIp} for ${requestUrl.hostname}`);
+          logger.debug(`Using configured static Jupiter IP override ${fallbackIp} for ${requestUrl.hostname}`);
         }
       }
 

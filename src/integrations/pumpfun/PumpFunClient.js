@@ -145,7 +145,21 @@ export class PumpFunClient {
         return tokenData;
       }
     } catch (error) {
-      logger.warn('PumpFun API failed:', error.message);
+      // Silently handle expected API failures (5xx errors, network issues)
+      const errorMessage = error.message || String(error);
+      const isExpectedError = errorMessage.includes('530') || 
+                             errorMessage.includes('503') || 
+                             errorMessage.includes('502') ||
+                             errorMessage.includes('504') ||
+                             errorMessage.includes('ECONNREFUSED') ||
+                             errorMessage.includes('ETIMEDOUT') ||
+                             errorMessage.includes('timeout');
+      
+      if (!isExpectedError) {
+        logger.warn('PumpFun API failed:', error.message);
+      } else {
+        logger.debug('PumpFun API unavailable (expected):', error.message);
+      }
     }
 
     const onChainFallback = await this.fetchOnChainTokenInfo(tokenMint);
@@ -193,7 +207,7 @@ export class PumpFunClient {
 
       const accountInfo = await this.connection.getAccountInfo(metadataPda);
       if (!accountInfo) {
-        logger.warn(`No on-chain metadata account found for mint ${tokenMint}`);
+        logger.debug(`No on-chain metadata account found for mint ${tokenMint} (this is normal for some tokens)`);
         return null;
       }
 
@@ -421,7 +435,7 @@ export class PumpFunClient {
 
     // If API failed, try direct on-chain lookup
     if (!info.success) {
-      logger.warn(`PumpFun API failed for ${tokenMint}, attempting on-chain fallback...`);
+      logger.debug(`PumpFun API unavailable for ${tokenMint}, using on-chain fallback...`);
       const onChainInfo = await this.fetchOnChainTokenInfo(tokenMint);
       
       if (onChainInfo) {
@@ -521,7 +535,18 @@ export class PumpFunClient {
         };
       }
     } catch (error) {
-      logger.warn('Bonding curve API failed:', error.message);
+      // Silently handle expected API failures
+      const errorMessage = error.message || String(error);
+      const isExpectedError = errorMessage.includes('530') || 
+                             errorMessage.includes('503') || 
+                             errorMessage.includes('502') ||
+                             errorMessage.includes('504');
+      
+      if (!isExpectedError) {
+        logger.warn('Bonding curve API failed:', error.message);
+      } else {
+        logger.debug('Bonding curve API unavailable (expected):', error.message);
+      }
     }
 
     return {

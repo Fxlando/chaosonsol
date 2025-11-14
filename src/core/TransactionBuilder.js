@@ -4,22 +4,20 @@
  * priority fees, versioned transactions, and Address Lookup Tables
  */
 
-import { 
-  Transaction, 
+import web3 from '@solana/web3.js';
+import { TRANSACTION_CONFIG, PROGRAM_IDS } from '../config/constants.js';
+import { loggerManager } from '../utils/logger.js';
+
+const {
+  Transaction,
   VersionedTransaction,
   TransactionMessage,
   SystemProgram,
   PublicKey,
   Keypair,
-  LAMPORTS_PER_SOL
-} from '@solana/web3.js';
-import { 
-  createComputeBudgetInstruction,
-  createSetComputeUnitLimitInstruction,
-  createSetComputeUnitPriceInstruction
-} from '@solana/web3.js';
-import { TRANSACTION_CONFIG, PROGRAM_IDS } from '../config/constants.js';
-import { loggerManager } from '../utils/logger.js';
+  LAMPORTS_PER_SOL,
+  ComputeBudgetProgram
+} = web3;
 
 const logger = loggerManager.getLogger('TransactionBuilder');
 
@@ -68,20 +66,22 @@ export class TransactionBuilder {
     if (this.config.priorityFee > 0 || options.priorityFee) {
       const priorityFee = options.priorityFee || this.config.priorityFee;
       const computeBudgetIx = this.createComputeBudgetInstruction(priorityFee);
-      transaction.add(computeBudgetIx);
+      if (computeBudgetIx) {
+        transaction.add(computeBudgetIx);
+      }
     }
 
     // Add compute unit limit if specified
     if (this.config.computeUnitLimit || options.computeUnitLimit) {
       const limit = options.computeUnitLimit || this.config.computeUnitLimit;
-      const limitIx = createSetComputeUnitLimitInstruction({ units: limit });
+      const limitIx = ComputeBudgetProgram.setComputeUnitLimit({ units: limit });
       transaction.add(limitIx);
     }
 
     // Add compute unit price if specified
     if (this.config.computeUnitPrice || options.computeUnitPrice) {
       const price = options.computeUnitPrice || this.config.computeUnitPrice;
-      const priceIx = createSetComputeUnitPriceInstruction({ microLamports: price });
+      const priceIx = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price });
       transaction.add(priceIx);
     }
 
@@ -120,20 +120,22 @@ export class TransactionBuilder {
     if (this.config.priorityFee > 0 || options.priorityFee) {
       const priorityFee = options.priorityFee || this.config.priorityFee;
       const computeBudgetIx = this.createComputeBudgetInstruction(priorityFee);
-      instructions.push(computeBudgetIx);
+      if (computeBudgetIx) {
+        instructions.push(computeBudgetIx);
+      }
     }
 
     // Add compute unit limit if specified
     if (this.config.computeUnitLimit || options.computeUnitLimit) {
       const limit = options.computeUnitLimit || this.config.computeUnitLimit;
-      const limitIx = createSetComputeUnitLimitInstruction({ units: limit });
+      const limitIx = ComputeBudgetProgram.setComputeUnitLimit({ units: limit });
       instructions.push(limitIx);
     }
 
     // Add compute unit price if specified
     if (this.config.computeUnitPrice || options.computeUnitPrice) {
       const price = options.computeUnitPrice || this.config.computeUnitPrice;
-      const priceIx = createSetComputeUnitPriceInstruction({ microLamports: price });
+      const priceIx = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price });
       instructions.push(priceIx);
     }
 
@@ -163,11 +165,16 @@ export class TransactionBuilder {
    * Create compute budget instruction for priority fee
    */
   createComputeBudgetInstruction(priorityFee) {
-    // Priority fee is in lamports, convert to microLamports for compute unit price
-    const microLamports = Math.floor(priorityFee * 1000); // 1 lamport = 1000 microLamports
-    
-    return createSetComputeUnitPriceInstruction({ 
-      microLamports: microLamports 
+    const feeLamports = priorityFee !== undefined ? priorityFee : this.config.priorityFee;
+
+    if (!feeLamports || feeLamports <= 0) {
+      return null;
+    }
+
+    const microLamports = Math.floor(feeLamports * 1000); // 1 lamport = 1000 microLamports
+
+    return ComputeBudgetProgram.setComputeUnitPrice({
+      microLamports
     });
   }
 

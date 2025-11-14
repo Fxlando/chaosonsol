@@ -16,7 +16,7 @@ import {
   createAssociatedTokenAccountInstruction,
   getAccount
 } from '@solana/spl-token';
-import { Metadata } from '@metaplex-foundation/mpl-token-metadata';
+import { deserializeMetadata } from '@metaplex-foundation/mpl-token-metadata';
 import axios from 'axios';
 import bs58 from 'bs58';
 import { API_ENDPOINTS, PROGRAM_IDS } from '../../config/constants.js';
@@ -39,6 +39,8 @@ export class PumpFunClient {
       apiBaseUrl: API_ENDPOINTS.PUMPFUN,
       defaultSlippage: config.defaultSlippage || 1.0,
       maxRetries: config.maxRetries || 3,
+      metadataFallback: config.metadataFallback || null,
+      pumpPortal: config.pumpPortal || {},
       ...config
     };
 
@@ -195,8 +197,26 @@ export class PumpFunClient {
         return null;
       }
 
-      const [metadata] = Metadata.deserialize(accountInfo.data);
-      const tokenMetadata = metadata.data;
+      const rawAccount = {
+        publicKey: metadataPda.toBase58(),
+        owner: this.metadataProgramId.toBase58(),
+        executable: accountInfo.executable,
+        lamports: BigInt(accountInfo.lamports),
+        rentEpoch: typeof accountInfo.rentEpoch === 'number'
+          ? BigInt(accountInfo.rentEpoch)
+          : undefined,
+        data: accountInfo.data instanceof Uint8Array
+          ? accountInfo.data
+          : new Uint8Array(accountInfo.data)
+      };
+
+      const metadataAccount = deserializeMetadata(rawAccount);
+      if (!metadataAccount) {
+        logger.warn(`Unable to deserialize metadata account for mint ${tokenMint}`);
+        return null;
+      }
+
+      const tokenMetadata = metadataAccount;
 
       const metadataUri = this.resolveMetadataUri(
         this.sanitizeString(tokenMetadata.uri)
@@ -300,15 +320,126 @@ export class PumpFunClient {
   }
 
   async buildMetadataFromMint(tokenMint) {
-    const info = await this.getTokenInfo(tokenMint);
+    // First, check local metadata store (for tokens launched through this app)
+    if (this.config.metadataFallback && typeof this.config.metadataFallback.getByMint === 'function') {
+      try {
+        const localMetadata = this.config.metadataFallback.getByMint(tokenMint);
+        if (localMetadata) {
+          logger.info(`✅ Found local metadata for ${tokenMint}`);
+          const mintKey = new PublicKey(tokenMint);
+          let decimals = 9;
+          let totalSupply = 0;
+          
+          try {
+            const supplyInfo = await this.connection.getTokenSupply(mintKey);
+            if (supplyInfo?.value) {
+              decimals = typeof supplyInfo.value.decimals === 'number'
+                ? supplyInfo.value.decimals
+                : decimals;
+              if (typeof supplyInfo.value.uiAmount === 'number') {
+                totalSupply = supplyInfo.value.uiAmount;
+              } else if (supplyInfo.value.amount) {
+                totalSupply = Number(supplyInfo.value.amount) / Math.pow(10, decimals);
+              }
+            }
+          } catch (supplyError) {
+            logger.warn(`Unable to fetch token supply for ${tokenMint}:`, supplyError.message);
+          }
 
+          const info = {
+            mint: tokenMint,
+            name: localMetadata.name || `Token ${tokenMint.slice(0, 8)}`,
+            symbol: localMetadata.symbol || 'TOKEN',
+            description: localMetadata.description || '',
+            image: localMetadata.image || '',
+            metadataUri: null,
+            twitter: localMetadata.twitter || null,
+            telegram: localMetadata.telegram || null,
+            website: localMetadata.website || null,
+            marketCap: null,
+            price: null,
+            totalSupply,
+            decimals,
+            bondingCurve: null,
+            isComplete: null,
+            createdTimestamp: null,
+            success: true,
+            source: 'local'
+          };
+
+          return {
+            metadata: {
+              name: info.name,
+              symbol: info.symbol,
+              description: info.description,
+              image: info.image,
+              twitter: info.twitter,
+              telegram: info.telegram,
+              website: info.website
+            },
+            info
+          };
+        }
+      } catch (localError) {
+        logger.warn(`Local metadata lookup failed for ${tokenMint}:`, localError.message);
+      }
+    }
+
+    let info = await this.getTokenInfo(tokenMint);
+
+    // If API failed, try direct on-chain lookup
     if (!info.success) {
-      throw new Error(info.error || 'Unable to load token info from PumpFun');
+      logger.warn(`PumpFun API failed for ${tokenMint}, attempting on-chain fallback...`);
+      const onChainInfo = await this.fetchOnChainTokenInfo(tokenMint);
+      
+      if (onChainInfo) {
+        info = onChainInfo;
+      } else {
+        // Last resort: verify mint exists and create minimal info
+        try {
+          const mintKey = new PublicKey(tokenMint);
+          const mintInfo = await this.connection.getParsedAccountInfo(mintKey);
+          
+          if (!mintInfo?.value) {
+            throw new Error(`Token mint ${tokenMint} does not exist on-chain`);
+          }
+
+          // Mint exists, create minimal metadata
+          const mintData = mintInfo.value.data?.parsed?.info;
+          const decimals = mintData?.decimals ?? 9;
+          const supply = mintData?.supply 
+            ? Number(mintData.supply) / Math.pow(10, decimals)
+            : 0;
+
+          info = {
+            mint: tokenMint,
+            name: `Token ${tokenMint.slice(0, 8)}`,
+            symbol: 'TOKEN',
+            description: '',
+            image: '',
+            metadataUri: null,
+            twitter: null,
+            telegram: null,
+            website: null,
+            marketCap: null,
+            price: null,
+            totalSupply: supply,
+            decimals,
+            bondingCurve: null,
+            isComplete: null,
+            createdTimestamp: null,
+            success: true,
+            source: 'minimal'
+          };
+        } catch (mintError) {
+          throw new Error(`Unable to fetch token info: ${mintError.message || info.error || 'Token not found'}`);
+        }
+      }
     }
 
     const metadata = {
-      name: info.name,
-      symbol: info.symbol,
+      name: info.name || `Token ${tokenMint.slice(0, 8)}`,
+      symbol: info.symbol || 'TOKEN',
       description: info.description || '',
       image: info.image || '',
       twitter: info.twitter || undefined,
@@ -317,13 +448,18 @@ export class PumpFunClient {
     };
 
     if (info.metadataUri) {
-      const remote = await this.fetchMetadataFromUri(info.metadataUri);
-      if (remote) {
-        metadata.description = remote.description || metadata.description;
-        metadata.image = remote.image || metadata.image;
-        metadata.twitter = remote.twitter || metadata.twitter;
-        metadata.telegram = remote.telegram || metadata.telegram;
-        metadata.website = remote.website || remote.external_url || metadata.website;
+      try {
+        const remote = await this.fetchMetadataFromUri(info.metadataUri);
+        if (remote) {
+          metadata.description = remote.description || metadata.description;
+          metadata.image = remote.image || metadata.image;
+          metadata.twitter = remote.twitter || metadata.twitter;
+          metadata.telegram = remote.telegram || metadata.telegram;
+          metadata.website = remote.website || remote.external_url || metadata.website;
+        }
+      } catch (uriError) {
+        logger.warn(`Failed to fetch metadata from URI ${info.metadataUri}:`, uriError.message);
+        // Continue with existing metadata
       }
     }
 

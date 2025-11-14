@@ -12,6 +12,8 @@ import {
 } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import axios from 'axios';
+import https from 'https';
+import dns from 'dns';
 import { API_ENDPOINTS, PROGRAM_IDS } from '../../config/constants.js';
 import { loggerManager } from '../../utils/logger.js';
 import { ErrorClassifier } from '../../utils/errors.js';
@@ -19,6 +21,67 @@ import TransactionBuilder from '../../core/TransactionBuilder.js';
 import AccountManager from '../../core/AccountManager.js';
 
 const logger = loggerManager.getLogger('JupiterClient');
+
+function parseCsv(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value;
+  return String(value)
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0);
+}
+
+function isValidIpOrHost(value) {
+  if (!value || typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  const ipv4Regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+  if (ipv4Regex.test(trimmed)) return true;
+
+  const hostnameRegex = /^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$/;
+  return hostnameRegex.test(trimmed);
+}
+
+function formatJupiterResponseData(data) {
+  if (!data) return '';
+  if (typeof data === 'string') return data;
+  if (Array.isArray(data)) {
+    return data.map(item => formatJupiterResponseData(item)).join('; ');
+  }
+  if (typeof data === 'object') {
+    const keys = ['error', 'message', 'msg', 'detail', 'details', 'reason'];
+    for (const key of keys) {
+      if (data[key]) {
+        return formatJupiterResponseData(data[key]);
+      }
+    }
+    try {
+      return JSON.stringify(data);
+    } catch {
+      return String(data);
+    }
+  }
+  return String(data);
+}
+
+function enrichAxiosError(error, context) {
+  if (!error) return error;
+  const response = error.response;
+  if (response && typeof response.status === 'number') {
+    const details = formatJupiterResponseData(response.data);
+    const messageParts = [`Jupiter API ${context || ''} responded with status ${response.status}`];
+    if (details) {
+      messageParts.push(details);
+    }
+    const enriched = new Error(messageParts.join(': '));
+    enriched.status = response.status;
+    enriched.data = response.data;
+    enriched.originalError = error;
+    return enriched;
+  }
+  return error;
+}
 
 /**
  * Jupiter Client Class
@@ -28,11 +91,24 @@ export class JupiterClient {
     this.solanaCore = solanaCore;
     this.connection = solanaCore.getConnection();
     this.config = {
-      jupiterApiUrl: API_ENDPOINTS.JUPITER_V6,
-      jupiterProgramId: PROGRAM_IDS.JUPITER_V6_PROGRAM,
+      jupiterApiUrl: config.jupiterApiUrl || process.env.JUPITER_API_URL || API_ENDPOINTS.JUPITER_V6,
+      jupiterProgramId: config.jupiterProgramId || process.env.JUPITER_PROGRAM_ID || PROGRAM_IDS.JUPITER_V6_PROGRAM,
       defaultSlippage: config.defaultSlippage || 1.0, // 1%
       maxRetries: config.maxRetries || 3,
       priorityFee: config.priorityFee || 1000,
+      dnsResolvers: config.dnsResolvers || parseCsv(process.env.JUPITER_DNS_RESOLVERS) || [
+        '1.1.1.1',
+        '1.0.0.1',
+        '8.8.8.8',
+        '8.8.4.4'
+      ],
+      dohEndpoints: config.dohEndpoints || parseCsv(process.env.JUPITER_DOH_ENDPOINTS) || [
+        'https://cloudflare-dns.com/dns-query',
+        'https://1.1.1.1/dns-query',
+        'https://dns.google/resolve',
+        'https://google-public-dns-a.google.com/resolve'
+      ],
+      jupiterStaticIps: config.jupiterStaticIps || parseCsv(process.env.JUPITER_STATIC_IPS),
       ...config
     };
 
@@ -40,8 +116,251 @@ export class JupiterClient {
     this.accountManager = new AccountManager(this.connection);
     this.cache = new Map();
     this.isInitialized = false;
+
+    this.systemLookup = dns.lookup;
+    this.dnsResolver = new dns.promises.Resolver();
+    if (Array.isArray(this.config.dnsResolvers) && this.config.dnsResolvers.length > 0) {
+      try {
+        this.dnsResolver.setServers(this.config.dnsResolvers);
+      } catch (error) {
+        logger.warn('Failed to set custom DNS resolvers:', error.message);
+      }
+    }
+
+    this.lookupFn = this.createLookupFunction();
+    this.httpsAgent = new https.Agent({
+      keepAlive: true,
+      lookup: this.lookupFn
+    });
+    this.jupiterHostname = this.extractHostname(this.config.jupiterApiUrl);
+    this.jupiterPort = this.extractPort(this.config.jupiterApiUrl);
+    this.staticIpPool = Array.isArray(this.config.jupiterStaticIps)
+      ? this.config.jupiterStaticIps.filter(isValidIpOrHost)
+      : [];
+    this.staticIpIndex = 0;
     
     this.initialize();
+  }
+
+  getStaticFallbackIp() {
+    if (!this.staticIpPool || this.staticIpPool.length === 0) {
+      return null;
+    }
+
+    const ip = this.staticIpPool[this.staticIpIndex % this.staticIpPool.length];
+    this.staticIpIndex = (this.staticIpIndex + 1) % this.staticIpPool.length;
+    return ip;
+  }
+
+  createLookupFunction() {
+    return (hostname, options, callback) => {
+      let lookupOptions = options;
+      let lookupCallback = callback;
+
+      if (typeof lookupOptions === 'function') {
+        lookupCallback = lookupOptions;
+        lookupOptions = {};
+      }
+
+      const complete = (error, address, family) => {
+        if (lookupCallback) {
+          lookupCallback(error, address, family);
+          lookupCallback = null;
+        }
+      };
+
+      const fallbackToSystem = () => {
+        try {
+          this.systemLookup(hostname, lookupOptions, complete);
+        } catch (error) {
+          complete(error);
+        }
+      };
+
+      Promise.resolve().then(async () => {
+        if (!this.dnsResolver) {
+          fallbackToSystem();
+          return;
+        }
+
+        const preferIPv6 = lookupOptions && lookupOptions.family === 6;
+        const recordOrder = preferIPv6 ? ['AAAA', 'A'] : ['A', 'AAAA'];
+
+        for (const recordType of recordOrder) {
+          try {
+            let addresses;
+            if (recordType === 'A') {
+              addresses = await this.dnsResolver.resolve4(hostname);
+            } else {
+              addresses = await this.dnsResolver.resolve6(hostname);
+            }
+
+            if (addresses && addresses.length > 0) {
+              const family = recordType === 'A' ? 4 : 6;
+              complete(null, addresses[0], family);
+              return;
+            }
+          } catch (error) {
+            if (typeof logger.debug === 'function') {
+              logger.debug(`Custom DNS resolve failed for ${hostname} (${recordType}): ${error.message}`);
+            }
+          }
+        }
+
+        fallbackToSystem();
+      }).catch(fallbackToSystem);
+    };
+  }
+
+  extractHostname(urlString) {
+    try {
+      return new URL(urlString).hostname;
+    } catch (error) {
+      logger.warn(`Invalid Jupiter API URL "${urlString}": ${error.message}. Falling back to default host.`);
+      return 'quote-api.jup.ag';
+    }
+  }
+
+  extractPort(urlString) {
+    try {
+      const parsed = new URL(urlString);
+      return parsed.port ? parseInt(parsed.port, 10) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  buildJupiterUrl(endpoint = '') {
+    const normalizedBase = this.config.jupiterApiUrl.endsWith('/')
+      ? this.config.jupiterApiUrl
+      : `${this.config.jupiterApiUrl}/`;
+    const sanitizedEndpoint = endpoint.startsWith('/')
+      ? endpoint.slice(1)
+      : endpoint;
+    return new URL(sanitizedEndpoint, normalizedBase);
+  }
+
+  async performJupiterRequest({ endpoint = '', method = 'GET', params, data, headers = {}, timeout = 10000 }) {
+    const requestUrl = this.buildJupiterUrl(endpoint);
+    const axiosConfig = {
+      method,
+      url: requestUrl.toString(),
+      params,
+      data,
+      timeout,
+      headers: { ...headers },
+      httpsAgent: this.httpsAgent
+    };
+
+    try {
+      return await axios(axiosConfig);
+    } catch (error) {
+      const message = typeof error?.message === 'string' ? error.message : '';
+      const causeMessage = typeof error?.cause?.message === 'string' ? error.cause.message : '';
+      const isDnsError =
+        error?.code === 'ENOTFOUND' ||
+        error?.cause?.code === 'ENOTFOUND' ||
+        message.includes('ENOTFOUND') ||
+        causeMessage.includes('ENOTFOUND') ||
+        message.includes('getaddrinfo') ||
+        causeMessage.includes('getaddrinfo');
+      if (!isDnsError) {
+        throw enrichAxiosError(error, endpoint || requestUrl.pathname || requestUrl.hostname);
+      }
+
+      logger.warn(`Primary Jupiter request failed due to DNS resolution (${requestUrl.hostname}). Attempting DoH fallback...`);
+      let fallbackIp = await this.resolveHostViaDoh(requestUrl.hostname);
+      if (!fallbackIp) {
+        fallbackIp = this.getStaticFallbackIp();
+        if (fallbackIp) {
+          logger.warn(`Using configured static Jupiter IP override ${fallbackIp} for ${requestUrl.hostname}`);
+        }
+      }
+
+      if (!fallbackIp) {
+        logger.error(`DoH fallback failed to resolve ${requestUrl.hostname}`);
+        logger.error('Provide IPs via JUPITER_STATIC_IPS or ensure outbound HTTPS to DoH endpoints is allowed.');
+        throw enrichAxiosError(error, endpoint || requestUrl.pathname || requestUrl.hostname);
+      }
+
+      if (typeof logger.info === 'function') {
+        logger.info(`✅ Resolved ${requestUrl.hostname} -> ${fallbackIp}. Retrying request with SNI preservation.`);
+      }
+
+      const fallbackUrl = new URL(requestUrl.toString());
+      fallbackUrl.hostname = fallbackIp;
+      if (this.jupiterPort) {
+        fallbackUrl.port = this.jupiterPort.toString();
+      }
+
+      const hostHeader = requestUrl.hostname;
+      const fallbackHeaders = {
+        ...headers,
+        Host: hostHeader
+      };
+
+      const fallbackAgent = new https.Agent({
+        keepAlive: true,
+        servername: hostHeader
+      });
+
+      try {
+        return await axios({
+          ...axiosConfig,
+          url: fallbackUrl.toString(),
+          headers: fallbackHeaders,
+          httpsAgent: fallbackAgent
+        });
+      } catch (fallbackError) {
+        throw enrichAxiosError(fallbackError, `${endpoint || requestUrl.pathname || requestUrl.hostname} (fallback)`);
+      }
+    }
+  }
+
+  async resolveHostViaDoh(hostname) {
+    const dohEndpoints = Array.isArray(this.config.dohEndpoints) && this.config.dohEndpoints.length > 0
+      ? this.config.dohEndpoints
+      : [
+          'https://cloudflare-dns.com/dns-query',
+          'https://1.1.1.1/dns-query',
+          'https://dns.google/resolve'
+        ];
+
+    for (const endpoint of dohEndpoints) {
+      try {
+        const response = await axios.get(endpoint, {
+          params: {
+            name: hostname,
+            type: 'A',
+            ct: 'application/dns-json'
+          },
+          headers: {
+            Accept: 'application/dns-json',
+            'User-Agent': 'ChaosBot-DNS-Resolver/1.0'
+          },
+          timeout: 5000
+        });
+
+        const data = response.data || {};
+        const answers = data.Answer || data.answer || [];
+        if (Array.isArray(answers) && answers.length > 0) {
+          const ipv4Record = answers.find(record => record.type === 1 && record.data);
+          if (ipv4Record?.data && isValidIpOrHost(ipv4Record.data)) {
+            return ipv4Record.data;
+          }
+        }
+
+        if (Array.isArray(data?.Answer) && data.Answer.length === 0 && typeof data?.Status === 'number') {
+          logger.warn(`DoH endpoint ${endpoint} responded with status ${data.Status} for ${hostname}`);
+        }
+      } catch (error) {
+        if (typeof logger.debug === 'function') {
+          logger.debug(`DoH lookup via ${endpoint} failed for ${hostname}: ${error.message}`);
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -82,7 +401,9 @@ export class JupiterClient {
     }
 
     try {
-      const response = await axios.get(`${this.config.jupiterApiUrl}/quote`, {
+      const response = await this.performJupiterRequest({
+        endpoint: 'quote',
+        method: 'GET',
         params: {
           inputMint: inputMint,
           outputMint: outputMint,
@@ -111,6 +432,7 @@ export class JupiterClient {
           routePlan: response.data.routePlan,
           contextSlot: response.data.contextSlot,
           timeTaken: response.data.timeTaken,
+          rawResponse: response.data,
           success: true
         };
 
@@ -119,6 +441,9 @@ export class JupiterClient {
       }
     } catch (error) {
       logger.warn('Jupiter quote API failed:', error.message);
+      if (error?.code === 'ENOTFOUND' || error?.cause?.code === 'ENOTFOUND') {
+        logger.error('DNS resolution failed for Jupiter quote API host. Consider updating DNS settings or providing a custom resolver.');
+      }
       const classifiedError = ErrorClassifier.classifyRPCError(error);
       throw classifiedError;
     }
@@ -134,18 +459,36 @@ export class JupiterClient {
    */
   async getSwapTransaction(quote, userPublicKey, options = {}) {
     try {
-      const response = await axios.post(`${this.config.jupiterApiUrl}/swap`, {
-        quoteResponse: quote,
+      const swapPayload = {
+        quoteResponse: quote.rawResponse || quote,
         userPublicKey: userPublicKey.toString(),
         wrapAndUnwrapSol: options.wrapAndUnwrapSol !== false,
         useSharedAccounts: options.useSharedAccounts !== false,
         feeAccount: options.feeAccount || null,
         trackingAccount: options.trackingAccount || null,
-        computeUnitPriceMicroLamports: options.computeUnitPriceMicroLamports || this.config.priorityFee * 1000,
         asLegacyTransaction: false,
-        dynamicComputeUnitLimit: true,
-        prioritizationFeeLamports: options.prioritizationFeeLamports || this.config.priorityFee
-      }, {
+        dynamicComputeUnitLimit: true
+      };
+
+      const computeUnitPrice = options.computeUnitPriceMicroLamports !== undefined
+        ? options.computeUnitPriceMicroLamports
+        : this.config.priorityFee * 1000;
+      const prioritizationFee = options.prioritizationFeeLamports !== undefined
+        ? options.prioritizationFeeLamports
+        : this.config.priorityFee;
+
+      if (computeUnitPrice && prioritizationFee) {
+        swapPayload.computeUnitPriceMicroLamports = computeUnitPrice;
+      } else if (computeUnitPrice) {
+        swapPayload.computeUnitPriceMicroLamports = computeUnitPrice;
+      } else if (prioritizationFee) {
+        swapPayload.prioritizationFeeLamports = prioritizationFee;
+      }
+
+      const response = await this.performJupiterRequest({
+        endpoint: 'swap',
+        method: 'POST',
+        data: swapPayload,
         timeout: 15000,
         headers: {
           'Content-Type': 'application/json'
@@ -163,6 +506,9 @@ export class JupiterClient {
       }
     } catch (error) {
       logger.warn('Jupiter swap transaction API failed:', error.message);
+      if (error?.code === 'ENOTFOUND' || error?.cause?.code === 'ENOTFOUND') {
+        logger.error('DNS resolution failed for Jupiter swap API host. Consider updating DNS settings or providing a custom resolver.');
+      }
       const classifiedError = ErrorClassifier.classifyRPCError(error);
       throw classifiedError;
     }
@@ -237,13 +583,25 @@ export class JupiterClient {
     } catch (error) {
       logger.error('Swap failed:', error);
       const classifiedError = ErrorClassifier.classifyTransactionError(error);
+
+      if (classifiedError?.err) {
+        try {
+          logger.error('Swap failure details:', JSON.stringify(classifiedError.err, null, 2));
+        } catch {
+          logger.error('Swap failure details (raw):', classifiedError.err);
+        }
+      } else if (classifiedError?.details?.originalError?.message) {
+        logger.error('Swap failure original error:', classifiedError.details.originalError.message);
+      }
+
       return {
         signature: null,
         inputAmount: 0,
         outputAmount: 0,
         priceImpact: 0,
         success: false,
-        error: classifiedError.message
+        error: classifiedError.message,
+        details: classifiedError.err || classifiedError.details || {}
       };
     }
   }
@@ -316,7 +674,9 @@ export class JupiterClient {
     }
 
     try {
-      const response = await axios.get(`${this.config.jupiterApiUrl}/tokens`, {
+      const response = await this.performJupiterRequest({
+        endpoint: 'tokens',
+        method: 'GET',
         timeout: 10000
       });
 

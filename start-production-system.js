@@ -5,10 +5,15 @@
  * Complete Solana trading platform with PumpFun, Raydium DEX, and optimized RPC
  */
 
-const { spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const { ProductionSystemTester } = require('./test-production-system');
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+import { ProductionSystemTester } from './test-production-system.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('🚀 CHAOS BOT - PRODUCTION SYSTEM STARTUP');
 console.log('==========================================\n');
@@ -56,7 +61,7 @@ ENABLE_DEBUG=false
 }
 
 // Load environment variables
-require('dotenv').config();
+dotenv.config();
 
 // Validate required environment variables
 const requiredEnvVars = ['RPC_URL', 'NETWORK'];

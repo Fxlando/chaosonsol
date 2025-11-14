@@ -337,7 +337,6 @@
             flex-direction: column;
             height: 100%;
         }
-
         .floating-window-header {
             background-color: #2a2a2a;
             padding: 12px 16px;
@@ -606,6 +605,34 @@
             </div>
         </div>
         
+<div class="modal fixed inset-0 overflow-y-auto bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden" id="blueprint-runs-modal">
+    <div class="min-h-screen px-4 text-center">
+        <span class="inline-block h-screen align-middle" aria-hidden="true">&#8203;</span>
+        <div class="inline-block w-full max-w-3xl my-8 overflow-hidden text-left align-middle transition-all transform bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
+                <div>
+                    <h2 class="text-lg font-semibold text-white" id="blueprint-runs-title">Blueprint Run History</h2>
+                    <p class="text-xs text-gray-400 mt-1">Review execution history, outcomes, and transaction signatures.</p>
+                </div>
+                <button class="text-gray-400 hover:text-white transition" onclick="closeModal('blueprint-runs-modal')">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="px-6 py-4 bg-neutral-950/70" id="blueprint-runs-body">
+                <div class="flex items-center justify-center gap-2 text-sm text-gray-400 py-6">
+                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                    <span>Loading run history...</span>
+                </div>
+            </div>
+            <div class="flex justify-end px-6 py-4 border-t border-neutral-800 bg-neutral-900/80">
+                <button class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-sm transition" onclick="closeModal('blueprint-runs-modal')">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
         <nav class="flex-1 p-3">
             <div class="nav-list space-y-1">
                 <div class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition text-gray-400 hover:bg-neutral-800 hover:text-white" data-view="tokens">
@@ -641,7 +668,6 @@
                     <span class="text-sm">Console</span>
                 </div>
             </div>
-            
             <div class="mt-6 bg-neutral-800 rounded-lg p-4">
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
@@ -686,13 +712,6 @@
                 </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-gray-500">Jito</span>
-                <div class="flex items-center gap-2">
-                    <span class="text-gray-300" id="jito-status">Online</span>
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse" id="jito-dot"></div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between">
                 <span class="text-gray-500">Proxies</span>
                 <span class="text-gray-300" id="proxy-status">None (0/0)</span>
             </div>
@@ -720,6 +739,37 @@
                     <p>No blueprints available yet. Create one from the Blueprint view.</p>
                     <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="navigateToPage('blueprint'); closeModal('launch-blueprint-modal')">
                         Manage Blueprints
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Automation Blueprint Runner -->
+        <div class="modal fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm z-50 hidden" id="automation-blueprint-modal">
+            <div class="modal-dialog max-w-xl mx-auto mt-20 bg-neutral-900 border border-neutral-700 rounded-xl shadow-lg overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Automation Blueprints</h3>
+                        <p class="text-xs text-gray-500">Run a saved blueprint to trigger on-chain automations.</p>
+                    </div>
+                    <button class="text-gray-400 hover:text-white transition" onclick="closeModal('automation-blueprint-modal')">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4 max-h-[420px] overflow-y-auto hidden" id="automation-blueprint-list"></div>
+                <div class="px-6 py-8 text-center text-sm text-gray-500 border-t border-neutral-800" id="automation-blueprint-empty">
+                    <div class="text-3xl mb-3">🗂️</div>
+                    <p>No blueprints available yet. Create one from the Blueprint view.</p>
+                    <button class="mt-4 bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 px-4 rounded transition" onclick="navigateToPage('blueprint'); closeModal('automation-blueprint-modal')">
+                        Manage Blueprints
+                    </button>
+                </div>
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-800 bg-neutral-950/60">
+                    <button class="px-4 py-2 text-sm text-gray-300 hover:text-white transition" onclick="navigateToPage('blueprint'); closeModal('automation-blueprint-modal')">
+                        Manage Blueprints
+                    </button>
+                    <button class="px-4 py-2 text-sm bg-neutral-800 hover:bg-neutral-700 text-white rounded transition" onclick="closeModal('automation-blueprint-modal')">
+                        Close
                     </button>
                 </div>
             </div>
@@ -847,6 +897,10 @@
                         <i data-lucide="upload" class="w-3.5 h-3.5"></i>
                         <span>Export</span>
                     </button>
+                    <button class="bg-purple-700 hover:bg-purple-600 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="walletOperationsSetCreatorWallet()">
+                        <i data-lucide="crown" class="w-3.5 h-3.5"></i>
+                        <span>Set Creator</span>
+                    </button>
                     <button class="bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-1.5 px-3 rounded flex items-center gap-2 transition" onclick="deactivateWallets()">
                         <i data-lucide="power" class="w-3.5 h-3.5"></i>
                         <span>Deactivate</span>
@@ -919,7 +973,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Import Page -->
         <div id="import-page" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
@@ -1217,7 +1270,7 @@
                                     </button>
                                 </div>
                                 <div class="text-xs text-gray-400 space-y-1">
-                                    <p><span class="text-purple-300 font-semibold">Jito</span>: Uses bundles for high landing rates. Perfect if you don’t run a staked validator.</p>
+                                    <p><span class="text-purple-300 font-semibold">Jito</span>: Uses bundles for high landing rates. Perfect if you don't run a staked validator.</p>
                                     <p><span class="text-purple-300 font-semibold">RPC</span>: For staked nodes or power users who manage their own priority fees.</p>
                                 </div>
                             </div>
@@ -1244,7 +1297,7 @@
                             Toggle as many platforms as you like. Use the auto assign button to randomise tags across your selection.
                         </p>
                         <div class="bg-neutral-900 border border-neutral-700 rounded-lg p-4 mb-4 space-y-2">
-                            <h4 class="text-sm font-semibold text-white">3-step “looks real” checklist</h4>
+                            <h4 class="text-sm font-semibold text-white">3-step "looks real" checklist</h4>
                             <ol class="list-decimal list-inside text-xs text-gray-300 space-y-1">
                                 <li>Create/import the wallet on the external platform (BullX, Photon, GMGN, Axiom, etc.) so their dashboard recognises it.</li>
                                 <li>Import the same wallet into Chaos Bot (Wallets → Import) and give it a friendly name.</li>
@@ -1267,7 +1320,6 @@
                     <div id="tag-wallet-info" class="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
                         <p class="text-sm text-gray-400">Select wallet(s) from the table to configure tagging settings.</p>
                     </div>
-                    
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block mb-2 text-sm font-semibold text-white">Min Buy Amount</label>
@@ -1608,7 +1660,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Activate / Deactivate Page -->
         <div id="activate-page" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
@@ -1631,6 +1682,21 @@
                             Activate wallets to include them in automations and funding operations. Deactivated wallets stay in your account but are excluded
                             from automated tasks until reactivated.
                         </p>
+                    </div>
+
+                    <div id="activate-wallets-card" class="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+                        <div class="px-5 py-4 border-b border-neutral-800 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-sm font-semibold text-white tracking-wide uppercase">Deactivated wallets</h3>
+                                <p class="text-xs text-gray-500 mt-1">Select wallets below to activate or keep them archived.</p>
+                            </div>
+                            <span id="activate-inactive-count" class="text-xs font-semibold text-purple-300 bg-purple-900/30 px-2.5 py-1 rounded-full">0</span>
+                        </div>
+                        <div id="activate-wallet-list" class="p-5 space-y-3 hidden"></div>
+                        <div id="activate-wallet-empty" class="p-8 text-center text-sm text-gray-400 space-y-3">
+                            <div class="text-3xl">🎉</div>
+                            <p>All wallets are currently active. Deactivate a wallet from the main table to manage it here.</p>
+                        </div>
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
@@ -1933,7 +1999,6 @@
                             <span class="text-sm">Use Vanity</span>
                         </label>
                     </div>
-                    
                     <!-- AUTOMATIONS SECTION - Smart Sell & Volume Bot -->
                     <div class="border-t-2 border-neutral-800 pt-6 mb-6" id="launch-automations-section">
                         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -2459,6 +2524,10 @@
                                 <i data-lucide="edit-2" class="w-4 h-4"></i>
                                 <span>Edit</span>
                             </button>
+                            <button id="token-collect-fees-btn" type="button" class="hidden bg-emerald-600/80 hover:bg-emerald-500 text-white px-4 py-2 rounded-full transition flex items-center gap-2 shadow-lg shadow-emerald-500/20" onclick="collectAllFees()">
+                                <i data-lucide="coins" class="w-4 h-4"></i>
+                                <span>Collect Fees</span>
+                            </button>
                             <button id="token-archive-btn" type="button" class="bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-full transition flex items-center gap-2 border border-neutral-800" onclick="handleTokenArchive()">
                                 <i data-lucide="archive" class="w-4 h-4"></i>
                                 <span>Archive</span>
@@ -2590,7 +2659,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 flex-1 shadow-[0_0_55px_rgba(45,212,191,0.12)]">
                             <div class="flex flex-wrap items-center gap-3 mb-5">
                                 <div class="flex items-center gap-2 bg-neutral-900/80 border border-neutral-900 rounded-full p-1">
@@ -2598,13 +2666,9 @@
                                     <button id="token-holdings-source-rpc" data-source="rpc" type="button" class="px-3 py-1 text-xs rounded-full text-gray-400 hover:text-white transition" onclick="setTokenHoldingsSource('rpc')">RPC</button>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2 ml-auto">
-                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-600/80 text-white hover:bg-purple-500 transition border border-purple-500/40" onclick="showAddVolumeTask()">
-                                        <i data-lucide="wifi" class="w-4 h-4"></i>
-                                        <span>Add Volume</span>
-                                    </button>
-                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showBumpTask()">
-                                        <i data-lucide="zap" class="w-4 h-4"></i>
-                                        <span>Bump</span>
+                                    <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-purple-600/80 text-white hover:bg-purple-500 transition border border-purple-500/40" onclick="openAutomationBlueprintModal()">
+                                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                        <span>Add Blueprint</span>
                                     </button>
                                     <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900 text-gray-300 hover:bg-neutral-800 transition border border-neutral-800" onclick="showSellBuybackTask()">
                                         <i data-lucide="repeat-2" class="w-4 h-4"></i>
@@ -2642,26 +2706,6 @@
                     </div>
 
                     <div class="flex flex-col gap-6 lg:w-64">
-                        <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 shadow-[0_0_45px_rgba(45,212,191,0.1)]">
-                            <h3 class="text-sm font-semibold text-gray-200 mb-4 uppercase tracking-wide">Actions</h3>
-                            <div class="flex flex-wrap gap-2">
-                                <button class="inline-flex items-center justify-center p-2 rounded-lg border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-gray-400 transition" onclick="navigateToPage('wallets')">
-                                    <i data-lucide="wallet-2" class="w-4 h-4"></i>
-                                </button>
-                                <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-500 text-sm font-medium text-white transition shadow-lg shadow-emerald-500/20" onclick="collectAllFees()">
-                                    <i data-lucide="coins" class="w-4 h-4"></i>
-                                    Collect Fees
-                                </button>
-                                <button class="inline-flex items-center justify-center p-2 rounded-lg border border-neutral-900 bg-neutral-900 hover:bg-neutral-800 text-gray-400 transition" type="button">
-                                    <i data-lucide="download" class="w-4 h-4"></i>
-                                </button>
-                                <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-sm text-gray-300 border border-neutral-900 transition" type="button">
-                                    <i data-lucide="archive" class="w-4 h-4"></i>
-                                    Archive
-                                </button>
-                            </div>
-                        </div>
-
                         <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl p-5 text-xs text-gray-500 space-y-3">
                             <div class="flex items-center gap-2 text-gray-300">
                                 <i data-lucide="info" class="w-4 h-4"></i>
@@ -2701,6 +2745,8 @@
                     </button>
                 </div>
             </div>
+            
+    <div id="launch-blueprint-summary" class="mx-6 mt-4 hidden"></div>
             
             <div class="flex-1 overflow-auto p-6">
                 <div class="max-w-4xl">
@@ -2769,7 +2815,7 @@
                         </div>
                     </div>
                     
-                    <button class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
+                    <button id="launch-token-submit" class="w-full bg-white hover:bg-gray-100 text-black font-medium py-3 px-4 rounded-lg transition" onclick="executeTokenLaunch()">
                         Launch Token
                     </button>
                 </div>
@@ -2936,7 +2982,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Sell/Buyback Task Window -->
         <div id="sell-buyback-window" class="floating-window hidden" style="position: fixed; top: 250px; left: 400px; z-index: 1000;">
             <div class="floating-window-content">
@@ -3286,7 +3331,6 @@
                         </div>
                     </div>
                 </div>
-
                 <!-- Recent Trades Table -->
                 <div class="bg-neutral-800 rounded-lg border border-neutral-700">
                     <div class="p-4 border-b border-neutral-700">
@@ -3612,7 +3656,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Markdown View -->
         <div id="markdown-view" class="view flex-1 flex flex-col hidden">
             <div class="bg-neutral-900 border-b border-neutral-800 p-6">
@@ -3748,250 +3791,11 @@
                         </div>
                     </section>
 
-                    <!-- Jito Section -->
-                    <section>
-                        <div class="mb-6">
-                            <h2 class="text-xl font-semibold mb-2">Jito</h2>
-                            <p class="text-sm text-gray-400">
-                                Configure your Jito settings. Jito is used for token launches and all buys and sells (individual and bundle).
-                            </p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Jito Location</label>
-                                <select id="jito-location" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
-                                    <option>New York</option>
-                                    <option>Amsterdam</option>
-                                    <option>Frankfurt</option>
-                                    <option>Tokyo</option>
-                                </select>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    The Jito location for validating transactions. Select the closest location to you for optimal performance.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6 mt-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Jito Bundle Max Tip</label>
-                                <input
-                                    type="number"
-                                    id="jito-bundle-max-tip"
-                                    value="0.001"
-                                    step="0.0001"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    The maximum allowed tip (SOL) for Jito bundles. If you set this too low bundles may not land.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Jito Transaction Max Tip</label>
-                                <input
-                                    type="number"
-                                    id="jito-transaction-max-tip"
-                                    value="0.001"
-                                    step="0.0001"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    The maximum allowed tip (SOL) for Jito transactions. If you set this too low transactions may not land.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="mt-6">
-                            <label class="block mb-2 text-sm font-medium">Jito Forwarder</label>
-                            <select id="jito-forwarder" class="w-full max-w-xs bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
-                                <option>Astralane</option>
-                                <option>Direct</option>
-                            </select>
-                            <p class="text-xs text-gray-500 mt-1">Choose an optional Jito forwarder for optimal performance.</p>
-                        </div>
-                    </section>
-
-                    <!-- Astralane Section -->
-                    <section>
-                        <div class="mb-6">
-                            <h2 class="text-xl font-semibold mb-2">Astralane</h2>
-                            <p class="text-sm text-gray-400">
-                                Configure your Astralane settings. Astralane is a Jito forwarder that optimizes for speed and fees.
-                            </p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Astralane Location</label>
-                                <select id="astralane-location" class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600">
-                                    <option>New York</option>
-                                    <option>Amsterdam</option>
-                                    <option>Frankfurt</option>
-                                    <option>Tokyo</option>
-                                </select>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    The Astralane location for sending transactions. Select the closest location to you for optimal performance.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Astralane API Key</label>
-                                <input
-                                    type="text"
-                                    id="astralane-api-key"
-                                    placeholder="Optional"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    Optionally provide your API key for Astralane. This is not required, but it can improve performance and reliability since you won't have to share the rate limit with other users.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6 mt-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Astralane Min Priority Fee</label>
-                                <input
-                                    type="number"
-                                    id="astralane-min-priority-fee"
-                                    value="0.0001"
-                                    step="0.0001"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">The min priority fee (SOL) for Astralane transactions.</p>
-                            </div>
-
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Astralane Max Priority Fee</label>
-                                <input
-                                    type="number"
-                                    id="astralane-max-priority-fee"
-                                    value="0.0005"
-                                    step="0.0001"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">The max priority fee (SOL) for Astralane transactions.</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Proxies Section -->
-                    <section>
-                        <div class="mb-6">
-                            <h2 class="text-xl font-semibold mb-2">Proxies</h2>
-                            <p class="text-sm text-gray-400">Proxies are not required.</p>
-                        </div>
-
-                        <div>
-                            <label class="block mb-2 text-sm font-medium">Proxy Endpoints</label>
-                            <textarea
-                                rows="4"
-                                id="proxy-endpoints"
-                                placeholder="host:port:username:password"
-                                class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600 font-mono"
-                            ></textarea>
-                            <p class="text-xs text-gray-500 mt-1">
-                                Add each proxy in the format: host:port:username:password. Separate each proxy with a new line.
-                            </p>
-                        </div>
-                    </section>
-
-                    <!-- Launchpad Section -->
-                    <section>
-                        <div class="mb-6">
-                            <h2 class="text-xl font-semibold mb-2">Launchpad</h2>
-                            <p class="text-sm text-gray-400">
-                                Configure your slippage settings for buys and sells for tokens that have not yet bonded, and are still on the launchpad (Pump.fun, Bonk, etc.).
-                            </p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
-                                <input
-                                    type="number"
-                                    id="launchpad-buy-slippage"
-                                    value="20"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    Allowed slippage for launchpad buy orders (i.e. 50 = 50% slippage). If you set this too low, orders may not fill due to price volatility.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
-                                <input
-                                    type="number"
-                                    id="launchpad-sell-slippage"
-                                    value="20"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    Allowed slippage for launchpad sell orders (i.e. 50 = 50% slippage). If you set this too low, orders may not fill due to price volatility.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- DEX Section -->
-                    <section>
-                        <div class="mb-6">
-                            <h2 class="text-xl font-semibold mb-2">DEX</h2>
-                            <p class="text-sm text-gray-400">
-                                Configure your slippage settings for buys and sells on decentralized exchanges after your token has bonded and migrated (Pumpswap, Raydium, etc.).
-                            </p>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-6">
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Buy Slippage</label>
-                                <input
-                                    type="number"
-                                    id="dex-buy-slippage"
-                                    value="5"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">
-                                    Allowed slippage for DEX buy orders (i.e. 5 = 5% slippage). You typically want this to be set low because you need to have x + (x * slippage) to fill the order.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label class="block mb-2 text-sm font-medium">Sell Slippage</label>
-                                <input
-                                    type="number"
-                                    id="dex-sell-slippage"
-                                    value="50"
-                                    class="w-full bg-black border border-neutral-700 rounded px-4 py-2 text-sm focus:outline-none focus:border-neutral-600"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">Allowed slippage for DEX sell orders (i.e. 50 = 50% slippage).</p>
-                            </div>
-                        </div>
-                    </section>
-
                     <!-- Customization Section -->
                     <section>
                         <div class="mb-6">
                             <h2 class="text-xl font-semibold mb-2">Customization</h2>
                             <p class="text-sm text-gray-400">Customize your experience to help you launch better and faster.</p>
-                        </div>
-
-                        <div class="mb-6">
-                            <label class="block mb-3 text-sm font-medium">Default Executor</label>
-                            <div class="flex gap-3" data-settings-default-executor>
-                                <button id="default-executor-jito" class="px-4 py-2 rounded text-sm font-medium transition bg-purple-700 text-white" onclick="selectDefaultExecutor('jito')">
-                                    Jito
-                                </button>
-                                <button id="default-executor-rpc" class="px-4 py-2 rounded text-sm font-medium transition bg-neutral-800 text-gray-300 hover:bg-neutral-700" onclick="selectDefaultExecutor('rpc')">
-                                    RPC
-                                </button>
-                            </div>
-                            <input type="hidden" id="default-executor-value" value="jito" />
-                            <p class="text-xs text-gray-500 mt-2">
-                                Choose the default transaction executor. You can override this on a per-task basis.
-                            </p>
                         </div>
 
                         <div class="mb-6">
@@ -4254,7 +4058,6 @@
                             <label class="block text-sm font-medium text-gray-300 mb-2">Description</label>
                             <textarea id="blueprint-description" rows="3" placeholder="What does this blueprint automate?" class="w-full bg-neutral-950 border border-neutral-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-600"></textarea>
                         </div>
-
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="bg-neutral-950 border border-neutral-800 rounded-lg p-4 space-y-4">
                                 <h3 class="text-sm font-semibold text-gray-200">Launch Defaults</h3>
@@ -4296,154 +4099,125 @@
                                         </div>
                                     </div>
                                     <div class="border-t border-neutral-800 pt-3 space-y-2">
-                                        <label class="block text-[11px] font-medium text-gray-400">Execution Wallets</label>
-                                        <select
-                                            id="blueprint-smart-sell-wallet-mode"
-                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600"
-                                        >
-                                            <option value="all">Use all active wallets</option>
-                                            <option value="custom">Select specific wallets</option>
-                                            <option value="group">Use wallet group</option>
-                                        </select>
-                                        <div id="blueprint-smart-sell-wallets-wrapper" class="space-y-2 hidden">
-                                            <select
-                                                id="blueprint-smart-sell-wallet-select"
-                                                multiple
-                                                class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600 h-24"
-                                            ></select>
-                                            <p class="text-[10px] text-gray-500">Hold Ctrl/Cmd to select multiple wallets.</p>
-                                        </div>
-                                        <div id="blueprint-smart-sell-group-wrapper" class="space-y-2 hidden">
-                                            <select
-                                                id="blueprint-smart-sell-group-select"
-                                                class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600"
-                                            >
-                                                <option value="">Select group...</option>
-                                            </select>
-                                            <p class="text-[10px] text-gray-500">Wallet groups are managed from the Wallets view.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="border-t border-neutral-800 pt-3 space-y-2">
-                                    <label class="flex items-center gap-2 text-xs text-gray-300">
-                                        <input type="checkbox" id="blueprint-volume-enabled" class="rounded" />
-                                        Enable Volume Bot
-                                    </label>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Base buy size (SOL)</label>
-                                            <input type="number" id="blueprint-volume-amount" value="0.02" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Cycles</label>
-                                            <input type="number" id="blueprint-volume-cycles" value="10" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds before selling</label>
-                                            <input type="number" id="blueprint-volume-delay" value="45" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Smallest buy (SOL)</label>
-                                            <input type="number" id="blueprint-volume-min-amount" value="0.015" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                            <p class="text-[10px] text-gray-500 mt-1">Used when "vary amount" is on.</p>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Largest buy (SOL)</label>
-                                            <input type="number" id="blueprint-volume-max-amount" value="0.05" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div class="flex items-center gap-2 mt-6">
-                                            <input type="checkbox" id="blueprint-volume-randomize-amounts" class="rounded" checked />
-                                            <span class="text-[11px] text-gray-400">Vary buy size each loop</span>
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between buys (avg)</label>
-                                            <input type="number" id="blueprint-volume-buy-interval" value="3" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest buy delay (s)</label>
-                                            <input type="number" id="blueprint-volume-buy-interval-min" value="1" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest buy delay (s)</label>
-                                            <input type="number" id="blueprint-volume-buy-interval-max" value="8" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between sells (avg)</label>
-                                            <input type="number" id="blueprint-volume-sell-interval" value="5" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest sell delay (s)</label>
-                                            <input type="number" id="blueprint-volume-sell-interval-min" value="2" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest sell delay (s)</label>
-                                            <input type="number" id="blueprint-volume-sell-interval-max" value="12" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell % Min</label>
-                                            <input type="number" id="blueprint-volume-sell-percent-min" value="55" step="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell % Max</label>
-                                            <input type="number" id="blueprint-volume-sell-percent-max" value="90" step="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
-                                        </div>
-                                        <div class="flex items-center gap-2 mt-6">
-                                            <input type="checkbox" id="blueprint-volume-randomize-delay" class="rounded" checked />
-                                            <span class="text-[11px] text-gray-400">Vary the timing a little</span>
-                                        </div>
-                                    </div>
-                                    <p class="text-[10px] text-gray-500">The bot picks a random delay between your fastest and slowest numbers. Leave them blank if you just want the average.</p>
-                                    <div class="border-t border-neutral-800 pt-3 space-y-3">
                                         <label class="flex items-center gap-2 text-xs text-gray-300">
-                                            <input type="checkbox" id="blueprint-volume-guardrails-enabled" class="rounded" checked onchange="toggleBlueprintVolumeGuardrails()" />
-                                            Enable safety stops
+                                            <input type="checkbox" id="blueprint-volume-enabled" class="rounded" />
+                                            Enable Volume Bot
                                         </label>
-                                        <div id="blueprint-volume-guardrail-config" class="grid grid-cols-2 gap-2">
+                                        <div class="grid grid-cols-3 gap-2">
                                             <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when profit hits (SOL)</label>
-                                                <input type="number" id="blueprint-volume-profit-target" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Base buy size (SOL)</label>
+                                                <input type="number" id="blueprint-volume-amount" value="0.02" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                             </div>
                                             <div>
-                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when loss hits (SOL)</label>
-                                                <input type="number" id="blueprint-volume-loss-limit" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Cycles</label>
+                                                <input type="number" id="blueprint-volume-cycles" value="10" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds before selling</label>
+                                                <input type="number" id="blueprint-volume-delay" value="45" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="border-t border-neutral-800 pt-3 space-y-2">
-                                        <label class="block text-[11px] font-medium text-gray-400">Execution Wallets</label>
-                                        <select
-                                            id="blueprint-volume-wallet-mode"
-                                            class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600"
-                                        >
-                                            <option value="all">Use all active wallets</option>
-                                            <option value="custom">Select specific wallets</option>
-                                            <option value="group">Use wallet group</option>
-                                        </select>
-                                        <div id="blueprint-volume-wallets-wrapper" class="space-y-2 hidden">
-                                            <select
-                                                id="blueprint-volume-wallet-select"
-                                                multiple
-                                                class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600 h-24"
-                                            ></select>
-                                            <p class="text-[10px] text-gray-500">Pick wallets that will run the volume loop. Hold Ctrl/Cmd for multiples.</p>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Smallest buy (SOL)</label>
+                                                <input type="number" id="blueprint-volume-min-amount" value="0.015" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                                <p class="text-[10px] text-gray-500 mt-1">Used when "vary amount" is on.</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Largest buy (SOL)</label>
+                                                <input type="number" id="blueprint-volume-max-amount" value="0.05" step="0.001" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-6">
+                                                <input type="checkbox" id="blueprint-volume-randomize-amounts" class="rounded" checked />
+                                                <span class="text-[11px] text-gray-400">Vary buy size each loop</span>
+                                            </div>
                                         </div>
-                                        <div id="blueprint-volume-group-wrapper" class="space-y-2 hidden">
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between buys (avg)</label>
+                                                <input type="number" id="blueprint-volume-buy-interval" value="3" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest buy delay (s)</label>
+                                                <input type="number" id="blueprint-volume-buy-interval-min" value="1" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest buy delay (s)</label>
+                                                <input type="number" id="blueprint-volume-buy-interval-max" value="8" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Seconds between sells (avg)</label>
+                                                <input type="number" id="blueprint-volume-sell-interval" value="5" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Fastest sell delay (s)</label>
+                                                <input type="number" id="blueprint-volume-sell-interval-min" value="2" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Slowest sell delay (s)</label>
+                                                <input type="number" id="blueprint-volume-sell-interval-max" value="12" step="0.1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell % Min</label>
+                                                <input type="number" id="blueprint-volume-sell-percent-min" value="55" step="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-medium text-gray-400 mb-1">Sell % Max</label>
+                                                <input type="number" id="blueprint-volume-sell-percent-max" value="90" step="1" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-6">
+                                                <input type="checkbox" id="blueprint-volume-randomize-delay" class="rounded" checked />
+                                                <span class="text-[11px] text-gray-400">Vary the timing a little</span>
+                                            </div>
+                                        </div>
+                                        <p class="text-[10px] text-gray-500">The bot picks a random delay between your fastest and slowest numbers. Leave them blank if you just want the average.</p>
+                                        <div class="border-t border-neutral-800 pt-3 space-y-3">
+                                            <label class="flex items-center gap-2 text-xs text-gray-300">
+                                                <input type="checkbox" id="blueprint-volume-guardrails-enabled" class="rounded" checked onchange="toggleBlueprintVolumeGuardrails()" />
+                                                Enable safety stops
+                                            </label>
+                                            <div id="blueprint-volume-guardrail-config" class="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when profit hits (SOL)</label>
+                                                    <input type="number" id="blueprint-volume-profit-target" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[11px] font-medium text-gray-400 mb-1">Stop when loss hits (SOL)</label>
+                                                    <input type="number" id="blueprint-volume-loss-limit" step="0.01" class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="border-t border-neutral-800 pt-3 space-y-2">
+                                            <label class="block text-[11px] font-medium text-gray-400">Execution Wallets</label>
                                             <select
-                                                id="blueprint-volume-group-select"
+                                                id="blueprint-volume-wallet-mode"
                                                 class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600"
                                             >
-                                                <option value="">Select group...</option>
+                                                <option value="all">Use all active wallets</option>
+                                                <option value="custom">Select specific wallets</option>
+                                                <option value="group">Use wallet group</option>
                                             </select>
-                                            <p class="text-[10px] text-gray-500">Select a wallet group to execute this automation.</p>
+                                            <div id="blueprint-volume-wallets-wrapper" class="space-y-2 hidden">
+                                                <select
+                                                    id="blueprint-volume-wallet-select"
+                                                    multiple
+                                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600 h-24"
+                                                ></select>
+                                                <p class="text-[10px] text-gray-500">Pick wallets that will run the volume loop. Hold Ctrl/Cmd for multiples.</p>
+                                            </div>
+                                            <div id="blueprint-volume-group-wrapper" class="space-y-2 hidden">
+                                                <select
+                                                    id="blueprint-volume-group-select"
+                                                    class="w-full bg-black border border-neutral-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-purple-600"
+                                                >
+                                                    <option value="">Select group...</option>
+                                                </select>
+                                                <p class="text-[10px] text-gray-500">Select a wallet group to execute this automation.</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4548,56 +4322,21 @@
 
         // Method Selection Functions
         function selectMethod(taskType, method) {
-            // Remove active class from both buttons
             const jitoBtn = document.getElementById(`${taskType}-method-jito`);
             const rpcBtn = document.getElementById(`${taskType}-method-rpc`);
-            
             jitoBtn.classList.remove('active');
             rpcBtn.classList.remove('active');
-            
-            // Add active class to selected button
             if (method === 'jito') {
                 jitoBtn.classList.add('active');
             } else {
                 rpcBtn.classList.add('active');
             }
-            
             addConsoleLog(`Selected ${method.toUpperCase()} method for ${taskType}`, 'info');
         }
 
         function getSelectedMethod(taskType) {
             const jitoBtn = document.getElementById(`${taskType}-method-jito`);
             return jitoBtn.classList.contains('active') ? 'jito' : 'rpc';
-        }
-
-        // Settings Functions
-        function selectDefaultExecutor(executor) {
-            const hiddenInput = document.getElementById('default-executor-value');
-            if (hiddenInput) {
-                hiddenInput.value = executor;
-            }
-            if (window.settingsUI && typeof window.settingsUI.syncDefaultExecutorButtons === 'function') {
-                window.settingsUI.syncDefaultExecutorButtons(executor);
-            }
-            const jitoBtn = document.getElementById('default-executor-jito');
-            const rpcBtn = document.getElementById('default-executor-rpc');
-            
-            // Remove active class from both buttons
-            jitoBtn.classList.remove('bg-purple-700', 'text-white');
-            jitoBtn.classList.add('bg-neutral-800', 'text-gray-300');
-            rpcBtn.classList.remove('bg-purple-700', 'text-white');
-            rpcBtn.classList.add('bg-neutral-800', 'text-gray-300');
-            
-            // Add active class to selected button
-            if (executor === 'jito') {
-                jitoBtn.classList.remove('bg-neutral-800', 'text-gray-300');
-                jitoBtn.classList.add('bg-purple-700', 'text-white');
-            } else {
-                rpcBtn.classList.remove('bg-neutral-800', 'text-gray-300');
-                rpcBtn.classList.add('bg-purple-700', 'text-white');
-            }
-            
-            addConsoleLog(`Selected ${executor.toUpperCase()} as default executor`, 'info');
         }
 
         // Floating Window Management Functions
@@ -4777,4 +4516,3 @@
     </script>
 </body>
 </html>
-

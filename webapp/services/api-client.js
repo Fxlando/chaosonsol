@@ -182,6 +182,14 @@ class APIClient {
     return await this.request(`/wallets/${walletId}`);
   }
 
+  async updateWalletTags(walletId, tags = []) {
+    return await this.request(`/wallets/${walletId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags })
+    });
+  }
+
   /**
    * Trading operations
    */

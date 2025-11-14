@@ -3,11 +3,13 @@
  * Comprehensive testing of all trading functionality
  */
 
-const { ProductionTradingEngine } = require('./production-trading-engine');
-const { ProductionSolanaCore } = require('./production-solana-core');
-const { ProductionPumpFunIntegration } = require('./production-pumpfun-integration');
-const { ProductionRaydiumIntegration } = require('./production-raydium-integration');
-const { ProductionWalletManager } = require('./production-wallet-manager');
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import path from 'node:path';
+import { ProductionTradingEngine } from './production-trading-engine.js';
+import { ProductionSolanaCore } from './production-solana-core.js';
+import { ProductionPumpFunIntegration } from './production-pumpfun-integration.js';
+import { ProductionRaydiumIntegration } from './production-raydium-integration.js';
+import { ProductionWalletManager } from './production-wallet-manager.js';
 
 class ProductionSystemTester {
     constructor() {
@@ -398,9 +400,12 @@ class ProductionSystemTester {
 }
 
 // Run tests if called directly
-if (require.main === module) {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const tester = new ProductionSystemTester();
     tester.runAllTests().catch(console.error);
 }
 
-module.exports = { ProductionSystemTester };
+export { ProductionSystemTester };

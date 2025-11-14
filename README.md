@@ -33,6 +33,24 @@ A comprehensive Solana trading platform with full PumpFun, Jupiter DEX integrati
 npm install
 ```
 
+## 🖥️ Local On-Chain Stack
+
+Run the same build that ships to production without relying on demo shortcuts.
+
+1. Copy the sample environment and update the values you care about:
+   ```bash
+   cp env.example .env
+   ```
+   - Set `NETWORK=devnet` for testing or `mainnet-beta` when you are ready for real funds.
+   - Point `RPC_URL` (and optional `HELIUS_API_KEY`, `QUICKNODE_ENDPOINT`, etc.) at the providers you actually use.
+2. Start the combined API + UI server:
+   ```bash
+   npm run web
+   ```
+   This serves the frontend and the API on `http://localhost:3000`, so every fetch stays on the same origin.
+3. Open `http://localhost:3000` in your normal browser profile, authenticate with your access code, and connect your Solana wallet.
+4. If you ever see a stale session, clear `localStorage` keys `chaos_auth` and `chaos_token` and refresh—no incognito window required.
+
 ## 🚀 Quick Start
 
 ### Basic Usage

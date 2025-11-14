@@ -3,190 +3,60 @@
  * Complete token creation and launch on PumpFun
  */
 
-import { 
-  PublicKey, 
-  Keypair, 
-  Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL
-} from '@solana/web3.js';
-import axios from 'axios';
+import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
-import { API_ENDPOINTS, PROGRAM_IDS } from '../../config/constants.js';
 import { loggerManager } from '../../utils/logger.js';
 import { ErrorClassifier } from '../../utils/errors.js';
-import TransactionBuilder from '../../core/TransactionBuilder.js';
-import AccountManager from '../../core/AccountManager.js';
 
 const logger = loggerManager.getLogger('TokenLaunch');
+const PUMP_FUN_IPFS_ENDPOINT = 'https://pump.fun/api/ipfs';
+const PUMP_PORTAL_ENDPOINT = 'https://pumpportal.fun/api/trade';
+const FALLBACK_PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==',
+  'base64'
+);
 
-/**
- * Token Launch Class
- */
 export class TokenLaunch {
   constructor(solanaCore, config = {}) {
     this.solanaCore = solanaCore;
     this.connection = solanaCore.getConnection();
     this.config = {
-      pumpFunProgramId: PROGRAM_IDS.PUMPFUN_PROGRAM,
-      apiBaseUrl: API_ENDPOINTS.PUMPFUN,
+      metadataFallback: config.metadataFallback || null,
+      pumpPortal: config.pumpPortal || {},
       maxRetries: config.maxRetries || 3,
       ...config
     };
-
-    this.transactionBuilder = new TransactionBuilder(this.connection);
-    this.accountManager = new AccountManager(this.connection);
     this.isInitialized = false;
-    
+
     this.initialize();
   }
 
-  /**
-   * Initialize
-   */
   async initialize() {
     if (this.isInitialized) return;
-    
     logger.info('Initializing Token Launch...');
     this.isInitialized = true;
     logger.info('✅ Token Launch initialized');
   }
 
-  /**
-   * Upload metadata to PumpFun
-   */
-  async uploadMetadata(metadata) {
+  async launchToken(walletKeypair, metadata, initialBuyAmount = 0, options = {}) {
     try {
-      const { name, symbol, description, image, twitter, telegram, website } = metadata;
+      logger.info(`Launching token: ${metadata.name} with initial buy: ${initialBuyAmount} SOL`);
+      const createResult = await this.createToken(walletKeypair, metadata, {
+        ...options,
+        initialBuyAmount
+      });
 
-      // Create metadata JSON
-      const metadataJson = {
-        name: name,
-        symbol: symbol,
-        description: description || '',
-        image: image || '',
-        attributes: [],
-        properties: {
-          files: [],
-          category: 'image'
-        }
+      if (!createResult.success) {
+        return createResult;
+      }
+
+      return {
+        ...createResult,
+        success: true
       };
-
-      // Add optional social links
-      if (twitter) metadataJson.twitter = twitter;
-      if (telegram) metadataJson.telegram = telegram;
-      if (website) metadataJson.website = website;
-
-      // Upload to PumpFun API
-      const response = await axios.post(`${this.config.apiBaseUrl}/metadata`, {
-        metadata: metadataJson
-      }, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.data && response.data.uri) {
-        logger.info('✅ Metadata uploaded:', response.data.uri);
-        return response.data.uri;
-      }
-
-      throw new Error('No URI returned from metadata upload');
     } catch (error) {
-      logger.error('Failed to upload metadata:', error);
-      throw new Error(`Metadata upload failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Create and launch token on PumpFun
-   */
-  async createToken(walletKeypair, metadata, options = {}) {
-    try {
-      logger.info(`Creating token: ${metadata.name} (${metadata.symbol})`);
-
-      const {
-        name,
-        symbol,
-        description,
-        image,
-        twitter,
-        telegram,
-        website
-      } = metadata;
-
-      // Step 1: Upload metadata
-      logger.info('Step 1: Uploading metadata...');
-      const metadataUri = await this.uploadMetadata({
-        name,
-        symbol,
-        description,
-        image,
-        twitter,
-        telegram,
-        website
-      });
-
-      // Step 2: Generate token mint keypair
-      logger.info('Step 2: Generating token mint...');
-      const mintKeypair = Keypair.generate();
-      const mintPubkey = mintKeypair.publicKey;
-
-      // Step 3: Build create token transaction
-      logger.info('Step 3: Building create token transaction...');
-      
-      // Use pumpfun-sdk if available, otherwise build manually
-      let createResult;
-      
-      try {
-        // Use pumpfun-sdk for REAL token creation (on-chain)
-        const pumpfunSdk = await import('pumpfun-sdk');
-        
-        if (pumpfunSdk && pumpfunSdk.pumpFunCreate) {
-          logger.info('🚀 Creating REAL token on-chain using pumpfun-sdk...');
-          
-          const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
-          
-          // REAL token creation - this executes on-chain
-          createResult = await pumpfunSdk.pumpFunCreate(
-            privateKeyBase58,
-            name,
-            symbol,
-            metadataUri,
-            {
-              rpcUrl: this.connection.rpcEndpoint,
-              commitment: 'confirmed',
-              trackTx: true
-            }
-          );
-
-          if (createResult && createResult.signature) {
-            logger.info(`✅ REAL token created on-chain: ${mintPubkey.toString()}`);
-            logger.info(`Transaction: https://solscan.io/tx/${createResult.signature}`);
-            
-            return {
-              success: true,
-              tokenMint: mintPubkey.toString(),
-              signature: createResult.signature,
-              metadataUri: metadataUri,
-              transaction: createResult,
-              viewOnExplorer: `https://solscan.io/tx/${createResult.signature}`
-            };
-          }
-        }
-      } catch (sdkError) {
-        logger.error('REAL token creation failed:', sdkError);
-        throw new Error(`Token creation failed: ${sdkError.message}`);
-      }
-
-      // If SDK failed, we cannot create tokens without it
-      throw new Error('Token creation requires pumpfun-sdk package. Please install: npm install pumpfun-sdk');
-
-    } catch (error) {
-      logger.error('Token creation failed:', error);
+      logger.error('Token launch failed:', error);
       const classifiedError = ErrorClassifier.classifyTransactionError(error);
-      
       return {
         success: false,
         error: classifiedError.message,
@@ -196,92 +66,278 @@ export class TokenLaunch {
     }
   }
 
-  /**
-   * Launch token with initial buy
-   */
-  async launchToken(walletKeypair, metadata, initialBuyAmount = 0, options = {}) {
+  async createToken(walletKeypair, metadata, options = {}) {
     try {
-      logger.info(`Launching token: ${metadata.name} with initial buy: ${initialBuyAmount} SOL`);
+      this.validateMetadata(metadata);
+      const metadataUri = await this.uploadMetadata(metadata);
+      const mintKeypair = Keypair.generate();
+      const mintPubkey = mintKeypair.publicKey.toBase58();
 
-      // Step 1: Create token
-      const createResult = await this.createToken(walletKeypair, metadata, options);
+      const portalResult = await this.sendPumpPortalCreate({
+        walletKeypair,
+        mintKeypair,
+        metadataUri,
+        metadata,
+        initialBuyAmount: Number(options.initialBuyAmount || 0),
+        pumpPortalOverrides: options.pumpPortal || {}
+      });
 
-      if (!createResult.success) {
-        return createResult;
+      logger.info(`✅ Token created: ${mintPubkey}`);
+      if (portalResult.signature) {
+        logger.info(`Transaction: https://solscan.io/tx/${portalResult.signature}`);
       }
 
-      const tokenMint = createResult.tokenMint;
-
-      // Step 2: Initial buy if specified
-      if (initialBuyAmount > 0) {
-        logger.info(`Executing initial buy: ${initialBuyAmount} SOL`);
-        
-        // Import PumpFunClient for buy operation
-        const { PumpFunClient } = await import('./PumpFunClient.js');
-        const pumpFunClient = new PumpFunClient(this.solanaCore);
-        await pumpFunClient.initialize();
-
-        const buyResult = await pumpFunClient.buyToken(
-          walletKeypair,
-          tokenMint,
-          initialBuyAmount,
-          {
-            slippage: 5.0, // 5% slippage for initial buy
-            source: 'token-launch'
-          }
-        );
-
-        if (buyResult.success) {
-          logger.info(`✅ Initial buy successful: ${buyResult.signature}`);
-        } else {
-          logger.warn(`Initial buy failed: ${buyResult.error}`);
+      // Save metadata locally by mint address for future lookups
+      if (this.config.metadataFallback && typeof this.config.metadataFallback.saveByMint === 'function') {
+        try {
+          const metadataJson = {
+            name: metadata.name,
+            symbol: metadata.symbol,
+            description: metadata.description || '',
+            image: metadata.image || '',
+            twitter: metadata.twitter,
+            telegram: metadata.telegram,
+            website: metadata.website,
+            attributes: [],
+            properties: {
+              files: [],
+              category: 'image'
+            }
+          };
+          this.config.metadataFallback.saveByMint(mintPubkey, metadataJson);
+          logger.info(`✅ Saved metadata locally for mint ${mintPubkey}`);
+        } catch (saveError) {
+          logger.warn(`Failed to save metadata locally for ${mintPubkey}:`, saveError.message);
         }
-
-        return {
-          ...createResult,
-          initialBuy: buyResult
-        };
       }
 
-      return createResult;
-
+      return {
+        success: true,
+        tokenMint: mintPubkey,
+        signature: portalResult.signature || null,
+        metadataUri,
+        transaction: portalResult.raw || null,
+        viewOnExplorer: portalResult.signature
+          ? `https://solscan.io/tx/${portalResult.signature}`
+          : null,
+        devBuyExecuted: Number(options.initialBuyAmount || 0) > 0
+      };
     } catch (error) {
-      logger.error('Token launch failed:', error);
+      logger.error('Token creation failed:', error);
+      const classifiedError = ErrorClassifier.classifyTransactionError(error);
       return {
         success: false,
-        error: error.message,
+        error: classifiedError.message,
         tokenMint: null,
         signature: null
       };
     }
   }
 
-  /**
-   * Validate token metadata
-   */
-  validateMetadata(metadata) {
-    const errors = [];
+  async uploadMetadata(metadata) {
+    const {
+      name,
+      symbol,
+      description,
+      image,
+      twitter,
+      telegram,
+      website,
+      metadataUri: providedUri
+    } = metadata || {};
 
-    if (!metadata.name || metadata.name.trim().length === 0) {
-      errors.push('Token name is required');
-    } else if (metadata.name.length > 32) {
-      errors.push('Token name must be 32 characters or less');
+    if (providedUri && providedUri.trim().length > 0) {
+      logger.info('Using provided metadata URI, skipping upload.');
+      return providedUri.trim();
     }
 
-    if (!metadata.symbol || metadata.symbol.trim().length === 0) {
-      errors.push('Token symbol is required');
-    } else if (metadata.symbol.length > 10) {
-      errors.push('Token symbol must be 10 characters or less');
+    const metadataJson = {
+      name,
+      symbol,
+      description: description || '',
+      image: image || '',
+      attributes: [],
+      properties: {
+        files: [],
+        category: 'image'
+      }
+    };
+
+    if (twitter) metadataJson.twitter = twitter;
+    if (telegram) metadataJson.telegram = telegram;
+    if (website) metadataJson.website = website;
+
+    try {
+      const formData = new FormData();
+      const imageBlob = await this.buildImageBlob(image, symbol || name);
+      if (imageBlob) {
+        formData.append(
+          'file',
+          imageBlob,
+          `${(symbol || name || 'token').replace(/\s+/g, '_')}.png`
+        );
+      }
+      formData.append('name', name || 'Token');
+      formData.append('symbol', symbol || 'TOKEN');
+      formData.append('description', metadataJson.description || '');
+      formData.append('twitter', metadataJson.twitter || '');
+      formData.append('telegram', metadataJson.telegram || '');
+      formData.append('website', metadataJson.website || '');
+      formData.append('showName', 'true');
+
+      const response = await fetch(PUMP_FUN_IPFS_ENDPOINT, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Pump.fun IPFS upload failed (${response.status}): ${text}`);
+      }
+
+      const data = await response.json();
+      if (data?.metadataUri) {
+        logger.info('✅ Metadata uploaded via pump.fun IPFS:', data.metadataUri);
+        return data.metadataUri;
+      }
+
+      throw new Error('Pump.fun IPFS upload did not return metadataUri');
+    } catch (error) {
+      logger.error('Failed to upload metadata via PumpFun API:', error.message || error);
+
+      if (this.config.metadataFallback && typeof this.config.metadataFallback.save === 'function') {
+        try {
+          const fallbackResult = await this.config.metadataFallback.save(metadataJson);
+          if (fallbackResult && fallbackResult.uri) {
+            logger.warn(`Using fallback metadata host: ${fallbackResult.uri}`);
+            return fallbackResult.uri;
+          }
+        } catch (fallbackError) {
+          logger.error('Fallback metadata storage failed:', fallbackError);
+        }
+      }
+
+      throw new Error(`Metadata upload failed: ${error.message}`);
+    }
+  }
+
+  async sendPumpPortalCreate({
+    walletKeypair,
+    mintKeypair,
+    metadataUri,
+    metadata,
+    initialBuyAmount,
+    pumpPortalOverrides = {}
+  }) {
+    const portalConfig = {
+      ...this.config.pumpPortal,
+      ...pumpPortalOverrides
+    };
+
+    const apiKey =
+      portalConfig.apiKey ||
+      process.env.PUMPPORTAL_API_KEY ||
+      process.env.PUMP_PORTAL_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('PumpPortal API key not configured. Set PUMPPORTAL_API_KEY environment variable.');
     }
 
-    if (metadata.description && metadata.description.length > 1000) {
-      errors.push('Token description must be 1000 characters or less');
+    const body = {
+      action: 'create',
+      tokenMetadata: {
+        name: metadata.name,
+        symbol: metadata.symbol,
+        uri: metadataUri
+      },
+      mint: bs58.encode(mintKeypair.secretKey),
+      denominatedInSol: 'true',
+      amount: Number.isFinite(initialBuyAmount) ? Number(initialBuyAmount) : 0,
+      slippage: portalConfig.slippage ?? 10,
+      priorityFee: portalConfig.priorityFee ?? 0.0005,
+      pool: portalConfig.pool || 'pump'
+    };
+
+    if (portalConfig.isMayhemMode === true || portalConfig.isMayhemMode === 'true') {
+      body.isMayhemMode = 'true';
+    }
+
+    const endpoint = `${PUMP_PORTAL_ENDPOINT}?api-key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      let message = response.statusText || 'PumpPortal trade failed';
+      try {
+        const data = JSON.parse(text);
+        message = data?.message || data?.error || message;
+      } catch {
+        // ignored
+      }
+      throw new Error(`PumpPortal create failed (${response.status}): ${message}`);
+    }
+
+    let data = {};
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      logger.warn('PumpPortal returned non-JSON response:', parseError);
     }
 
     return {
-      valid: errors.length === 0,
-      errors: errors
+      signature: data?.signature || null,
+      raw: data
     };
+  }
+
+  async buildImageBlob(image, label) {
+    try {
+      if (image && image.startsWith('data:')) {
+        const match = image.match(/^data:(.+?);base64,(.+)$/);
+        if (match) {
+          const mimeType = match[1] || 'image/png';
+          const buffer = Buffer.from(match[2], 'base64');
+          return new Blob([buffer], { type: mimeType });
+        }
+      }
+
+      if (image && /^https?:\/\//i.test(image)) {
+        const response = await fetch(image);
+        if (response.ok) {
+          return await response.blob();
+        }
+      }
+    } catch (error) {
+      logger.warn(`Failed to build image blob for ${label || 'token'}:`, error);
+    }
+
+    return new Blob([FALLBACK_PIXEL], { type: 'image/png' });
+  }
+
+  validateMetadata(metadata) {
+    if (!metadata.name || metadata.name.trim().length === 0) {
+      throw new Error('Token name is required');
+    } else if (metadata.name.length > 32) {
+      throw new Error('Token name must be 32 characters or fewer');
+    }
+
+    if (!metadata.symbol || metadata.symbol.trim().length === 0) {
+      throw new Error('Token symbol is required');
+    } else if (metadata.symbol.length > 10) {
+      throw new Error('Token symbol must be 10 characters or fewer');
+    }
+
+    if (metadata.description && metadata.description.length > 1000) {
+      throw new Error('Token description must be 1000 characters or fewer');
+    }
+
+    return metadata;
   }
 }
 

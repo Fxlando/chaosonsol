@@ -8,9 +8,9 @@ var API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
 
 // State
 let systemData = {
-    wallets: { total: 40, active: 40 },
+    wallets: { total: 0, active: 0 },
     balance: { sol: 0, usd: 0 },
-    solPrice: 180
+    solPrice: 0
 };
 
 // Initialize
@@ -42,10 +42,13 @@ async function fetchSystemData() {
             };
             console.log('✓ Live data loaded:', systemData);
         } else {
-            console.log('⚠ Using demo data');
+            const errorText = await response.text();
+            console.error('⚠ Backend API responded with error:', response.status, errorText);
+            addActivityLog('Backend API unavailable. Start Chaos Bot API server and refresh.', 'error');
         }
     } catch (error) {
-        console.log('⚠ API not available, using demo mode');
+        console.error('⚠ API not available:', error);
+        addActivityLog('Unable to reach Chaos Bot API server. Verify it is running on localhost:3000.', 'error');
     }
 }
 

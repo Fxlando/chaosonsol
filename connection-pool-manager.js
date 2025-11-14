@@ -11,8 +11,7 @@ class ConnectionPoolManager {
     this.rpcUrls = rpcUrls.length > 0 ? rpcUrls : [
       'https://rpc.ankr.com/solana/0420a9599f84c238839150272c7dc114e8d6fa8722dfd48b5c92e0a81be23d27',
       'https://api.mainnet-beta.solana.com',
-      'https://solana-api.projectserum.com',
-      'https://solana-mainnet.g.alchemy.com/v2/demo'
+      'https://solana-api.projectserum.com'
     ];
     
     this.config = {

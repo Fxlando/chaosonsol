@@ -14,6 +14,18 @@ import { loggerManager } from './utils/logger.js';
 const logger = loggerManager.getLogger('App');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+const PLATFORM_MINT_PREFERENCES = {
+  gmgn: [
+    { mint: 'F7pB3ZdfBnyFw2LRHydWEn9BmhEa5XihXLjhySFRpump', symbol: 'GMGN', source: 'gmgn' }
+  ],
+  axiom: [
+    { mint: 'DfWGKkDHaDoWJJYVVXkhXYYUXDyKT2qW1BZwxdogpump', symbol: 'AXIOM', source: 'axiom' }
+  ],
+  photon: [
+    { mint: 'GBjyFeDB47mo2zGGPpduGZuqckpjLKMb3ybiWHZtyTMF', symbol: 'PHOTON', source: 'photon' }
+  ]
+};
+
 /**
  * Main Application Class
  */
@@ -29,6 +41,8 @@ export class App {
       volumeBot: { ...(config.volumeBot || {}) },
       walletManager: { ...(config.walletManager || {}) }
     };
+    this.config.metadataFallback = config.metadataFallback || null;
+    this.config.pumpPortal = config.pumpPortal || {};
 
     // Core components
     this.solanaCore = null;
@@ -71,7 +85,9 @@ export class App {
 
       // Initialize Trading Engine
       this.tradingEngine = new TradingEngine(this.solanaCore, this.walletManager, {
-        ...this.config.trading
+        ...this.config.trading,
+        metadataFallback: this.config.metadataFallback,
+        pumpPortal: this.config.pumpPortal
       });
       await this.tradingEngine.initialize();
 
@@ -233,22 +249,64 @@ export class App {
       };
     }
 
-    const candidatePool = mintCandidates.map((mint) => {
+    const candidateMap = new Map();
+    let candidatePool = mintCandidates.map((mint) => {
       if (mint && typeof mint === 'object') {
-        return {
+        const entry = {
           mint: mint.mint || mint.address || '',
           symbol: mint.symbol || null,
           decimals: mint.decimals,
           source: mint.source || null
         };
+        if (entry.mint) {
+          candidateMap.set(entry.mint, entry);
+        }
+        return entry;
       }
-      return {
+      const entry = {
         mint: String(mint || '').trim(),
         symbol: null,
         decimals: undefined,
         source: null
       };
+      if (entry.mint) {
+        candidateMap.set(entry.mint, entry);
+      }
+      return entry;
     }).filter(entry => entry.mint);
+
+    const preferredMintSet = new Set();
+
+    sanitizedTags.forEach(tag => {
+      const preferredList = PLATFORM_MINT_PREFERENCES[tag];
+      if (!preferredList) return;
+
+      preferredList.forEach(preferred => {
+        const mint = preferred?.mint ? String(preferred.mint).trim() : '';
+        if (!mint) return;
+
+        preferredMintSet.add(mint);
+
+        if (!candidateMap.has(mint)) {
+          candidateMap.set(mint, {
+            mint,
+            symbol: preferred.symbol || null,
+            decimals: preferred.decimals,
+            source: preferred.source || tag
+          });
+        } else {
+          const existing = candidateMap.get(mint);
+          if (!existing.source) {
+            existing.source = preferred.source || tag;
+          }
+          if (!existing.symbol && preferred.symbol) {
+            existing.symbol = preferred.symbol;
+          }
+        }
+      });
+    });
+
+    candidatePool = Array.from(candidateMap.values());
 
     if (candidatePool.length === 0) {
       return {
@@ -259,6 +317,34 @@ export class App {
     }
 
     const results = [];
+
+    const shuffleArray = (array) => {
+      const arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    const shuffleCandidates = (candidates) => {
+      if (!preferredMintSet.size) {
+        return shuffleArray(candidates);
+      }
+
+      const preferred = [];
+      const others = [];
+
+      candidates.forEach(candidate => {
+        if (preferredMintSet.has(candidate.mint)) {
+          preferred.push(candidate);
+        } else {
+          others.push(candidate);
+        }
+      });
+
+      return shuffleArray(preferred).concat(shuffleArray(others));
+    };
 
     for (const walletId of walletIds) {
       const wallet = this.walletManager.getWallet(walletId);
@@ -277,37 +363,71 @@ export class App {
           .toFixed(4)
       );
 
-      // Rotate candidate pool to avoid hammering the same mint repeatedly
-      const candidateIndex = Math.floor(Math.random() * candidatePool.length);
-      const { mint, symbol, decimals, source } = candidatePool[candidateIndex];
+      const attemptedCandidates = [];
+      let selectedCandidate = null;
+      let buyResult = null;
 
-      if (!mint) {
+      for (const candidate of shuffleCandidates(candidatePool)) {
+        const { mint } = candidate;
+        if (!mint) {
+          attemptedCandidates.push({
+            mint: '(invalid)',
+            error: 'Mint candidate missing address'
+          });
+          continue;
+        }
+
+        logger.info(`Tagging wallet ${walletId} attempting mint ${mint} with ${solAmount} SOL`);
+        attemptedCandidates.push({ mint });
+
+        try {
+          const attemptResult = await this.tradingEngine.buyToken(
+            walletId,
+            mint,
+            solAmount,
+            {
+              slippage,
+              executor,
+              source: 'tagging',
+              tags: sanitizedTags,
+              method
+            }
+          );
+
+          if (attemptResult?.success) {
+            selectedCandidate = candidate;
+            buyResult = attemptResult;
+            logger.info(`✅ Buy successful for wallet ${walletId} via mint ${mint}`);
+            break;
+          }
+
+          attemptedCandidates[attemptedCandidates.length - 1].error =
+            attemptResult?.error || 'Buy transaction failed';
+        } catch (attemptError) {
+          attemptedCandidates[attemptedCandidates.length - 1].error =
+            attemptError?.message || 'Buy attempt threw an exception';
+          logger.warn(`Buy attempt failed for mint ${mint}: ${attemptError?.message || attemptError}`);
+        }
+      }
+
+      if (!selectedCandidate || !buyResult?.success) {
+        const failedMints = new Set(attemptedCandidates.map(item => item.mint).filter(Boolean));
+        candidatePool = candidatePool.filter(candidate => !failedMints.has(candidate.mint));
+
         results.push({
           walletId,
           success: false,
-          error: 'Invalid mint candidate'
+          error: 'Unable to execute buy on available mint candidates',
+          stage: 'buy',
+          details: attemptedCandidates
         });
         continue;
       }
 
+      const { mint, symbol, decimals, source } = selectedCandidate;
       logger.info(`Tagging wallet ${walletId} using mint ${mint} (${symbol || 'unknown'}) with amount ${solAmount} SOL`);
 
       try {
-        const buyOptions = {
-          slippage,
-          executor,
-          source: 'tagging',
-          tags: sanitizedTags,
-          method
-        };
-
-        const buyResult = await this.tradingEngine.buyToken(
-          walletId,
-          mint,
-          solAmount,
-          buyOptions
-        );
-
         if (!buyResult?.success) {
           results.push({
             walletId,
@@ -360,10 +480,12 @@ export class App {
           await sleep(delayMs);
         }
 
+        const sellAmount = Math.max(1, Math.floor(tokenAmount * 0.995));
+
         const sellResult = await this.tradingEngine.sellToken(
           walletId,
           mint,
-          tokenAmount,
+          sellAmount,
           {
             slippage,
             executor,
@@ -379,6 +501,7 @@ export class App {
             mint,
             solAmount,
             tokenAmount,
+            tokenAmountSold: sellAmount,
             success: false,
             stage: 'sell',
             buy: buyResult,
@@ -398,6 +521,7 @@ export class App {
           source,
           solAmount,
           tokenAmount,
+          tokenAmountSold: sellAmount,
           success: true,
           buy: buyResult,
           sell: sellResult,
@@ -424,6 +548,66 @@ export class App {
       failureCount,
       results
     };
+  }
+
+  /**
+   * Assign wallets to a named group
+   */
+  async groupWallets(options = {}) {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    const {
+      walletIds = [],
+      groupName = null,
+      keepExisting = false
+    } = options;
+
+    const result = this.walletManager.updateWalletGroups(walletIds, groupName, {
+      keepExisting
+    });
+
+    if (!result.success) {
+      return result;
+    }
+
+    return {
+      ...result,
+      groups: this.getWalletGroups()
+    };
+  }
+
+  /**
+   * Return summary of wallet groups
+   */
+  getWalletGroups() {
+    if (!this.isInitialized) {
+      throw new Error('App not initialized');
+    }
+
+    const wallets = this.walletManager.getAllWallets();
+    const groups = new Map();
+
+    wallets.forEach((wallet) => {
+      const groupKey = typeof wallet.group === 'string' && wallet.group.trim().length > 0
+        ? wallet.group.trim()
+        : null;
+      if (!groupKey) {
+        return;
+      }
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
+      groups.get(groupKey).push(wallet.id || wallet.publicKey);
+    });
+
+    return Array.from(groups.entries()).map(([name, walletIds]) => ({
+      id: name,
+      name,
+      walletIds,
+      walletCount: walletIds.length
+    }));
   }
 
   /**

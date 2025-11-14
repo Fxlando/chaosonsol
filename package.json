@@ -35,10 +35,10 @@
   "author": "Simple Wallet Manager",
   "license": "MIT",
   "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^3.2.1",
     "@netlify/blobs": "^10.3.3",
     "@solana/spl-token": "^0.4.8",
     "@solana/web3.js": "^1.95.2",
-    "@metaplex-foundation/mpl-token-metadata": "^3.2.1",
     "axios": "^1.6.8",
     "bs58": "^5.0.0",
     "cors": "^2.8.5",

@@ -122,6 +122,29 @@ export class APIServer {
       }
     });
 
+    const groupWalletsHandler = async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const { walletIds, groupName, keepExisting } = req.body || {};
+        const result = await this.chaosApp.groupWallets({
+          walletIds: walletIds || [],
+          groupName: groupName ?? null,
+          keepExisting: keepExisting === true
+        });
+        if (!result.success) {
+          res.status(400).json(result);
+          return;
+        }
+        res.json(result);
+      } catch (error) {
+        logger.error('Group wallets failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    };
+
+    this.app.post('/api/wallets/group', groupWalletsHandler);
+    this.app.post('/wallets/group', groupWalletsHandler);
+
     this.app.get('/api/wallets', async (req, res) => {
       try {
         await this.ensureInitialized();
@@ -132,6 +155,20 @@ export class APIServer {
         res.status(500).json({ success: false, error: error.message });
       }
     });
+
+    const getGroupsHandler = async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const groups = this.chaosApp.getWalletGroups();
+        res.json({ success: true, groups });
+      } catch (error) {
+        logger.error('Get wallet groups failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    };
+
+    this.app.get('/api/groups', getGroupsHandler);
+    this.app.get('/groups', getGroupsHandler);
 
     this.app.get('/api/wallets/:walletId', async (req, res) => {
       try {
@@ -409,6 +446,33 @@ export class APIServer {
         res.json(result);
       } catch (error) {
         logger.error('Get Jupiter tokens failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Update wallet tags
+    this.app.post('/api/wallets/:walletId/tags', async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const { walletId } = req.params;
+        const { tags } = req.body;
+        const result = this.chaosApp.walletManager.updateWalletTags(walletId, tags || []);
+        res.json(result);
+      } catch (error) {
+        logger.error('Update wallet tags failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Warm wallets
+    this.app.post('/api/warm/run', async (req, res) => {
+      try {
+        await this.ensureInitialized();
+        const result = await this.chaosApp.warmWallets(req.body || {});
+        this.emitToClients('warm', result);
+        res.json(result);
+      } catch (error) {
+        logger.error('Warm wallets failed:', error);
         res.status(500).json({ success: false, error: error.message });
       }
     });

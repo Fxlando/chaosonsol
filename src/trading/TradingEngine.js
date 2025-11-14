@@ -21,12 +21,16 @@ export class TradingEngine {
       defaultSlippage: config.defaultSlippage || 1.0,
       priorityFee: config.priorityFee || 1000,
       maxRetries: config.maxRetries || 3,
+      metadataFallback: config.metadataFallback || null,
+      pumpPortal: config.pumpPortal || {},
       ...config
     };
 
     // Initialize integrations
     this.pumpFun = new PumpFunClient(solanaCore, {
-      defaultSlippage: this.config.defaultSlippage
+      defaultSlippage: this.config.defaultSlippage,
+      metadataFallback: this.config.metadataFallback,
+      pumpPortal: this.config.pumpPortal
     });
     
     this.jupiter = new JupiterClient(solanaCore, {
@@ -227,26 +231,28 @@ export class TradingEngine {
   async copyToken(walletId, sourceMint, options = {}) {
     try {
       const { metadata, info } = await this.pumpFun.buildMetadataFromMint(sourceMint);
-      const initialBuyAmount =
-        Number(options.initialBuyAmount ?? options.initialBuy ?? 0) || 0;
+      const platform = options.platform || 'pumpfun';
 
-      const launchOptions = {
-        ...options,
-        platform: options.platform || 'pumpfun',
-        copySourceMint: sourceMint,
-        sourceMetadataUri: info.metadataUri
+      const draftTemplate = {
+        name: metadata.name,
+        symbol: metadata.symbol,
+        description: metadata.description || '',
+        image: metadata.image || '',
+        metadataUri: info.metadataUri || metadata.metadataUri || '',
+        twitter: metadata.twitter || null,
+        telegram: metadata.telegram || null,
+        website: metadata.website || null,
+        platform,
+        sourceMint
       };
 
-      const result = await this.launchToken(walletId, metadata, initialBuyAmount, launchOptions);
-
-      if (!result.success) {
-        return result;
-      }
-
       return {
-        ...result,
+        success: true,
+        copiedMetadata: metadata,
         source: info,
-        copiedMetadata: metadata
+        metadataUri: info.metadataUri || null,
+        platform,
+        draftTemplate
       };
     } catch (error) {
       logger.error('Copy token failed:', error);

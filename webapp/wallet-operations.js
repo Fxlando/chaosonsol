@@ -126,6 +126,11 @@ async function loadWallets() {
     } else {
       wallets = [];
     }
+
+    wallets = wallets.map((wallet) => ({
+      ...wallet,
+      status: wallet?.status === 'inactive' ? 'inactive' : 'active'
+    }));
     
     // Update wallet groups
     updateWalletGroups();
@@ -138,6 +143,7 @@ async function loadWallets() {
 
     // Update grouping view
     walletOperationsRenderGroupingTable();
+    walletOperationsRenderActivateList();
     walletOperationsSyncSelectionUI();
     
     showToast(`Loaded ${wallets.length} wallets`, 'success');
@@ -145,51 +151,18 @@ async function loadWallets() {
     
   } catch (error) {
     console.error('Error loading wallets:', error);
-    showToast('Failed to load wallets. Using demo data.', 'error');
+    showToast('Failed to load wallets. Verify the Chaos Bot API server is running.', 'error');
     addConsoleLog(`Error loading wallets: ${error.message}`, 'error');
-    
-    // Fallback to demo wallets
-    wallets = generateDemoWallets();
+
+    wallets = [];
     walletOperationsRenderTable();
     walletOperationsUpdateTotals();
     walletOperationsRenderGroupingTable();
     walletOperationsSyncSelectionUI();
+    if (typeof renderWalletsError === 'function') {
+      renderWalletsError('Backend unavailable - start the Chaos Bot API server and refresh.');
+    }
   }
-}
-
-/**
- * Generate demo wallets (fallback)
- */
-function generateDemoWallets() {
-  const demoWallets = [];
-  for (let i = 1; i <= 10; i++) {
-    demoWallets.push({
-      id: `wallet_${i}`,
-      name: `Wallet_${i}`,
-      address: generateRandomAddress(),
-      publicKey: generateRandomAddress(),
-      privateKey: '***hidden***',
-      balance: Math.random() * 5,
-      tags: [],
-      group: i % 2 === 0 ? 'Volume' : 'Pump',
-      status: 'active',
-      tokenHoldings: Math.floor(Math.random() * 3),
-      unclaimedRent: Math.random() * 0.01
-    });
-  }
-  return demoWallets;
-}
-
-/**
- * Generate random Solana address
- */
-function generateRandomAddress() {
-  const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let address = '';
-  for (let i = 0; i < 44; i++) {
-    address += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return address;
 }
 
 function walletOperationsGetWalletId(wallet) {
@@ -361,14 +334,15 @@ function walletOperationsRenderTable() {
   const searchTerm = document.getElementById('wallet-search')?.value.toLowerCase() || '';
   const activeTab = document.getElementById('active-tab')?.classList.contains('bg-neutral-700');
   const filteredWallets = wallets.filter(wallet => {
+    const walletStatus = wallet.status || 'active';
     const matchesSearch = !searchTerm || 
       wallet.name?.toLowerCase().includes(searchTerm) ||
       wallet.address?.toLowerCase().includes(searchTerm) ||
       wallet.publicKey?.toLowerCase().includes(searchTerm);
     
     const matchesTab = activeTab === undefined || 
-      (activeTab && wallet.status === 'active') ||
-      (!activeTab && wallet.status === 'inactive');
+      (activeTab && walletStatus !== 'inactive') ||
+      (!activeTab && walletStatus === 'inactive');
     
     return matchesSearch && matchesTab;
   });
@@ -651,6 +625,102 @@ function walletOperationsRenderGroupingTable() {
 
   tbody.innerHTML = rows;
   walletOperationsUpdateSelectAllIndicators();
+}
+
+/**
+ * Render list of deactivated wallets on the activate page
+ */
+function walletOperationsRenderActivateList() {
+  const list = document.getElementById('activate-wallet-list');
+  const emptyState = document.getElementById('activate-wallet-empty');
+  const countLabel = document.getElementById('activate-inactive-count');
+
+  if (!list) {
+    return;
+  }
+
+  list.innerHTML = '';
+
+  const inactiveWallets = wallets.filter((wallet) => wallet?.status === 'inactive');
+
+  if (countLabel) {
+    countLabel.textContent = inactiveWallets.length.toString();
+  }
+
+  if (inactiveWallets.length === 0) {
+    list.classList.add('hidden');
+    if (emptyState) {
+      emptyState.classList.remove('hidden');
+    }
+    return;
+  }
+
+  list.classList.remove('hidden');
+  if (emptyState) {
+    emptyState.classList.add('hidden');
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  inactiveWallets.forEach((wallet) => {
+    const walletId = walletOperationsGetWalletId(wallet);
+    const address = walletOperationsGetPrimaryAddress(wallet);
+    const balance = Number(wallet.balance || 0);
+    const tags = Array.isArray(wallet.tags) ? wallet.tags : [];
+    const isSelected = selectedWallets.has(walletId);
+
+    const tagChips = tags.length
+      ? tags
+          .map(
+            (tag) =>
+              `<span class="px-2 py-0.5 bg-purple-900/40 text-purple-200 rounded-full text-[10px] uppercase tracking-wide">${escapeHtml(
+                tag
+              )}</span>`
+          )
+          .join('')
+      : '<span class="text-[10px] text-gray-500 uppercase tracking-wide">No tags</span>';
+
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between gap-4 p-4 bg-neutral-950/80 border border-neutral-800/60 rounded-2xl';
+
+    row.innerHTML = `
+      <label class="flex items-start gap-3 flex-1 cursor-pointer">
+        <input
+          type="checkbox"
+          class="wallet-checkbox rounded border-neutral-700 bg-neutral-900 text-purple-500 focus:ring-purple-500 mt-1"
+          data-wallet-id="${walletId}"
+          ${isSelected ? 'checked' : ''}
+          onchange="walletOperationsToggleSelection('${walletId}', this.checked)"
+        />
+        <div class="flex flex-col gap-1">
+          <span class="text-sm font-semibold text-white leading-tight">${escapeHtml(wallet.name || 'Unnamed Wallet')}</span>
+          <div class="flex items-center gap-2 text-xs text-gray-400 font-mono">
+            <span>${truncateAddress(address)}</span>
+            ${
+              address
+                ? `<button type="button" class="text-gray-500 hover:text-purple-300 transition" onclick="copyToClipboard('${address}')"><i data-lucide="copy" class="w-3 h-3"></i></button>`
+                : ''
+            }
+          </div>
+          <div class="flex flex-wrap gap-1.5 pt-1">
+            ${tagChips}
+          </div>
+        </div>
+      </label>
+      <div class="text-right min-w-[110px]">
+        <div class="text-[10px] uppercase text-gray-500 tracking-wide">Balance</div>
+        <div class="text-sm font-mono text-purple-200">${balance.toFixed(4)} SOL</div>
+      </div>
+    `;
+
+    fragment.appendChild(row);
+  });
+
+  list.appendChild(fragment);
+
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
 }
 
 /**
@@ -1086,21 +1156,50 @@ async function exportWallets() {
       showToast('No wallets to export', 'error');
       return;
     }
-    
+
     showToast(`Exporting ${walletsToExport.length} wallets...`, 'info');
     addConsoleLog(`Exporting ${walletsToExport.length} wallets`, 'info');
-    
-    // Create export data
-    const exportData = walletsToExport.map(wallet => ({
+
+    const walletIds = walletsToExport
+      .map((wallet) => wallet.id || wallet.address || wallet.publicKey)
+      .filter(Boolean);
+
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/export`
+      : `${API_BASE}/api/wallets/export`;
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletIds,
+        includePrivateKey: true
+      })
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => ({}));
+      const message = errorPayload?.error || `API returned ${response.status}`;
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    if (!result?.success || !Array.isArray(result.wallets)) {
+      throw new Error(result?.error || 'Failed to export wallets');
+    }
+
+    const exportData = result.wallets.map((wallet) => ({
+      id: wallet.id,
       name: wallet.name,
-      address: wallet.address || wallet.publicKey || wallet.pubkey,
-      privateKey: wallet.privateKey || '***hidden***',
-      balance: wallet.balance || 0,
+      address: wallet.publicKey,
+      privateKeyArray: wallet.privateKeyArray || null,
+      privateKeyBase58: wallet.privateKeyBase58 || null,
       tags: wallet.tags || [],
-      group: wallet.group || wallet.groupName || 'default'
+      group: wallet.group || 'default',
+      createdAt: wallet.createdAt,
+      lastUsed: wallet.lastUsed
     }));
-    
-    // Create and download JSON file
+
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
@@ -1128,6 +1227,105 @@ function executeExportWallets() {
 }
 
 /**
+ * Set the selected wallet as creator wallet
+ */
+async function walletOperationsSetCreatorWallet() {
+  try {
+    if (selectedWallets.size === 0) {
+      showToast('Select a wallet to set as creator', 'warning');
+      return;
+    }
+
+    if (selectedWallets.size > 1) {
+      showToast('Select only one wallet when setting the creator wallet', 'warning');
+      return;
+    }
+
+    const walletId = Array.from(selectedWallets)[0];
+    const wallet = walletOperationsFindWallet(walletId);
+    if (!wallet) {
+      showToast('Selected wallet could not be found', 'error');
+      return;
+    }
+
+    showToast('Linking creator wallet...', 'info');
+    addConsoleLog(`Setting wallet ${walletId} as creator`, 'info');
+
+    let privateKeyPayload = null;
+    try {
+      const endpoint = API_BASE.includes('netlify')
+        ? `${API_BASE}/wallets/export`
+        : `${API_BASE}/api/wallets/export`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletIds: [walletId],
+          includePrivateKey: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result?.wallets?.[0]) {
+          privateKeyPayload = result.wallets[0];
+        }
+      }
+    } catch (exportError) {
+      console.warn('Unable to fetch private key for creator wallet assignment:', exportError);
+    }
+
+    if (typeof window.setCreatorWalletFromSelection !== 'function') {
+      throw new Error('Creator wallet handler is not available yet. Try again after the UI finishes loading.');
+    }
+
+    const assignmentResult = await window.setCreatorWalletFromSelection({
+      wallet: { ...wallet },
+      privateKeyBase58: privateKeyPayload?.privateKeyBase58 || null,
+      privateKeyArray: privateKeyPayload?.privateKeyArray || null
+    });
+
+    if (assignmentResult && Array.isArray(assignmentResult.tags)) {
+      wallet.tags = assignmentResult.tags;
+    } else if (Array.isArray(wallet.tags)) {
+      if (!wallet.tags.includes('creator')) {
+        wallet.tags.push('creator');
+      }
+    } else {
+      wallet.tags = ['creator'];
+    }
+
+    wallets = wallets.map((entry) => {
+      const entryId = walletOperationsGetWalletId(entry);
+      if (entryId === walletId) {
+        return {
+          ...entry,
+          ...wallet,
+          tags: wallet.tags
+        };
+      }
+      return entry;
+    });
+
+    updateWalletGroups();
+    walletOperationsRenderTable();
+    walletOperationsRenderGroupingTable();
+    walletOperationsRenderActivateList();
+    walletOperationsUpdateTagInfo();
+    walletOperationsRenderGroupingChips();
+    walletOperationsUpdateBulkActions();
+
+    showToast('Creator wallet updated', 'success');
+    addConsoleLog(`Creator wallet set to ${wallet.name || walletId}`, 'success');
+  } catch (error) {
+    console.error('Error setting creator wallet:', error);
+    showToast(`Failed to set creator wallet: ${error.message}`, 'error');
+    addConsoleLog(`Error setting creator wallet: ${error.message}`, 'error');
+  }
+}
+
+/**
  * Deactivate wallets
  */
 async function deactivateWallets() {
@@ -1136,41 +1334,68 @@ async function deactivateWallets() {
       showToast('Please select wallets to deactivate', 'error');
       return;
     }
-    
-    const affectedCount = selectedWallets.size;
+
+    const targetIds = Array.from(selectedWallets);
+    const affectedCount = targetIds.length;
     showToast(`Deactivating ${selectedWallets.size} wallets...`, 'info');
     addConsoleLog(`Deactivating ${selectedWallets.size} wallets`, 'info');
-    
-    // Update wallet status
-    wallets.forEach(wallet => {
-      const walletId = wallet.id || wallet.address || wallet.publicKey;
-      if (selectedWallets.has(walletId)) {
-        wallet.status = 'inactive';
-      }
-    });
-    
-    // Call API to update wallets
-    const endpoint = API_BASE.includes('netlify') 
-      ? `${API_BASE}/wallets/deactivate` 
+
+    const endpoint = API_BASE.includes('netlify')
+      ? `${API_BASE}/wallets/deactivate`
       : `${API_BASE}/api/wallets/deactivate`;
-    
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        walletIds: Array.from(selectedWallets) 
+      body: JSON.stringify({
+        walletIds: targetIds
       })
     });
-    
-    // Clear selection
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result?.success) {
+      const message = result?.error || result?.message || `API returned ${response.status}`;
+      throw new Error(message);
+    }
+
+    const updatedLookup = new Map();
+    if (Array.isArray(result.wallets)) {
+      result.wallets.forEach((entry) => {
+        if (!entry) return;
+        const entryId = entry.id || entry.publicKey || entry.address;
+        if (!entryId) return;
+        updatedLookup.set(entryId, entry);
+      });
+    }
+
+    wallets = wallets.map((wallet) => {
+      const walletId = walletOperationsGetWalletId(wallet);
+      if (!targetIds.includes(walletId)) {
+        return wallet;
+      }
+
+      const updated = updatedLookup.get(walletId)
+        || updatedLookup.get(wallet.id)
+        || updatedLookup.get(wallet.publicKey);
+
+      return {
+        ...wallet,
+        status: updated?.status === 'inactive' ? 'inactive' : 'inactive',
+        lastUsed: updated?.lastUsed || wallet.lastUsed
+      };
+    });
+
+    updateWalletGroups();
     selectedWallets.clear();
     walletOperationsRenderTable();
     walletOperationsRenderGroupingTable();
+    walletOperationsRenderActivateList();
     walletOperationsSyncSelectionUI();
-    
-    showToast(`Deactivated ${affectedCount} wallet${affectedCount === 1 ? '' : 's'}`, 'success');
-    addConsoleLog(`Deactivated ${affectedCount} wallet${affectedCount === 1 ? '' : 's'}`, 'success');
-    
+
+    const updatedCount = Number.isFinite(result.updatedCount) ? result.updatedCount : affectedCount;
+    showToast(`Deactivated ${updatedCount} wallet${updatedCount === 1 ? '' : 's'}`, 'success');
+    addConsoleLog(`Deactivated ${updatedCount} wallet${updatedCount === 1 ? '' : 's'}`, 'success');
   } catch (error) {
     console.error('Error deactivating wallets:', error);
     showToast(`Failed to deactivate wallets: ${error.message}`, 'error');
@@ -1188,8 +1413,10 @@ async function executeActivateWallets() {
       return;
     }
 
-    showToast(`Activating ${selectedWallets.size} wallets...`, 'info');
-    addConsoleLog(`Activating ${selectedWallets.size} wallets`, 'info');
+    const targetIds = Array.from(selectedWallets);
+
+    showToast(`Activating ${targetIds.length} wallets...`, 'info');
+    addConsoleLog(`Activating ${targetIds.length} wallets`, 'info');
 
     const endpoint = API_BASE.includes('netlify')
       ? `${API_BASE}/wallets/activate`
@@ -1198,7 +1425,7 @@ async function executeActivateWallets() {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ walletIds: Array.from(selectedWallets) })
+      body: JSON.stringify({ walletIds: targetIds })
     });
 
     const result = await response.json();
@@ -1207,18 +1434,44 @@ async function executeActivateWallets() {
       throw new Error(result.error || `API returned ${response.status}`);
     }
 
-    wallets.forEach(wallet => {
-      const walletId = wallet.id || wallet.address || wallet.publicKey;
-      if (selectedWallets.has(walletId)) {
-        wallet.status = 'active';
+    const updatedLookup = new Map();
+    if (Array.isArray(result.wallets)) {
+      result.wallets.forEach((entry) => {
+        if (!entry) return;
+        const entryId = entry.id || entry.publicKey || entry.address;
+        if (!entryId) return;
+        updatedLookup.set(entryId, entry);
+      });
+    }
+
+    wallets = wallets.map((wallet) => {
+      const walletId = walletOperationsGetWalletId(wallet);
+      if (!targetIds.includes(walletId)) {
+        return wallet;
       }
+      const updated = updatedLookup.get(walletId)
+        || updatedLookup.get(wallet.id)
+        || updatedLookup.get(wallet.publicKey);
+      return {
+        ...wallet,
+        status: updated?.status === 'inactive' ? 'inactive' : 'active',
+        lastUsed: updated?.lastUsed || wallet.lastUsed
+      };
     });
 
+    updateWalletGroups();
     selectedWallets.clear();
-    await loadWallets();
+    walletOperationsRenderTable();
+    walletOperationsRenderGroupingTable();
+    walletOperationsRenderActivateList();
+    walletOperationsSyncSelectionUI();
 
-    showToast(`Activated ${result.activated || 0} wallets`, 'success');
-    addConsoleLog(`Activated ${result.activated || 0} wallets`, 'success');
+    const activatedCount = Number.isFinite(result.updatedCount)
+      ? result.updatedCount
+      : result.activated || targetIds.length;
+
+    showToast(`Activated ${activatedCount} wallet${activatedCount === 1 ? '' : 's'}`, 'success');
+    addConsoleLog(`Activated ${activatedCount} wallet${activatedCount === 1 ? '' : 's'}`, 'success');
   } catch (error) {
     console.error('Error activating wallets:', error);
     showToast(`Failed to activate wallets: ${error.message}`, 'error');
@@ -1257,11 +1510,20 @@ async function executeGroupWallets() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         walletIds: Array.from(selectedWallets),
-        groupName
+        groupName,
+        keepExisting: !!keepExisting
       })
     });
 
-    const result = await response.json();
+    const raw = await response.text();
+    let result = {};
+    if (raw) {
+      try {
+        result = JSON.parse(raw);
+      } catch (parseError) {
+        throw new Error('Unexpected response from server');
+      }
+    }
 
     if (!response.ok || !result.success) {
       throw new Error(result.error || `API returned ${response.status}`);
@@ -1452,6 +1714,7 @@ window.walletOperations = {
   getSelectedWalletIds: () => Array.from(selectedWallets),
   executeGenerateWallets,
   exportWallets,
+  walletOperationsSetCreatorWallet,
   deactivateWallets,
   refreshBalances,
   walletOperationsToggleSelection,
@@ -1460,6 +1723,7 @@ window.walletOperations = {
   walletOperationsFilterWallets,
   walletOperationsRenderTable,
   walletOperationsRenderGroupingTable,
+  walletOperationsRenderActivateList,
   walletOperationsRenderGroupingChips,
   walletOperationsUpdateTotals,
   walletOperationsUpdateBulkActions,
@@ -1473,6 +1737,7 @@ window.executeGenerateWallets = executeGenerateWallets;
 window.executeImportWallet = executeImportWallet;
 window.exportWallets = exportWallets;
 window.executeExportWallets = executeExportWallets;
+window.walletOperationsSetCreatorWallet = walletOperationsSetCreatorWallet;
 window.deactivateWallets = deactivateWallets;
 window.executeActivateWallets = executeActivateWallets;
 window.refreshBalances = refreshBalances;
@@ -1483,6 +1748,7 @@ window.walletOperationsSwitchTab = walletOperationsSwitchTab;
 window.walletOperationsFilterWallets = walletOperationsFilterWallets;
 window.walletOperationsRenderTable = walletOperationsRenderTable;
 window.walletOperationsRenderGroupingTable = walletOperationsRenderGroupingTable;
+window.walletOperationsRenderActivateList = walletOperationsRenderActivateList;
 window.walletOperationsRenderGroupingChips = walletOperationsRenderGroupingChips;
 window.walletOperationsUpdateTotals = walletOperationsUpdateTotals;
 window.walletOperationsUpdateBulkActions = walletOperationsUpdateBulkActions;

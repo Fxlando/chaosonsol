@@ -93,7 +93,6 @@ class SettingsManager {
 
             // Customization
             customization: {
-                defaultExecutor: 'jito',
                 quickBuyOptions: [0.1, 0.5, 1],
                 quickSellOptions: [25, 50, 100],
                 autoOpenLinks: {

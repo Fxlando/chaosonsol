@@ -4,6 +4,7 @@
  */
 
 import { Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { loggerManager } from '../utils/logger.js';
 import { InvalidAccountError } from '../utils/errors.js';
 
@@ -100,6 +101,8 @@ export class WalletManager {
         publicKey: keypair.publicKey.toString(),
         privateKey: Array.from(keypair.secretKey),
         tags: tags,
+        group: null,
+        status: 'active',
         createdAt: new Date().toISOString(),
         lastUsed: new Date().toISOString()
       };
@@ -115,7 +118,8 @@ export class WalletManager {
           id: wallet.id,
           name: wallet.name,
           publicKey: wallet.publicKey,
-          tags: wallet.tags
+          tags: wallet.tags,
+          status: wallet.status
           // Never return private key
         }
       };
@@ -144,7 +148,6 @@ export class WalletManager {
           secretKey = new Uint8Array(JSON.parse(privateKey));
         } catch (e) {
           // Try base58
-          const bs58 = require('bs58');
           secretKey = bs58.decode(privateKey);
         }
       } else if (privateKey instanceof Uint8Array) {
@@ -166,6 +169,8 @@ export class WalletManager {
         publicKey: keypair.publicKey.toString(),
         privateKey: Array.from(keypair.secretKey),
         tags: tags,
+        group: null,
+        status: 'active',
         createdAt: new Date().toISOString(),
         lastUsed: new Date().toISOString()
       };
@@ -197,7 +202,8 @@ export class WalletManager {
           id: wallet.id,
           name: wallet.name,
           publicKey: wallet.publicKey,
-          tags: wallet.tags
+          tags: wallet.tags,
+          status: wallet.status
         }
       };
     } catch (error) {
@@ -219,14 +225,7 @@ export class WalletManager {
     }
 
     // Return wallet without private key
-    return {
-      id: wallet.id,
-      name: wallet.name,
-      publicKey: wallet.publicKey,
-      tags: wallet.tags,
-      createdAt: wallet.createdAt,
-      lastUsed: wallet.lastUsed
-    };
+    return this.normalizeWalletResponse(wallet);
   }
 
   /**
@@ -259,8 +258,8 @@ export class WalletManager {
    */
   getAllWallets() {
     const wallets = [];
-    for (const [id, wallet] of this.wallets) {
-      wallets.push(this.getWallet(id));
+    for (const [_id, wallet] of this.wallets) {
+      wallets.push(this.normalizeWalletResponse(wallet));
     }
     return wallets;
   }
@@ -287,12 +286,22 @@ export class WalletManager {
    * Update wallet tags
    */
   updateWalletTags(walletId, tags) {
-    const wallet = this.wallets.get(walletId);
+    const wallet = this.resolveWalletRecord(walletId);
     if (!wallet) {
       return { success: false, error: 'Wallet not found' };
     }
 
-    wallet.tags = tags;
+    const normalizedTags = Array.isArray(tags)
+      ? Array.from(
+          new Set(
+            tags
+              .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+              .filter(Boolean)
+          )
+        )
+      : [];
+
+    wallet.tags = normalizedTags;
     wallet.lastUsed = new Date().toISOString();
     this.saveWallets();
     
@@ -367,8 +376,16 @@ export class WalletManager {
     try {
       const saved = this.storage.get('chaosbot_wallets');
       if (saved && Array.isArray(saved)) {
-        saved.forEach(wallet => {
-          this.wallets.set(wallet.id, wallet);
+        saved.forEach((wallet) => {
+          const normalized = this.normalizeWalletRecord(wallet);
+          if (!normalized) {
+            return;
+          }
+          const key = normalized.id || normalized.publicKey;
+          if (!key) {
+            return;
+          }
+          this.wallets.set(key, normalized);
         });
         logger.info(`Loaded ${saved.length} wallets from storage`);
       }
@@ -395,6 +412,166 @@ export class WalletManager {
    */
   generateId() {
     return `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Normalize wallet data loaded from storage
+   */
+  normalizeWalletRecord(wallet) {
+    if (!wallet) {
+      return null;
+    }
+
+    const status = wallet.status === 'inactive' ? 'inactive' : 'active';
+    const tags = Array.isArray(wallet.tags) ? wallet.tags : [];
+
+    return {
+      ...wallet,
+      status,
+      tags,
+      group: typeof wallet.group === 'string' && wallet.group.trim().length > 0
+        ? wallet.group.trim()
+        : null
+    };
+  }
+
+  /**
+   * Normalize wallet for API responses
+   */
+  normalizeWalletResponse(wallet) {
+    if (!wallet) {
+      return null;
+    }
+
+    return {
+      id: wallet.id,
+      name: wallet.name,
+      publicKey: wallet.publicKey,
+      tags: Array.isArray(wallet.tags) ? wallet.tags : [],
+      group: typeof wallet.group === 'string' && wallet.group.trim().length > 0
+        ? wallet.group.trim()
+        : null,
+      groupName: typeof wallet.group === 'string' && wallet.group.trim().length > 0
+        ? wallet.group.trim()
+        : null,
+      createdAt: wallet.createdAt,
+      lastUsed: wallet.lastUsed,
+      status: wallet.status === 'inactive' ? 'inactive' : 'active'
+    };
+  }
+
+  /**
+   * Resolve wallet by id or public key
+   */
+  resolveWalletRecord(identifier) {
+    if (!identifier) {
+      return null;
+    }
+
+    if (this.wallets.has(identifier)) {
+      return this.wallets.get(identifier);
+    }
+
+    for (const wallet of this.wallets.values()) {
+      if (wallet.publicKey === identifier) {
+        return wallet;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Update wallet status in bulk
+   */
+  updateWalletStatuses(walletIds = [], status = 'inactive') {
+    if (!Array.isArray(walletIds) || walletIds.length === 0) {
+      return {
+        success: false,
+        error: 'walletIds must be a non-empty array'
+      };
+    }
+
+    const normalizedStatus = status === 'inactive' ? 'inactive' : 'active';
+    const updated = [];
+
+    walletIds.forEach((identifier) => {
+      const target = this.resolveWalletRecord(identifier);
+      if (!target) {
+        return;
+      }
+      target.status = normalizedStatus;
+      target.lastUsed = new Date().toISOString();
+      updated.push(this.normalizeWalletResponse(target));
+    });
+
+    if (updated.length === 0) {
+      return {
+        success: false,
+        error: 'No wallets were updated'
+      };
+    }
+
+    this.saveWallets();
+
+    return {
+      success: true,
+      status: normalizedStatus,
+      updatedCount: updated.length,
+      wallets: updated
+    };
+  }
+
+  updateWalletGroups(walletIds = [], groupName = null, options = {}) {
+    if (!Array.isArray(walletIds) || walletIds.length === 0) {
+      return {
+        success: false,
+        error: 'walletIds must be a non-empty array'
+      };
+    }
+
+    const keepExisting = options.keepExisting === true;
+    const normalizedGroup = typeof groupName === 'string' ? groupName.trim() : '';
+    const isClearing = normalizedGroup.length === 0;
+
+    const updated = [];
+    const walletIdSet = new Set(walletIds);
+
+    walletIds.forEach((identifier) => {
+      const target = this.resolveWalletRecord(identifier);
+      if (!target) {
+        return;
+      }
+
+      target.group = isClearing ? null : normalizedGroup;
+      target.lastUsed = new Date().toISOString();
+      updated.push(this.normalizeWalletResponse(target));
+    });
+
+    if (!keepExisting && !isClearing && normalizedGroup.length > 0) {
+      this.wallets.forEach((wallet, key) => {
+        if (wallet.group === normalizedGroup && !walletIdSet.has(key) && !walletIdSet.has(wallet.publicKey)) {
+          wallet.group = null;
+          wallet.lastUsed = new Date().toISOString();
+        }
+      });
+    }
+
+    if (updated.length === 0) {
+      return {
+        success: false,
+        error: 'No wallets were updated'
+      };
+    }
+
+    this.saveWallets();
+
+    return {
+      success: true,
+      group: isClearing ? null : normalizedGroup,
+      updatedCount: updated.length,
+      wallets: updated
+    };
   }
 }
 

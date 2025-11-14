@@ -7,7 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import BlueprintStore from '../src/server/BlueprintStore.js';
+import BlueprintExecutor from '../src/server/BlueprintExecutor.js';
+import MetadataStore from '../src/storage/MetadataStore.js';
 
 dotenv.config();
 
@@ -17,6 +21,8 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.WEB_PORT) || 3000;
 const NETWORK = process.env.NETWORK || 'mainnet-beta';
 const STORAGE_SECRET = process.env.CHAOSBOT_STORAGE_SECRET || process.env.STORAGE_SECRET;
+const METADATA_BASE_URL = process.env.METADATA_BASE_URL || process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+const DEBUG_LOG_PATH = path.join(__dirname, 'api-debug.log');
 
 const app = express();
 app.use(cors({
@@ -25,11 +31,82 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '5mb' }));
+app.use((req, _res, next) => {
+  console.log(`➡️  ${req.method} ${req.originalUrl}`);
+  next();
+});
+app.use((err, req, res, next) => {
+  if (err) {
+    console.error('❌ JSON/body parse error:', err);
+    res.status(400).json({
+      success: false,
+      error: 'Invalid request body',
+      details: {
+        message: err.message,
+        stack: err.stack
+      }
+    });
+  } else {
+    next();
+  }
+});
+
+function normalizeMetadataId(rawId) {
+  if (!rawId) return null;
+  return String(rawId).replace(/\.json$/i, '');
+}
+
+app.get(['/metadata/:id', '/metadata/:id.json'], (req, res) => {
+  const id = normalizeMetadataId(req.params.id);
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Invalid metadata id' });
+  }
+  
+  // Check if ID is a mint address (starts with 'mint_' or is a 32-44 char base58 string)
+  let record = null;
+  if (id.startsWith('mint_')) {
+    const mint = id.replace(/^mint_/, '');
+    record = metadataStore.getByMint ? metadataStore.getByMint(mint) : null;
+  } else if (id.length >= 32 && id.length <= 44 && /^[A-Za-z0-9]+$/.test(id)) {
+    // Looks like a mint address, try getByMint
+    if (metadataStore.getByMint) {
+      record = metadataStore.getByMint(id);
+    }
+  }
+  
+  // Fallback to regular ID lookup
+  if (!record) {
+    record = metadataStore.get(id);
+  }
+  
+  if (!record) {
+    return res.status(404).json({ success: false, error: 'Metadata not found' });
+  }
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.json(record);
+});
 
 let backendPromise = null;
 let priceModulePromise = null;
 let warnedAboutPlainStorage = false;
 const registeredRoutes = new Set();
+const metadataStore = new MetadataStore({
+  storageDir: resolveProjectPath('.data', 'metadata'),
+  baseUrl: METADATA_BASE_URL
+});
+
+function buildPumpPortalConfig() {
+  const cfg = {};
+  const apiKey = process.env.PUMPPORTAL_API_KEY || process.env.PUMP_PORTAL_API_KEY;
+  if (apiKey) cfg.apiKey = apiKey;
+  if (process.env.PUMPPORTAL_SLIPPAGE) cfg.slippage = Number(process.env.PUMPPORTAL_SLIPPAGE);
+  if (process.env.PUMPPORTAL_PRIORITY_FEE) cfg.priorityFee = Number(process.env.PUMPPORTAL_PRIORITY_FEE);
+  if (process.env.PUMPPORTAL_POOL) cfg.pool = process.env.PUMPPORTAL_POOL;
+  if (process.env.PUMPPORTAL_MAYHEM_MODE) {
+    cfg.isMayhemMode = process.env.PUMPPORTAL_MAYHEM_MODE === 'true';
+  }
+  return cfg;
+}
 
 function resolveProjectPath(...segments) {
   return path.join(__dirname, '..', ...segments);
@@ -173,6 +250,16 @@ async function loadBackend() {
 
       const appInstance = new AppClass({
         network: NETWORK,
+        metadataFallback: {
+          async save(metadataJson) {
+            const saved = metadataStore.save(metadataJson);
+            if (!saved.uri) {
+              throw new Error('Metadata base URL is not configured (METADATA_BASE_URL)');
+            }
+            return saved;
+          }
+        },
+        pumpPortal: buildPumpPortalConfig(),
         walletManager: {
           storage: walletStorage
         }
@@ -183,12 +270,20 @@ async function loadBackend() {
       return appInstance;
     })().catch((error) => {
       backendPromise = null;
+      console.error('❌ Failed to initialize backend application:', error);
+      console.error(error.stack);
       throw error;
     });
   }
 
   return backendPromise;
 }
+
+const blueprintStore = new BlueprintStore();
+const blueprintExecutor = new BlueprintExecutor({
+  store: blueprintStore,
+  loadBackend
+});
 
 function createHandler(handler) {
   return async (req, res) => {
@@ -198,11 +293,26 @@ function createHandler(handler) {
         res.json(result);
       }
     } catch (error) {
+      try {
+        fs.appendFileSync(DEBUG_LOG_PATH, `[error] ${req.method} ${req.originalUrl} :: ${error?.message || error} ${new Date().toISOString()}\n`);
+      } catch (logError) {
+        console.error('Failed to write error log:', logError);
+      }
       console.error(`API ${req.method} ${req.originalUrl} failed:`, error);
+      if (error && error.stack) {
+        console.error(error.stack);
+      }
       if (!res.headersSent) {
         res.status(500).json({
           success: false,
-          error: error.message || 'Internal server error'
+          error: error.message || 'Internal server error',
+          details: {
+            name: error?.name,
+            message: error?.message,
+            code: error?.code,
+            info: error?.info,
+            stack: error?.stack
+          }
         });
       }
     }
@@ -245,9 +355,35 @@ register('get', '/status', async () => {
 });
 
 register('get', '/wallets', async () => {
-  const backend = await loadBackend();
-  const solPrice = await getSolPrice();
-  const wallets = await backend.getAllWalletsWithBalances();
+  console.time('api:/wallets');
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] handler start ${new Date().toISOString()}\n`);
+    console.log('[wallets] handler start');
+    const backend = await loadBackend();
+    fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] backend loaded ${new Date().toISOString()}\n`);
+    console.log('[wallets] backend loaded');
+
+    let solPrice;
+    try {
+      solPrice = await getSolPrice();
+      fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] sol price ${solPrice} ${new Date().toISOString()}\n`);
+      console.log('[wallets] sol price', solPrice);
+    } catch (error) {
+      fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] sol price error ${error?.message} ${new Date().toISOString()}\n`);
+      console.error('[wallets] sol price error', error);
+      throw new Error(`SOL_PRICE: ${error.message}`);
+    }
+
+    let wallets;
+    try {
+      wallets = await backend.getAllWalletsWithBalances();
+      fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] wallet count ${wallets.length} ${new Date().toISOString()}\n`);
+      console.log('[wallets] wallet count', wallets.length);
+    } catch (error) {
+      fs.appendFileSync(DEBUG_LOG_PATH, `[wallets] balance error ${error?.message} ${new Date().toISOString()}\n`);
+      console.error('[wallets] balance error', error);
+      throw new Error(`WALLET_BALANCES: ${error.message}`);
+    }
 
   const enriched = wallets.map((wallet) => {
     const balance = Number(wallet.balance || 0);
@@ -260,17 +396,20 @@ register('get', '/wallets', async () => {
 
   const totalSol = enriched.reduce((sum, wallet) => sum + (wallet.balance || 0), 0);
 
-  return {
-    success: true,
-    wallets: enriched,
-    totals: {
-      count: enriched.length,
-      sol: totalSol,
-      usd: solPrice > 0 ? totalSol * solPrice : 0
-    },
-    solPrice,
-    network: NETWORK
-  };
+    return {
+      success: true,
+      wallets: enriched,
+      totals: {
+        count: enriched.length,
+        sol: totalSol,
+        usd: solPrice > 0 ? totalSol * solPrice : 0
+      },
+      solPrice,
+      network: NETWORK
+    };
+  } finally {
+    console.timeEnd('api:/wallets');
+  }
 });
 
 register('get', '/wallets/:walletId', async (req, res) => {
@@ -331,6 +470,222 @@ register('post', '/wallets/import', async (req, res) => {
   }
 
   return result;
+});
+
+register('post', '/wallets/generate', async (req, res) => {
+  const backend = await loadBackend();
+  const { count, prefix, tags } = req.body || {};
+
+  const totalToCreate = Number(count);
+
+  if (!Number.isFinite(totalToCreate) || totalToCreate < 1 || totalToCreate > 100) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'count must be a number between 1 and 100'
+    };
+  }
+
+  const tagList = Array.isArray(tags) ? tags.filter((tag) => typeof tag === 'string' && tag.trim()).map((tag) => tag.trim()).slice(0, 10) : [];
+  const namePrefix = typeof prefix === 'string' && prefix.trim().length > 0 ? prefix.trim() : null;
+
+  const generated = [];
+
+  for (let i = 0; i < totalToCreate; i += 1) {
+    const walletName = namePrefix ? `${namePrefix}_${i + 1}` : null;
+    const result = backend.createWallet(walletName, tagList);
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Failed to create wallet');
+    }
+
+    generated.push(result.wallet);
+  }
+
+  const allWallets = backend.walletManager.getAllWallets();
+
+  return {
+    success: true,
+    generatedCount: generated.length,
+    wallets: generated,
+    totals: {
+      count: allWallets.length
+    }
+  };
+});
+
+register('post', '/wallets/rename', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletId, newName } = req.body || {};
+
+  if (!walletId || typeof walletId !== 'string') {
+    res.status(400);
+    return {
+      success: false,
+      error: 'walletId is required'
+    };
+  }
+
+  if (!newName || typeof newName !== 'string') {
+    res.status(400);
+    return {
+      success: false,
+      error: 'newName is required'
+    };
+  }
+
+  const trimmedName = newName.trim();
+  if (trimmedName.length < 2 || trimmedName.length > 64) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'newName must be between 2 and 64 characters'
+    };
+  }
+
+  const result = backend.walletManager.updateWalletName(walletId, trimmedName);
+
+  if (!result?.success) {
+    res.status(404);
+  }
+
+  return result;
+});
+
+register('post', '/wallets/:walletId/tags', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletId } = req.params;
+  const { tags } = req.body || {};
+
+  if (!walletId) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'walletId is required'
+    };
+  }
+
+  if (!Array.isArray(tags)) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'tags must be an array of strings'
+    };
+  }
+
+  const cleanedTags = tags
+    .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+    .filter(Boolean);
+
+  const result = backend.walletManager.updateWalletTags(walletId, cleanedTags);
+
+  if (!result?.success) {
+    res.status(404);
+  }
+
+  return result;
+});
+
+register('post', '/wallets/deactivate', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletIds } = req.body || {};
+
+  if (!Array.isArray(walletIds) || walletIds.length === 0) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'walletIds must be a non-empty array'
+    };
+  }
+
+  const result = backend.walletManager.updateWalletStatuses(walletIds, 'inactive');
+
+  if (!result.success) {
+    res.status(400);
+  }
+
+  return result;
+});
+
+register('post', '/wallets/activate', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletIds } = req.body || {};
+
+  if (!Array.isArray(walletIds) || walletIds.length === 0) {
+    res.status(400);
+    return {
+      success: false,
+      error: 'walletIds must be a non-empty array'
+    };
+  }
+
+  const result = backend.walletManager.updateWalletStatuses(walletIds, 'active');
+
+  if (!result.success) {
+    res.status(400);
+  }
+
+  return result;
+});
+
+register('post', '/wallets/export', async (req, res) => {
+  const backend = await loadBackend();
+  const { walletIds, includePrivateKey = true } = req.body || {};
+
+  const walletManager = backend.walletManager;
+
+  if (!walletManager) {
+    res.status(500);
+    return {
+      success: false,
+      error: 'Wallet manager unavailable'
+    };
+  }
+
+  const walletMap = walletManager.wallets;
+  if (!walletMap || !(walletMap instanceof Map)) {
+    res.status(500);
+    return {
+      success: false,
+      error: 'Wallet storage unavailable'
+    };
+  }
+
+  let walletsToExport;
+  if (Array.isArray(walletIds) && walletIds.length > 0) {
+    walletsToExport = walletIds
+      .map((id) => (typeof id === 'string' ? walletMap.get(id) : null))
+      .filter(Boolean);
+  } else {
+    walletsToExport = Array.from(walletMap.values());
+  }
+
+  const payload = walletsToExport.map((wallet) => {
+    const privateKeyArray = Array.isArray(wallet.privateKey) ? wallet.privateKey : null;
+    const privateKeyBase58 =
+      includePrivateKey && privateKeyArray
+        ? bs58.encode(Uint8Array.from(privateKeyArray))
+        : null;
+
+    return {
+      id: wallet.id,
+      name: wallet.name,
+      publicKey: wallet.publicKey,
+      tags: wallet.tags || [],
+      group: wallet.group || wallet.groupName || null,
+      createdAt: wallet.createdAt,
+      lastUsed: wallet.lastUsed,
+      privateKeyArray: includePrivateKey ? privateKeyArray : null,
+      privateKeyBase58,
+      privateKeyVisible: includePrivateKey && Boolean(privateKeyBase58)
+    };
+  });
+
+  return {
+    success: true,
+    wallets: payload,
+    count: payload.length
+  };
 });
 
 register('delete', '/wallets/:walletId', async (req, res) => {
@@ -558,6 +913,138 @@ register('post', '/tokens/import', async (req, res) => {
   return backend.importToken(tokenMint, options || {});
 });
 
+register('get', '/blueprints', async () => ({
+  success: true,
+  blueprints: blueprintStore.listBlueprints()
+}));
+
+register('post', '/blueprints', async (req, res) => {
+  const payload = req.body || {};
+
+  if (!payload.name || typeof payload.name !== 'string') {
+    res.status(400);
+    return {
+      success: false,
+      error: 'name is required'
+    };
+  }
+
+  const blueprint = blueprintStore.upsertBlueprint(payload);
+  return {
+    success: true,
+    blueprint
+  };
+});
+
+register('post', '/blueprints/:blueprintId/execute', async (req, res) => {
+  const { blueprintId } = req.params;
+  const blueprint = blueprintStore.getBlueprint(blueprintId);
+
+  if (!blueprint) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Blueprint not found'
+    };
+  }
+
+  const run = blueprintStore.createRun(blueprintId, {
+    requestedAt: Date.now(),
+    requestedBy: req.body?.requestedBy || null
+  });
+
+  blueprint.lastRun = run.requestedAt;
+  blueprint.stats = blueprint.stats || {};
+  blueprint.stats.totalRuns = (blueprint.stats.totalRuns || 0) + 1;
+  blueprintStore.upsertBlueprint(blueprint);
+
+  blueprintExecutor.enqueue({
+    blueprint,
+    runId: run.id
+  });
+
+  return {
+    success: true,
+    run
+  };
+});
+
+register('get', '/blueprints/:blueprintId/runs', async (req, res) => {
+  const { blueprintId } = req.params;
+  const blueprint = blueprintStore.getBlueprint(blueprintId);
+
+  if (!blueprint) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Blueprint not found'
+    };
+  }
+
+  const limit = Math.max(
+    1,
+    Math.min(100, Number(req.query?.limit) || 20)
+  );
+
+  return {
+    success: true,
+    runs: blueprintStore.listRuns(blueprintId, limit)
+  };
+});
+
+register('get', '/blueprints/:blueprintId/runs/:runId', async (req, res) => {
+  const { blueprintId, runId } = req.params;
+  const run = blueprintStore.getRun(runId);
+
+  if (!run || run.blueprintId !== blueprintId) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Run not found'
+    };
+  }
+
+  return {
+    success: true,
+    run
+  };
+});
+
+register('post', '/blueprints/:blueprintId/applied', async (req, res) => {
+  const { blueprintId } = req.params;
+  const updated = blueprintStore.markApplied(blueprintId);
+
+  if (!updated) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Blueprint not found'
+    };
+  }
+
+  return {
+    success: true,
+    blueprint: updated
+  };
+});
+
+register('delete', '/blueprints/:blueprintId', async (req, res) => {
+  const { blueprintId } = req.params;
+  const removed = blueprintStore.deleteBlueprint(blueprintId);
+
+  if (!removed) {
+    res.status(404);
+    return {
+      success: false,
+      error: 'Blueprint not found'
+    };
+  }
+
+  return {
+    success: true
+  };
+});
+
 register('post', '/tagging/run', async (req) => {
   const backend = await loadBackend();
   return backend.tagWallets(req.body || {});
@@ -712,6 +1199,58 @@ register('get', '/stats', async () => {
     rpc: backend.getRPCStats(),
     network: NETWORK
   };
+});
+
+const STATIC_ROOT = path.join(__dirname);
+
+app.use(
+  express.static(STATIC_ROOT, {
+    extensions: ['html'],
+    index: 'index.html',
+    fallthrough: true,
+    maxAge: 0
+  })
+);
+
+app.get('*', (req, res, next) => {
+  if (req.method !== 'GET') {
+    return next();
+  }
+
+  const requestPath = req.path || '';
+  if (requestPath.startsWith('/api') || requestPath.startsWith('/.netlify/functions')) {
+    return next();
+  }
+
+  if (requestPath.includes('.')) {
+    return next();
+  }
+
+  res.sendFile(path.join(STATIC_ROOT, 'index.html'));
+});
+
+app.use((err, req, res, next) => {
+  if (!err) {
+    return next();
+  }
+
+  try {
+    fs.appendFileSync(DEBUG_LOG_PATH, `[global-error] ${req?.method} ${req?.originalUrl} :: ${err?.message || err} ${new Date().toISOString()}\n`);
+  } catch (logError) {
+    console.error('Failed to write global error log:', logError);
+  }
+
+  console.error('Unhandled error in API server:', err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    error: err?.message || 'Internal server error',
+    details: {
+      name: err?.name,
+      message: err?.message,
+      stack: err?.stack
+    }
+  });
 });
 
 const server = app.listen(PORT, () => {

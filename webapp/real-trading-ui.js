@@ -6519,18 +6519,46 @@ function buildTokenRow(record) {
     const launchpadLabel = record.launchpad || (record.platform ? record.platform : isDraft ? 'Pump.fun' : 'Pump.fun');
     const rowSource = isDraft ? 'draft' : 'imported';
     const identifier = isDraft ? record.id : record.mint;
+    
+    // Add price and market cap info if available
+    const stats = record.stats || {};
+    const priceInfo = stats.priceUsd ? `$${formatNumber(stats.priceUsd, { decimals: 6, compact: true })}` : null;
+    const marketCapInfo = stats.marketCapUsd ? `$${formatNumber(stats.marketCapUsd, { decimals: 0, compact: true })}` : null;
+    const priceChange24h = stats.priceChange24hPct !== null && stats.priceChange24hPct !== undefined 
+        ? `${stats.priceChange24hPct >= 0 ? '+' : ''}${stats.priceChange24hPct.toFixed(2)}%`
+        : null;
+    
+    // Build stats display
+    let statsDisplay = '';
+    if (!isDraft && (priceInfo || marketCapInfo || priceChange24h)) {
+        const statsParts = [];
+        if (priceInfo) {
+            statsParts.push(`<span class="text-green-400 font-medium">${priceInfo}</span>`);
+        }
+        if (priceChange24h) {
+            const changeColor = parseFloat(priceChange24h) >= 0 ? 'text-green-400' : 'text-red-400';
+            statsParts.push(`<span class="${changeColor} text-xs">${priceChange24h}</span>`);
+        }
+        if (marketCapInfo) {
+            statsParts.push(`<span class="text-gray-400 text-xs">MC: ${marketCapInfo}</span>`);
+        }
+        if (statsParts.length > 0) {
+            statsDisplay = `<div class="flex flex-wrap items-center gap-2 mt-1">${statsParts.join(' • ')}</div>`;
+        }
+    }
 
     return `
         <tr data-token-id="${escapeHtml(identifier)}" data-token-source="${rowSource}" class="border-b border-neutral-800 hover:bg-neutral-800/40 transition cursor-pointer">
             <td class="p-4">
                 <div class="flex items-center gap-3">
                     ${tokenAvatar(record)}
-                    <div>
+                    <div class="flex-1">
                         <div class="text-white font-semibold flex items-center gap-2">
                             <span>${escapeHtml(record.name || 'Unnamed')}</span>
                             ${record.symbol ? `<span class="text-xs text-gray-400">(${escapeHtml(record.symbol)})</span>` : ''}
                         </div>
                         <div class="text-xs text-gray-500 mt-1">${escapeHtml(description)}</div>
+                        ${statsDisplay}
                     </div>
                 </div>
             </td>

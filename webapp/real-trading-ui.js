@@ -155,6 +155,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshVanityLaunchPerformance().catch(error => {
         console.warn('Unable to refresh vanity launch performance:', error);
     });
+    
+    // Listen for settings changes and refresh token detail page if open
+    document.addEventListener('chaosSettingsUpdated', () => {
+        // If we're on the token detail page, reload it with new settings
+        if (rtCurrentView === 'token-detail' && tokenRegistry.current) {
+            console.log('🔄 Settings updated - refreshing token detail page...');
+            
+            // Stop existing streams/intervals
+            stopTokenActivityStream();
+            stopMetricsRefresh();
+            
+            // Reload the token detail page with new RPC settings
+            const currentRecord = tokenRegistry.imported.get(tokenRegistry.current.mint) || tokenRegistry.current;
+            if (currentRecord && currentRecord.mint) {
+                setTimeout(() => {
+                    loadLiveTokenDetail(currentRecord).catch(error => {
+                        console.error('Failed to reload token detail after settings change:', error);
+                    });
+                }, 500); // Small delay to ensure settings are applied
+            }
+        }
+    });
+    
     console.log('✅ Real Trading Platform Ready');
 });
 

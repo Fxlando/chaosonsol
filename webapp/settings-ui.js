@@ -189,6 +189,11 @@
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');
+        
+        // Trigger settings updated event to refresh active views
+        document.dispatchEvent(new CustomEvent('chaosSettingsUpdated', { 
+            detail: window.settingsManager.getSettings() 
+        }));
     }
 
     document.addEventListener('chaosSettingsUpdated', (event) => {

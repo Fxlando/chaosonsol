@@ -152,6 +152,34 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                         }
                         throw new Error('DexScreener returned no price data');
                         
+                    case 'coingecko':
+                        const cgData = await fetchCoinGeckoPrice(mintAddress);
+                        if (cgData && cgData.priceUsd) {
+                            const priceUsd = cgData.priceUsd;
+                            const priceSol = solPrice ? priceUsd / solPrice : null;
+                            return {
+                                priceSol,
+                                priceUsd,
+                                marketCapUsd: cgData.marketCap || null,
+                                source: 'coingecko'
+                            };
+                        }
+                        throw new Error('CoinGecko returned no price data');
+                        
+                    case 'moralis':
+                        const moralisPriceData = await fetchMoralisPrice(mintAddress);
+                        if (moralisPriceData && moralisPriceData.priceUsd) {
+                            const priceUsd = moralisPriceData.priceUsd;
+                            const priceSol = solPrice ? priceUsd / solPrice : null;
+                            return {
+                                priceSol,
+                                priceUsd,
+                                marketCapUsd: moralisPriceData.marketCap || null,
+                                source: 'moralis'
+                            };
+                        }
+                        throw new Error('Moralis returned no price data');
+                        
                     case 'onchain':
                         const connection = getSolanaConnection('price');
                         if (!connection) {
@@ -314,6 +342,66 @@ async function fetchJupiterPrice(mintAddress) {
 }
 
 /**
+ * CoinGecko API (Free, no auth required)
+ * Note: CoinGecko uses contract addresses, not mint addresses directly
+ * For Solana tokens, we need to use the contract address format
+ */
+async function fetchCoinGeckoPrice(mintAddress) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        // CoinGecko uses contract addresses in format: solana:{mintAddress}
+        const response = await fetch(
+            `https://api.coingecko.com/api/v3/simple/token_price/solana?contract_addresses=${mintAddress}&vs_currencies=usd&include_market_cap=true`,
+            { 
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            // CoinGecko returns 404 if token not found - this is normal
+            if (response.status === 404) {
+                return null;
+            }
+            throw new Error(`CoinGecko API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const tokenData = data[mintAddress.toLowerCase()];
+        
+        if (!tokenData || !tokenData.usd) {
+            return null;
+        }
+        
+        return {
+            priceUsd: parseFloat(tokenData.usd),
+            marketCap: tokenData.usd_market_cap ? parseFloat(tokenData.usd_market_cap) : null
+        };
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('CoinGecko request timeout');
+        }
+        
+        // Silently handle DNS/network errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch') ||
+            errorMsg.includes('NetworkError')) {
+            return null;
+        }
+        
+        throw new Error(`CoinGecko fetch failed: ${error.message}`);
+    }
+}
+
+/**
  * DexScreener API (Free, no auth required)
  */
 async function fetchDexScreenerPrice(mintAddress) {
@@ -445,6 +533,13 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
                             return heliusTrades;
                         }
                         throw new Error('Helius returned no trades');
+                        
+                    case 'moralis':
+                        const moralisTrades = await fetchMoralisTrades(mintAddress, limit);
+                        if (moralisTrades && moralisTrades.length > 0) {
+                            return moralisTrades;
+                        }
+                        throw new Error('Moralis returned no trades');
                         
                     case 'pumpportal':
                         // PumpPortal is WebSocket-based, not suitable for one-time fetch
@@ -836,6 +931,230 @@ async function fetchDexScreenerMetadata(mintAddress) {
 }
 
 /**
+ * Get Moralis API key from settings
+ */
+function getMoralisApiKey() {
+    try {
+        // Try settingsManager first
+        if (window.settingsManager?.settings?.moralis?.apiKey) {
+            return window.settingsManager.settings.moralis.apiKey.trim();
+        }
+        
+        // Fallback to localStorage
+        const saved = localStorage.getItem('chaosbot_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            if (settings.moralis?.apiKey) {
+                return settings.moralis.apiKey.trim();
+            }
+        }
+        
+        return null; // No default - requires user to provide API key
+    } catch (error) {
+        console.debug('Error getting Moralis API key:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch token price from Moralis Pump.fun API
+ */
+async function fetchMoralisPrice(mintAddress) {
+    try {
+        const apiKey = getMoralisApiKey();
+        if (!apiKey) {
+            throw new Error('Moralis API key not configured');
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(
+            `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/price`,
+            { 
+                signal: controller.signal,
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Moralis API key invalid');
+            }
+            if (response.status === 404) {
+                return null; // Token not found
+            }
+            throw new Error(`Moralis API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.usdPrice) {
+            return {
+                priceUsd: parseFloat(data.usdPrice),
+                marketCap: data.marketCap ? parseFloat(data.marketCap) : null
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Moralis request timeout');
+        }
+        
+        // Silently handle network errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return null;
+        }
+        
+        throw error;
+    }
+}
+
+/**
+ * Fetch token metadata from Moralis Pump.fun API
+ */
+async function fetchMoralisMetadata(mintAddress) {
+    try {
+        const apiKey = getMoralisApiKey();
+        if (!apiKey) {
+            throw new Error('Moralis API key not configured');
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(
+            `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/metadata`,
+            { 
+                signal: controller.signal,
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Moralis API key invalid');
+            }
+            if (response.status === 404) {
+                return null; // Token not found
+            }
+            throw new Error(`Moralis API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.name || data.symbol) {
+            return {
+                name: data.name || null,
+                symbol: data.symbol || null,
+                image: data.logo || data.logoURI || null,
+                marketCap: data.marketCap ? parseFloat(data.marketCap) : null,
+                priceUsd: data.priceUsd ? parseFloat(data.priceUsd) : null,
+                source: 'moralis'
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Moralis request timeout');
+        }
+        
+        // Silently handle network errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return null;
+        }
+        
+        throw error;
+    }
+}
+
+/**
+ * Fetch trades from Moralis Pump.fun API
+ */
+async function fetchMoralisTrades(mintAddress, limit = 20) {
+    try {
+        const apiKey = getMoralisApiKey();
+        if (!apiKey) {
+            throw new Error('Moralis API key not configured');
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        const response = await fetch(
+            `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/swaps?limit=${limit}`,
+            { 
+                signal: controller.signal,
+                headers: {
+                    'accept': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Moralis API key invalid');
+            }
+            if (response.status === 404) {
+                return []; // Token not found
+            }
+            throw new Error(`Moralis API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.result || !Array.isArray(data.result)) {
+            return [];
+        }
+        
+        // Parse Moralis swap format to our trade format
+        return data.result.map(swap => ({
+            type: swap.type === 'buy' ? 'buy' : 'sell',
+            wallet: swap.wallet || swap.user || 'Unknown',
+            timestamp: swap.timestamp ? swap.timestamp * 1000 : Date.now(),
+            amountTokens: swap.tokenAmount ? Math.abs(parseFloat(swap.tokenAmount)) : 0,
+            amountSol: swap.solAmount ? Math.abs(parseFloat(swap.solAmount)) : 0,
+            signature: swap.signature || null
+        })).slice(0, limit);
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Moralis request timeout');
+        }
+        
+        // Silently handle network errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return [];
+        }
+        
+        throw error;
+    }
+}
+
+/**
  * Get Birdeye API key from settings
  */
 function getBirdeyeApiKey() {
@@ -958,6 +1277,13 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                             return { ...dexData, success: true };
                         }
                         throw new Error('DexScreener returned no metadata');
+                        
+                    case 'moralis':
+                        const moralisMetadata = await fetchMoralisMetadata(mintAddress);
+                        if (moralisMetadata && (moralisMetadata.name || moralisMetadata.symbol)) {
+                            return { ...moralisMetadata, success: true };
+                        }
+                        throw new Error('Moralis returned no metadata');
                         
                     case 'birdeye':
                         const birdeyeData = await fetchBirdeyeMetadata(mintAddress);

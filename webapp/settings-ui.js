@@ -42,6 +42,10 @@
         apiKey: 'birdeye-api-key'
     };
 
+    const MORALIS_FIELDS = {
+        apiKey: 'moralis-api-key'
+    };
+
     function parseNumber(value, fallback = 0) {
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -70,7 +74,7 @@
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {}, birdeye = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {}, birdeye = {}, moralis = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
@@ -94,6 +98,11 @@
         // Populate Birdeye API settings
         Object.entries(BIRDEYE_FIELDS).forEach(([key, id]) => {
             setInputValue(id, birdeye[key]);
+        });
+
+        // Populate Moralis API settings
+        Object.entries(MORALIS_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, moralis[key]);
         });
 
         // Update endpoint display
@@ -168,13 +177,18 @@
             apiKey: get(BIRDEYE_FIELDS.apiKey)?.value.trim() || ''
         };
 
+        const moralis = {
+            apiKey: get(MORALIS_FIELDS.apiKey)?.value.trim() || ''
+        };
+
         return {
             solana,
             customization,
             pumpportal,
             shyft,
             helius,
-            birdeye
+            birdeye,
+            moralis
         };
     }
 
@@ -186,7 +200,7 @@
         }
 
         const settingsPatch = collectSettingsFromForm();
-        const { solana, customization, shyft, helius, birdeye } = settingsPatch;
+        const { solana, customization, shyft, helius, birdeye, moralis } = settingsPatch;
 
         const rpcResult = await window.settingsManager.updateSolana(solana);
         if (!rpcResult.success) {

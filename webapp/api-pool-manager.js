@@ -57,12 +57,15 @@
             this.pricePool = [
                 { url: 'jupiter', name: 'Jupiter', cost: 0, type: 'price' }, // Free, fast
                 { url: 'dexscreener', name: 'DexScreener', cost: 0, type: 'price' }, // Free
+                { url: 'coingecko', name: 'CoinGecko', cost: 0, type: 'price' }, // Free, reliable
+                { url: 'moralis', name: 'Moralis', cost: 1, type: 'price' }, // Paid (free tier), Pump.fun specific
                 { url: 'onchain', name: 'On-Chain', cost: 0, type: 'price' } // Free, uses RPC
             ];
 
             // Metadata APIs Pool (sorted by speed: fastest first)
             this.metadataPool = [
                 { url: 'dexscreener', name: 'DexScreener', cost: 0, type: 'metadata' }, // Free, fast
+                { url: 'moralis', name: 'Moralis', cost: 1, type: 'metadata' }, // Paid (free tier), Pump.fun specific
                 { url: 'pumpfun', name: 'Pump.fun', cost: 0, type: 'metadata' }, // Free but unreliable
                 { url: 'birdeye', name: 'Birdeye', cost: 1, type: 'metadata' }, // Paid, reliable
                 { url: 'onchain', name: 'On-Chain Metaplex', cost: 0, type: 'metadata' } // Free, slow
@@ -71,6 +74,7 @@
             // Trade APIs Pool (sorted by speed: fastest first)
             this.tradePool = [
                 { url: 'helius', name: 'Helius Enhanced', cost: 1, type: 'trade' }, // Paid, fastest
+                { url: 'moralis', name: 'Moralis', cost: 1, type: 'trade' }, // Paid (free tier), Pump.fun specific
                 { url: 'pumpportal', name: 'PumpPortal', cost: 1, type: 'trade' }, // Paid, WebSocket
                 { url: 'onchain', name: 'On-Chain', cost: 0, type: 'trade' } // Free, slow
             ];

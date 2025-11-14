@@ -71,6 +71,11 @@ class SettingsManager {
                 apiKey: '9ddbf4282f714067a229ad9caedd1b41' // Birdeye API key for token metadata
             },
 
+            // Moralis Pump.fun API (optional - for Pump.fun specific data)
+            moralis: {
+                apiKey: '' // Moralis API key for Pump.fun token data (price, metadata, trades)
+            },
+
             // Jito Settings
             jito: {
                 location: 'New York',
@@ -414,6 +419,20 @@ class SettingsManager {
         const saved = this.saveSettings();
         if (saved) {
             console.log('✅ Birdeye API settings updated and saved');
+        }
+        this.applySettings();
+        this.publish();
+        return true;
+    }
+
+    updateMoralis(config = {}) {
+        if (!this.settings.moralis) {
+            this.settings.moralis = {};
+        }
+        this.settings.moralis = this.deepMerge(this.settings.moralis, config);
+        const saved = this.saveSettings();
+        if (saved) {
+            console.log('✅ Moralis API settings updated and saved');
         }
         this.applySettings();
         this.publish();

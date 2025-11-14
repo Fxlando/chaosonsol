@@ -56,9 +56,14 @@ class SettingsManager {
                 skipPreflight: false,
                 priorityFee: 0.0005,
                 commitment: 'confirmed',
-                // Dedicated RPCs for specific purposes (optional - falls back to main RPC if not set)
-                monitoringRpc: '', // For live trade transaction monitoring (WebSocket)
-                priceRpc: '' // For market cap/price updates (HTTP)
+            // Dedicated RPCs for specific purposes (optional - falls back to main RPC if not set)
+            monitoringRpc: '', // For live trade transaction monitoring (WebSocket)
+            priceRpc: '' // For market cap/price updates (HTTP)
+            },
+            
+            // Helius Enhanced API (optional - for faster transaction parsing)
+            helius: {
+                apiKey: '' // Helius API key for Enhanced Transaction APIs
             },
 
             // Jito Settings
@@ -379,6 +384,20 @@ class SettingsManager {
         this.saveSettings();
         this.applySettings();
         console.log('✅ Customization settings updated');
+        return true;
+    }
+
+    updateHelius(config = {}) {
+        if (!this.settings.helius) {
+            this.settings.helius = {};
+        }
+        this.settings.helius = this.deepMerge(this.settings.helius, config);
+        const saved = this.saveSettings();
+        if (saved) {
+            console.log('✅ Helius Enhanced API settings updated and saved');
+        }
+        this.applySettings();
+        this.publish();
         return true;
     }
 

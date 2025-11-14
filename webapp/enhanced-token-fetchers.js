@@ -326,13 +326,23 @@ async function calculateOnChainPrice(mintAddress) {
 }
 
 /**
- * Enhanced trade feed with fallback to on-chain transactions
+ * Enhanced trade feed with Helius Enhanced APIs and fallback to on-chain transactions
  */
 async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
     console.log('🔍 Fetching trade feed for:', mintAddress);
     
-    // Try to fetch from on-chain transactions instead of Pump.fun API
-    // Use dedicated monitoring RPC if available, otherwise general RPC
+    // Priority 1: Try Helius Enhanced API (fastest, best parsing)
+    try {
+        const heliusTrades = await fetchHeliusEnhancedTrades(mintAddress, limit);
+        if (heliusTrades && heliusTrades.length > 0) {
+            console.log(`✅ Retrieved ${heliusTrades.length} trades from Helius Enhanced API`);
+            return heliusTrades;
+        }
+    } catch (error) {
+        console.debug('Helius Enhanced API fetch failed, trying fallback:', error.message);
+    }
+    
+    // Priority 2: Try on-chain transactions via RPC
     try {
         const connection = getSolanaConnection('monitoring');
         if (connection) {
@@ -356,6 +366,147 @@ async function fetchPumpFunTradeFeed(mintAddress, limit = 20) {
     // Return empty array instead of failing
     console.warn('⚠️ No trade data available - showing empty activity');
     return [];
+}
+
+/**
+ * Fetch trades using Helius Enhanced Transaction API
+ * Much faster and better parsed than standard RPC calls
+ */
+async function fetchHeliusEnhancedTrades(mintAddress, limit = 20) {
+    try {
+        // Get Helius API key from settings
+        let heliusApiKey = null;
+        try {
+            if (window.settingsManager?.getSettings) {
+                const settings = window.settingsManager.getSettings();
+                // Try to get from Helius settings or monitoring RPC
+                heliusApiKey = settings?.helius?.apiKey || 
+                    extractApiKeyFromUrl(settings?.solana?.monitoringRpc) ||
+                    extractApiKeyFromUrl(settings?.solana?.priceRpc);
+            }
+            
+            // Fallback: try localStorage
+            if (!heliusApiKey) {
+                const stored = localStorage.getItem('chaosbot_settings');
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    heliusApiKey = settings?.helius?.apiKey || 
+                        extractApiKeyFromUrl(settings?.solana?.monitoringRpc) ||
+                        extractApiKeyFromUrl(settings?.solana?.priceRpc);
+                }
+            }
+        } catch (error) {
+            console.debug('Failed to get Helius API key from settings:', error);
+        }
+        
+        if (!heliusApiKey) {
+            throw new Error('Helius API key not configured');
+        }
+        
+        // Use address-specific endpoint for better results
+        const url = `https://api.helius.xyz/v0/addresses/${mintAddress}/transactions?api-key=${heliusApiKey}&limit=${limit}`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`Helius API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data || !Array.isArray(data)) {
+            return [];
+        }
+        
+        // Parse Helius transaction data
+        const trades = [];
+        for (const tx of data) {
+            try {
+                const tradeData = parseHeliusTransaction(tx, mintAddress);
+                if (tradeData) {
+                    trades.push(tradeData);
+                }
+            } catch (err) {
+                console.debug('Failed to parse Helius transaction:', err.message);
+            }
+        }
+        
+        return trades;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Helius API request timeout');
+        }
+        throw new Error(`Helius Enhanced API fetch failed: ${error.message}`);
+    }
+}
+
+/**
+ * Extract API key from Helius RPC URL
+ */
+function extractApiKeyFromUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+    const match = url.match(/api-key=([^&]+)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Parse trade data from Helius Enhanced API transaction
+ */
+function parseHeliusTransaction(tx, mintAddress) {
+    try {
+        if (!tx || !tx.nativeTransfers || !tx.tokenTransfers) {
+            return null;
+        }
+        
+        // Find token transfers for this mint
+        const tokenTransfer = tx.tokenTransfers.find(t => 
+            t.mint === mintAddress || t.mintAddress === mintAddress
+        );
+        
+        if (!tokenTransfer) {
+            return null;
+        }
+        
+        // Find corresponding SOL transfer
+        const solTransfer = tx.nativeTransfers.find(t => 
+            t.fromUserAccount === tokenTransfer.fromUserAccount ||
+            t.toUserAccount === tokenTransfer.fromUserAccount ||
+            t.fromUserAccount === tokenTransfer.toUserAccount ||
+            t.toUserAccount === tokenTransfer.toUserAccount
+        );
+        
+        const tokenAmount = parseFloat(tokenTransfer.tokenAmount || 0);
+        const solAmount = solTransfer ? Math.abs(parseFloat(solTransfer.amount || 0)) / 1e9 : 0;
+        
+        if (tokenAmount === 0 && solAmount === 0) {
+            return null;
+        }
+        
+        const isBuy = tokenAmount > 0;
+        const wallet = tokenTransfer.fromUserAccount || tx.source || 'Unknown';
+        
+        return {
+            type: isBuy ? 'buy' : 'sell',
+            wallet: wallet,
+            timestamp: tx.timestamp ? tx.timestamp * 1000 : Date.now(),
+            amountTokens: Math.abs(tokenAmount),
+            amountSol: solAmount,
+            signature: tx.signature || null
+        };
+    } catch (error) {
+        console.debug('Failed to parse Helius transaction:', error.message);
+        return null;
+    }
 }
 
 /**

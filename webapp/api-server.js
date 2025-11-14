@@ -1237,6 +1237,18 @@ register('get', '/config', async () => {
     (process.env.RPC_URL_2 ? process.env.RPC_URL_2.replace('https://', 'wss://').replace('http://', 'ws://') : '');
   const priceRpcHttp = process.env.PRICE_RPC_HTTP || process.env.RPC_URL_2 || '';
   
+  // Extract Helius API key from RPC URLs or use dedicated env var
+  let heliusApiKey = process.env.HELIUS_API_KEY || '';
+  if (!heliusApiKey) {
+    // Try to extract from monitoring or price RPC
+    const extractKey = (url) => {
+      if (!url) return '';
+      const match = url.match(/api-key=([^&]+)/);
+      return match ? match[1] : '';
+    };
+    heliusApiKey = extractKey(monitoringRpcWs) || extractKey(priceRpcHttp);
+  }
+  
   return {
     success: true,
     config: {
@@ -1255,6 +1267,9 @@ register('get', '/config', async () => {
       shyft: {
         apiKey: '6AC3vTBB5lObDYTm', // Hard-coded default
         enabled: false
+      },
+      helius: {
+        apiKey: heliusApiKey
       }
     }
   };

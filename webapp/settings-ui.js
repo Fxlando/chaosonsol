@@ -33,6 +33,10 @@
         enabled: 'shyft-enabled',
         apiKey: 'shyft-api-key'
     };
+    
+    const HELIUS_FIELDS = {
+        apiKey: 'helius-api-key'
+    };
 
     function parseNumber(value, fallback = 0) {
         const parsed = Number(value);
@@ -158,7 +162,7 @@
         }
 
         const settingsPatch = collectSettingsFromForm();
-        const { solana, customization, shyft } = settingsPatch;
+        const { solana, customization, shyft, helius } = settingsPatch;
 
         const rpcResult = await window.settingsManager.updateSolana(solana);
         if (!rpcResult.success) {

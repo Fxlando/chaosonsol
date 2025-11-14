@@ -158,6 +158,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen for settings changes and refresh token detail page if open
     document.addEventListener('chaosSettingsUpdated', () => {
+        // Reinitialize Helius connection if settings changed (for token balance queries)
+        if (window.solanaIntegration?.reinitHeliusConnection) {
+            window.solanaIntegration.reinitHeliusConnection();
+        }
         // If we're on the token detail page, reload it with new settings
         if (rtCurrentView === 'token-detail' && tokenRegistry.current) {
             console.log('🔄 Settings updated - refreshing token detail page...');

@@ -313,6 +313,10 @@
                         helius: {
                             ...currentSettings.helius,
                             ...envConfig.helius
+                        },
+                        birdeye: {
+                            ...currentSettings.birdeye,
+                            ...envConfig.birdeye
                         }
                     };
                     

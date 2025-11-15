@@ -8089,7 +8089,26 @@ async function loadLiveTokenDetail(record) {
         
         // Extract values from settled promises
         const pumpFunInfo = pumpFunInfoResult.status === 'fulfilled' ? pumpFunInfoResult.value : null;
+        if (pumpFunInfoResult.status === 'rejected') {
+            console.debug('⚠️ Pump.fun token details fetch failed:', pumpFunInfoResult.reason?.message || pumpFunInfoResult.reason);
+        }
+        
         const priceDetails = priceDetailsResult.status === 'fulfilled' ? priceDetailsResult.value : { priceSol: null, priceUsd: null, source: '' };
+        if (priceDetailsResult.status === 'rejected') {
+            console.warn('⚠️ Price fetch failed:', priceDetailsResult.reason?.message || priceDetailsResult.reason);
+            // Try to retry price fetch once more as a fallback
+            try {
+                console.log('🔄 Retrying price fetch...');
+                const retryPriceDetails = await fetchTokenPriceDetails(record.mint, { solPrice });
+                if (retryPriceDetails && (retryPriceDetails.priceSol !== null || retryPriceDetails.priceUsd !== null)) {
+                    Object.assign(priceDetails, retryPriceDetails);
+                    console.log('✅ Price fetch retry successful');
+                }
+            } catch (retryError) {
+                console.debug('⚠️ Price fetch retry also failed:', retryError.message);
+            }
+        }
+        
         const runtimeAutomations = runtimeAutomationsResult.status === 'fulfilled' ? runtimeAutomationsResult.value : { tasks: [], stats: { totalVolume: 0, activeSessions: 0 } };
         const holdingsResult = holdingsResultResult.status === 'fulfilled' ? holdingsResultResult.value : { holdings: [], summary: { totalTokenBalance: 0, totalHoldingsSol: 0 } };
         const activity = activityResult.status === 'fulfilled' ? activityResult.value : [];

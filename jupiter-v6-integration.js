@@ -528,32 +528,36 @@ class JupiterV6Integration {
     const isLikelyHumanReadable = tokenAmount < 1e12 || isDecimal;
     
     if (isLikelyHumanReadable) {
-      try {
-        // Get token mint info to determine decimals
-        const { PublicKey } = require('@solana/web3.js');
-        const { getMint } = require('@solana/spl-token');
-        
-        const mintPublicKey = new PublicKey(tokenMint);
-        const mintInfo = await getMint(this.connection, mintPublicKey);
-        const decimals = mintInfo.decimals || 6; // Default to 6 if not found
-        
-        // Convert human-readable amount to base units (integer, no decimals)
-        amountInBaseUnits = Math.floor(Number(tokenAmount) * Math.pow(10, decimals));
-        console.log(`💰 Converted token amount for Jupiter: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
-        
-        // Validate: amount must be an integer
-        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
-          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Must be positive integer.`);
+      // Get token decimals - SOL always has 9 decimals, other tokens need to be fetched
+      let decimals = 6; // Default for most SPL tokens
+      
+      // SOL (wrapped or native) always has 9 decimals
+      if (tokenMint === this.solMint || tokenMint === 'So11111111111111111111111111111111111111112') {
+        decimals = 9;
+        console.log(`💰 Detected SOL mint - using 9 decimals`);
+      } else {
+        try {
+          // Get token mint info to determine decimals
+          const { PublicKey } = require('@solana/web3.js');
+          const { getMint } = require('@solana/spl-token');
+          
+          const mintPublicKey = new PublicKey(tokenMint);
+          const mintInfo = await getMint(this.connection, mintPublicKey);
+          decimals = mintInfo.decimals || 6; // Default to 6 if not found
+        } catch (error) {
+          console.warn(`⚠️ Could not get mint info for ${tokenMint}, assuming 6 decimals:`, error.message);
+          // Default to 6 decimals if we can't fetch mint info (for non-SOL tokens)
+          decimals = 6;
         }
-      } catch (error) {
-        console.warn(`⚠️ Could not get mint info for ${tokenMint}, assuming 6 decimals:`, error.message);
-        // Default to 6 decimals if we can't fetch mint info
-        amountInBaseUnits = Math.floor(Number(tokenAmount) * 1e6);
-        
-        // Validate
-        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
-          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Original: ${tokenAmount}`);
-        }
+      }
+      
+      // Convert human-readable amount to base units (integer, no decimals)
+      amountInBaseUnits = Math.floor(Number(tokenAmount) * Math.pow(10, decimals));
+      console.log(`💰 Converted token amount for Jupiter: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
+      
+      // Validate: amount must be an integer
+      if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+        throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Must be positive integer.`);
       }
     } else {
       // Amount is already in base units, but ensure it's an integer

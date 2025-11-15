@@ -460,17 +460,24 @@ export class JupiterClient {
         throw new Error(`Invalid amount format: ${finalAmount}. Amount must be an integer string.`);
       }
       
+      // CRITICAL: Log and validate right before creating params
+      logger.error(`🚨 [getQuote] BEFORE performJupiterRequest: finalAmount = "${finalAmount}" (type: ${typeof finalAmount}, parsed: ${parseInt(finalAmount)})`);
+      
+      const paramsObject = {
+        inputMint: inputMint,
+        outputMint: outputMint,
+        amount: finalAmount, // Final validated integer string, no decimals
+        slippageBps: slippageBps.toString(),
+        onlyDirectRoutes: options.onlyDirectRoutes || false,
+        asLegacyTransaction: false
+      };
+      
+      logger.error(`🚨 [getQuote] Params object created: ${JSON.stringify(paramsObject, null, 2)}`);
+      
       const response = await this.performJupiterRequest({
         endpoint: 'quote',
         method: 'GET',
-        params: {
-          inputMint: inputMint,
-          outputMint: outputMint,
-          amount: finalAmount, // Final validated integer string, no decimals
-          slippageBps: slippageBps.toString(),
-          onlyDirectRoutes: options.onlyDirectRoutes || false,
-          asLegacyTransaction: false
-        },
+        params: paramsObject,
         timeout: 10000,
         headers: {
           'Content-Type': 'application/json'

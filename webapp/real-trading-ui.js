@@ -8878,10 +8878,23 @@ function populateTokenDetailView(record) {
     if (gmgnChartEl && record.mint && !isDraft) {
         // Format: https://www.gmgn.cc/kline/sol/{token CA}
         const gmgnUrl = `https://www.gmgn.cc/kline/sol/${record.mint}`;
-        gmgnChartEl.src = gmgnUrl;
+        
+        // Only update if URL is different to avoid unnecessary reloads
+        if (gmgnChartEl.src !== gmgnUrl) {
+            // Clear src first to properly destroy old chart
+            gmgnChartEl.src = '';
+            // Small delay to let cleanup complete, then load new chart
+            setTimeout(() => {
+                if (gmgnChartEl && record.mint) {
+                    gmgnChartEl.src = gmgnUrl;
+                }
+            }, 100);
+        }
     } else if (gmgnChartEl) {
         // Hide chart for drafts or tokens without mint
-        gmgnChartEl.src = '';
+        if (gmgnChartEl.src) {
+            gmgnChartEl.src = '';
+        }
     }
 
     if (iconEl) {

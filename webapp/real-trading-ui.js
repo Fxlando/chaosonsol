@@ -5540,9 +5540,14 @@ function updateTokenMetrics({
             ? `${formatSol(holdingsValueSol)}${holdingsValueUsd !== null ? ` (${formatUSD(holdingsValueUsd)})` : ''}`
             : '';
 
-    const amountSoldDisplay = amountSoldSol !== null ? formatSol(amountSoldSol) : '—';
+    // Amount Sold display - show "$0" if no sales data, USD value if sold
+    const amountSoldDisplay = amountSoldSol !== null && amountSoldSol > 0 
+        ? (solPrice && solPrice > 0 ? formatUSD(amountSoldSol * solPrice) : formatSol(amountSoldSol))
+        : '$0';
     const amountSoldDetail =
-        amountSoldSol !== null && solPrice !== null ? `${formatUSD(amountSoldSol * solPrice)}` : '';
+        amountSoldSol !== null && amountSoldSol > 0 && solPrice !== null 
+            ? formatUSD(amountSoldSol * solPrice) 
+            : '$0';
 
     const priceDetail = source ? `Source: ${source.toUpperCase()}` : '';
     const marketCapDisplay = marketCapUsd !== null ? formatUSD(marketCapUsd) : '—';

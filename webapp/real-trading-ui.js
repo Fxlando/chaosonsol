@@ -6559,7 +6559,7 @@ function startMetricsRefresh(mint, solPrice = null) {
     // Event-driven updates with 30-second fallback polling
     console.log('🔄 Starting event-driven metrics refresh for', mint, '- updates on events + 30s fallback');
     
-    // Do an immediate update on start
+    // Do an immediate update on start (but preserve existing holdings)
     (async () => {
         try {
             const priceDetails = await fetchTokenPriceDetails(mint, { 
@@ -6567,10 +6567,33 @@ function startMetricsRefresh(mint, solPrice = null) {
                 preferOnChain: false
             });
             if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null)) {
+                // Preserve existing holdings from state if available
+                const currentHoldings = tokenDetailViewState.currentHoldings || null;
+                let totalTokenHoldings = null;
+                let holdingsValueSol = null;
+                let holdingsValueUsd = null;
+                
+                if (currentHoldings && currentHoldings.totalTokenBalance > 0) {
+                    totalTokenHoldings = currentHoldings.totalTokenBalance;
+                    // Recalculate with new price if available
+                    if (priceDetails.priceSol) {
+                        holdingsValueSol = currentHoldings.totalTokenBalance * priceDetails.priceSol;
+                        const currentSolPrice = solPrice || solPriceCache.value;
+                        holdingsValueUsd = holdingsValueSol && currentSolPrice ? holdingsValueSol * currentSolPrice : currentHoldings.holdingsValueUsd;
+                    } else {
+                        // Use cached values if no new price
+                        holdingsValueSol = currentHoldings.holdingsValueSol;
+                        holdingsValueUsd = currentHoldings.holdingsValueUsd;
+                    }
+                }
+                
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,
                     priceUsd: priceDetails.priceUsd,
                     marketCapUsd: priceDetails.marketCapUsd,
+                    totalTokenHoldings,
+                    holdingsValueSol,
+                    holdingsValueUsd,
                     solPrice: solPrice || solPriceCache.value,
                     source: priceDetails.source || ''
                 });

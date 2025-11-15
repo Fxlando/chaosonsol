@@ -67,21 +67,41 @@ export class TradingEngine {
       // Get wallet keypair
       const keypair = this.walletManager.getWalletKeypair(walletId);
 
-      // Check if token is PumpFun token first - use pump.fun SDK directly
-      const tokenInfo = await this.pumpFun.getTokenInfo(tokenMint);
-      
-      if (tokenInfo.success && !tokenInfo.isComplete) {
-        // Use PumpFun SDK directly for bonding curve tokens (before graduation)
-        logger.info('Using PumpFun SDK for bonding curve token');
+      // ALWAYS try pump.fun SDK first for buy operations
+      // Pump.fun SDK can handle bonding curve tokens, and will fail gracefully if not a pump.fun token
+      // This is more reliable than detection, since detection can fail but SDK can still work
+      try {
+        logger.info('Attempting pump.fun buy first (bonding curve tokens)...');
         const result = await this.pumpFun.buyToken(keypair, tokenMint, solAmount, options);
         
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+        if (result && result.success) {
+          logger.info('✅ Pump.fun buy successful');
+          // Update wallet last used
+          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+          return result;
+        }
         
-        return result;
+        // If pump.fun returned non-success, log and continue to Jupiter
+        if (result && !result.success) {
+          logger.warn('⚠️ Pump.fun returned non-success:', result.error || 'Unknown error');
+        }
+      } catch (pumpFunError) {
+        // Pump.fun failed - check if it's a detection error or actual failure
+        logger.warn('⚠️ Pump.fun buy attempt failed:', pumpFunError.message);
+        
+        // If error suggests it's not a pump.fun token, continue to Jupiter
+        const isNotPumpFunError = pumpFunError.message?.includes('not found') || 
+                                  pumpFunError.message?.includes('invalid') ||
+                                  pumpFunError.message?.includes('Not a pump.fun token') ||
+                                  pumpFunError.message?.includes('not on pump.fun');
+        
+        if (isNotPumpFunError) {
+          logger.info('ℹ️ Token appears to not be on pump.fun, trying Jupiter...');
+        }
+        // If it's a real error (might still be pump.fun token), log but continue to Jupiter
       }
       
-      // For graduated tokens or non-pump.fun tokens, try Jupiter V6, then legacy
+      // For non-pump.fun tokens or if pump.fun failed, try Jupiter V6, then legacy
       try {
         // Try to use Jupiter V6 integration if available
         // Using createRequire to import CommonJS module in ES module context

@@ -8633,6 +8633,7 @@ function handleSellPercentageSelection(walletId, walletAddress, tokenMint, perce
 function updateBuyAmountButtons(walletId, tokenMint) {
     const key = `${walletId}_${tokenMint}`;
     const selected = selectedBuyAmounts.get(key);
+    const quickBuyOptions = [0.1, 0.5, 1];
     
     // Find all buy amount buttons for this wallet/token
     const buttons = document.querySelectorAll(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-buy-amount]`);
@@ -8650,6 +8651,19 @@ function updateBuyAmountButtons(walletId, tokenMint) {
             button.className = button.className.replace(/border-emerald-800/g, 'border-neutral-800');
         }
     });
+    
+    // Update custom input field border color if custom amount is selected
+    const customInput = document.querySelector(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-buy-custom-input]`);
+    if (customInput) {
+        const isCustomAmount = selected && !quickBuyOptions.includes(selected.solAmount);
+        if (isCustomAmount && selected.solAmount > 0) {
+            customInput.classList.remove('border-neutral-700');
+            customInput.classList.add('border-emerald-600');
+        } else {
+            customInput.classList.remove('border-emerald-600');
+            customInput.classList.add('border-neutral-700');
+        }
+    }
 }
 
 // Update sell percentage button styles to show selected state
@@ -8673,6 +8687,19 @@ function updateSellPercentageButtons(walletId, tokenMint) {
             button.className = button.className.replace(/border-rose-800/g, 'border-neutral-800');
         }
     });
+    
+    // Update custom input field border color if custom percentage is selected
+    const customInput = document.querySelector(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-sell-custom-input]`);
+    if (customInput) {
+        const isCustomPercentage = selected && ![25, 50, 100].includes(selected.percentage);
+        if (isCustomPercentage && selected.percentage > 0 && selected.percentage <= 100) {
+            customInput.classList.remove('border-neutral-700');
+            customInput.classList.add('border-rose-600');
+        } else {
+            customInput.classList.remove('border-rose-600');
+            customInput.classList.add('border-neutral-700');
+        }
+    }
 }
 
 async function handleWalletTradeAction(action, walletId, walletAddress, tokenMint, percentage = null, tokenBalance = null) {

@@ -406,15 +406,41 @@ class JupiterV6Integration {
     }
     
     // Strategy 2: Try Jupiter with DEX swap
+    // Convert SOL amount to lamports (base units) if needed
+    // Jupiter expects SOL amounts in lamports (integer) - NO DECIMALS
+    let solAmountInLamports = solAmount;
+    
+    // Check if solAmount is in SOL (human-readable) or already in lamports
+    // SOL amounts in lamports are typically > 1e6, human-readable SOL is < 1e6
+    const isLikelyHumanReadable = solAmount < 1e6 || 
+                                   (typeof solAmount === 'string' && solAmount.includes('.'));
+    
+    if (isLikelyHumanReadable) {
+      // Convert SOL to lamports (1 SOL = 1e9 lamports)
+      solAmountInLamports = Math.floor(Number(solAmount) * LAMPORTS_PER_SOL);
+      console.log(`💰 Converted SOL amount for Jupiter: ${solAmount} SOL → ${solAmountInLamports} lamports`);
+      
+      // Validate: amount must be an integer
+      if (!Number.isInteger(solAmountInLamports) || solAmountInLamports <= 0) {
+        throw new Error(`Invalid SOL amount after conversion: ${solAmountInLamports}. Original: ${solAmount}`);
+      }
+    } else {
+      // Amount is already in lamports, but ensure it's an integer
+      solAmountInLamports = Math.floor(Number(solAmount));
+      if (!Number.isInteger(solAmountInLamports) || solAmountInLamports <= 0) {
+        throw new Error(`Invalid SOL amount: ${solAmountInLamports}. Must be positive integer lamports.`);
+      }
+      console.log(`💰 Using SOL amount as-is (already in lamports): ${solAmountInLamports}`);
+    }
+    
     let result = null;
     try {
       console.log('🔄 Attempting Jupiter DEX swap...');
-      const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
       result = await this.executeSwap(
         wallet,
         this.solMint,
         tokenMint,
-        lamports,
+        solAmountInLamports, // Use lamports (base units) - integer, no decimals
         { ...options, maxRetries: 3 }
       );
       

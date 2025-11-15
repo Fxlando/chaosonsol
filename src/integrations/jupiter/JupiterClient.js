@@ -497,10 +497,20 @@ export class JupiterClient {
    * Get quote from Jupiter API
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {
-    // Ensure amount is an integer string (Jupiter API requires integer, no decimals)
-    // Convert to integer to handle any edge cases where amount might be a decimal
+    // CRITICAL FIX: If amount is suspiciously large (> 1e12), it's likely been incorrectly multiplied by 1e6
+    // This can happen if something thinks the amount has 6 decimals when it already has 9 decimals
     let amountInteger = amount;
-    if (typeof amount === 'number' && amount % 1 !== 0) {
+    
+    // Convert to number first for validation
+    const amountNum = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+    
+    // If amount > 1 trillion and divisible by 1e6, it's likely been incorrectly multiplied
+    // Fix it by dividing by 1e6 (e.g., 4000000000000 -> 4000000)
+    if (amountNum > 1e12 && amountNum % 1000000 === 0) {
+      const fixedAmount = Math.floor(amountNum / 1000000);
+      logger.error(`🚨 CRITICAL FIX in getQuote: Amount ${amountNum} is > 1 trillion and divisible by 1e6. Fixing to ${fixedAmount}`);
+      amountInteger = fixedAmount;
+    } else if (typeof amount === 'number' && amount % 1 !== 0) {
       logger.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. Flooring to integer.`);
       amountInteger = Math.floor(amount);
     } else if (typeof amount === 'string' && amount.includes('.')) {

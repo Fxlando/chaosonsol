@@ -40,17 +40,16 @@ class JupiterV6Integration {
   }
 
   // Get quote for swap with retry across multiple API endpoints
+  // IMPORTANT: amount must be in base units (integer), not human-readable format
   async getQuote(inputMint, outputMint, amount, slippage = null, apiUrl = null) {
     // Ensure amount is an integer (base units) - Jupiter API requires integer strings
-    // If amount is a decimal, it should have been converted before calling this function
-    // But we'll ensure it's an integer here as a safety check
+    // If amount is already in base units (large number > 1e12), use it as-is
+    // If amount is human-readable (has decimals or < 1e12), it should have been converted before calling
     let amountInteger = amount;
     if (typeof amount === 'number' && amount % 1 !== 0) {
-      // If it's a decimal number, log warning and floor it
-      console.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. This should be in base units. Flooring to integer.`);
+      console.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. Expected base units. Flooring to integer.`);
       amountInteger = Math.floor(amount);
     } else if (typeof amount === 'string' && amount.includes('.')) {
-      // If it's a decimal string, convert to integer
       console.warn(`⚠️ Warning: getQuote received decimal string ${amount}. Converting to integer.`);
       amountInteger = Math.floor(parseFloat(amount));
     }
@@ -100,6 +99,7 @@ class JupiterV6Integration {
   }
   
   // Get quote from Orca API
+  // IMPORTANT: amount must be in base units (integer), not human-readable format
   async getOrcaQuote(inputMint, outputMint, amount, slippage = null) {
     try {
       // Ensure amount is an integer (base units) - Orca API also requires integers

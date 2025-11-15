@@ -5535,42 +5535,44 @@ function updateTokenMetrics({
             ? `${Math.max(0, Math.min(100, bondingPercent)).toFixed(1)}%`
             : '—';
 
-    const profitEl = getElement('metric-profit-loss');
-    if (profitEl) profitEl.textContent = profitDisplay;
-    const profitDetailEl = getElement('metric-profit-loss-detail');
-    if (profitDetailEl) profitDetailEl.textContent = profitDetail;
+    // Smooth metric updates using requestAnimationFrame to prevent flash
+    const updateMetricSmoothly = (element, value) => {
+        if (!element) return;
+        element.classList.add('metric-value', 'updating');
+        requestAnimationFrame(() => {
+            element.textContent = value;
+            requestAnimationFrame(() => {
+                element.classList.remove('updating');
+            });
+        });
+    };
 
-    const investedEl = getElement('metric-amount-invested');
-    if (investedEl) investedEl.textContent = amountInvestedDisplay;
+    updateMetricSmoothly(getElement('metric-profit-loss'), profitDisplay);
+    updateMetricSmoothly(getElement('metric-profit-loss-detail'), profitDetail);
+    updateMetricSmoothly(getElement('metric-amount-invested'), amountInvestedDisplay);
+    
     const investedDetailEl = getElement('metric-amount-invested-detail');
-    if (investedDetailEl && amountInvestedSol !== null && solPrice !== null) {
-        investedDetailEl.textContent = formatUSD(amountInvestedSol * solPrice);
-    } else if (investedDetailEl) {
-        investedDetailEl.textContent = '';
+    if (investedDetailEl) {
+        const detailValue = amountInvestedSol !== null && solPrice !== null 
+            ? formatUSD(amountInvestedSol * solPrice) 
+            : '';
+        updateMetricSmoothly(investedDetailEl, detailValue);
     }
 
-    const holdingsEl = getElement('metric-token-holdings');
-    if (holdingsEl) holdingsEl.textContent = holdingsDisplay;
-    const holdingsDetailEl = getElement('metric-token-holdings-detail');
-    if (holdingsDetailEl) holdingsDetailEl.textContent = holdingsDetail;
-
-    const holdingsValueEl = getElement('metric-holdings-value');
-    if (holdingsValueEl) holdingsValueEl.textContent = formatMaybeSol(holdingsValueSol);
+    updateMetricSmoothly(getElement('metric-token-holdings'), holdingsDisplay);
+    updateMetricSmoothly(getElement('metric-token-holdings-detail'), holdingsDetail);
+    updateMetricSmoothly(getElement('metric-holdings-value'), formatMaybeSol(holdingsValueSol));
+    
     const holdingsValueDetailEl = getElement('metric-holdings-value-detail');
-    if (holdingsValueDetailEl) holdingsValueDetailEl.textContent = holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '';
+    if (holdingsValueDetailEl) {
+        updateMetricSmoothly(holdingsValueDetailEl, holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '');
+    }
 
-    const soldEl = getElement('metric-amount-sold');
-    if (soldEl) soldEl.textContent = amountSoldDisplay;
-    const soldDetailEl = getElement('metric-amount-sold-detail');
-    if (soldDetailEl) soldDetailEl.textContent = amountSoldDetail;
-
-    const priceEl = getElement('metric-price-per-token');
-    if (priceEl) priceEl.textContent = priceDisplay;
-    const priceDetailEl = getElement('metric-price-per-token-detail');
-    if (priceDetailEl) priceDetailEl.textContent = priceDetail;
-
-    const marketCapEl = getElement('metric-market-cap');
-    if (marketCapEl) marketCapEl.textContent = marketCapDisplay;
+    updateMetricSmoothly(getElement('metric-amount-sold'), amountSoldDisplay);
+    updateMetricSmoothly(getElement('metric-amount-sold-detail'), amountSoldDetail);
+    updateMetricSmoothly(getElement('metric-price-per-token'), priceDisplay);
+    updateMetricSmoothly(getElement('metric-price-per-token-detail'), priceDetail);
+    updateMetricSmoothly(getElement('metric-market-cap'), marketCapDisplay);
 
     const marketCapDetailEl = getElement('metric-market-cap-detail');
     if (marketCapDetailEl && marketCapUsd !== null) {

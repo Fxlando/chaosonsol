@@ -7941,8 +7941,15 @@ async function loadLiveTokenDetail(record) {
         }
 
         const holdingsSummary = holdingsResult.summary || { totalTokenBalance: 0, totalHoldingsSol: 0 };
-        const holdingsValueSol =
-            priceSol !== null ? holdingsSummary.totalTokenBalance * priceSol : holdingsSummary.totalHoldingsSol || null;
+        
+        // Calculate holdings value - always use current price if available
+        let holdingsValueSol = null;
+        if (priceSol !== null && holdingsSummary.totalTokenBalance > 0) {
+            holdingsValueSol = holdingsSummary.totalTokenBalance * priceSol;
+        } else if (holdingsSummary.totalHoldingsSol > 0) {
+            holdingsValueSol = holdingsSummary.totalHoldingsSol;
+        }
+        
         const holdingsValueUsd =
             holdingsValueSol !== null && solPrice ? holdingsValueSol * solPrice : null;
 
@@ -8050,6 +8057,22 @@ async function loadLiveTokenDetail(record) {
             };
         }
         
+        // Ensure we always show data if we have holdings, even if investment amount is unknown
+        const finalAmountInvested = amountInvestedSol ?? null;
+        const finalAmountSold = amountSoldSol ?? null;
+        
+        // If we have holdings but no investment amount, we can still show other metrics
+        console.log('📊 Final Metrics Calculation:', {
+            totalTokenHoldings: holdingsSummary.totalTokenBalance,
+            holdingsValueSol,
+            holdingsValueUsd,
+            amountInvestedSol: finalAmountInvested,
+            amountSoldSol: finalAmountSold,
+            profitLossSol,
+            hasPrice: priceSol !== null,
+            hasHoldings: holdingsSummary.totalTokenBalance > 0
+        });
+        
         updateTokenMetrics({
             priceSol,
             priceUsd,
@@ -8059,8 +8082,8 @@ async function loadLiveTokenDetail(record) {
             totalTokenHoldings: holdingsSummary.totalTokenBalance,
             holdingsValueSol,
             holdingsValueUsd,
-            amountInvestedSol: amountInvestedSol ?? null,
-            amountSoldSol,
+            amountInvestedSol: finalAmountInvested,
+            amountSoldSol: finalAmountSold,
             profitLossSol,
             solPrice,
             source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')

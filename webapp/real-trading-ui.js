@@ -8288,6 +8288,10 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
                 throw new Error(response?.error || 'Buy operation failed');
             }
             notify(`Submitted buy for ${amount} SOL`, 'success');
+            // Trigger immediate metrics refresh
+            if (current && current.mint === tokenMint) {
+                refreshMetricsOnEvent(tokenMint, 'user-action');
+            }
         } else if (action === 'sell-percentage') {
             if (!tokenBalance || tokenBalance <= 0) {
                 notify('No token balance available to sell.', 'warning');
@@ -8307,9 +8311,14 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
                 throw new Error(response?.error || 'Sell operation failed');
             }
             notify(`Submitted sell for ${percentage}% of holdings`, 'success');
+            // Trigger immediate metrics refresh
+            if (current && current.mint === tokenMint) {
+                refreshMetricsOnEvent(tokenMint, 'user-action');
+            }
         }
 
         if (current && current.mint === tokenMint) {
+            // Also reload full detail after delay (for holdings update)
             setTimeout(() => loadLiveTokenDetail(current), 1500);
         }
     } catch (error) {

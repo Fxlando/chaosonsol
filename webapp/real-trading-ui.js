@@ -7692,14 +7692,29 @@ async function loadLiveTokenDetail(record) {
         let bondingPercent = null;
         let isBondingComplete = false;
         
+        // Debug: Log what we got from the API
+        if (pumpFunInfo) {
+            console.log('🔍 Pump.fun API response keys:', Object.keys(pumpFunInfo));
+            console.log('🔍 Bonding curve data:', {
+                bondingCurve: pumpFunInfo.bondingCurve,
+                bondingCurvePercentage: pumpFunInfo.bondingCurvePercentage,
+                complete_percent: pumpFunInfo.complete_percent,
+                complete: pumpFunInfo.complete,
+                graduated: pumpFunInfo.graduated,
+                raydium: pumpFunInfo.raydium
+            });
+        }
+        
         if (pumpFunInfo) {
             // Check for normalized bonding curve data
             if (pumpFunInfo.bondingCurve?.percentComplete !== undefined && pumpFunInfo.bondingCurve.percentComplete !== null) {
                 bondingPercent = safeNumber(pumpFunInfo.bondingCurve.percentComplete);
                 isBondingComplete = pumpFunInfo.bondingCurve.isComplete === true || bondingPercent === 100;
+                console.log('✅ Found bonding curve from normalized data:', bondingPercent);
             } else if (pumpFunInfo.bondingCurvePercentage !== undefined && pumpFunInfo.bondingCurvePercentage !== null) {
                 bondingPercent = safeNumber(pumpFunInfo.bondingCurvePercentage);
                 isBondingComplete = bondingPercent === 100;
+                console.log('✅ Found bonding curve from bondingCurvePercentage:', bondingPercent);
             }
             
             // Also check direct fields from API
@@ -7707,13 +7722,31 @@ async function loadLiveTokenDetail(record) {
                 if (pumpFunInfo.complete_percent !== undefined) {
                     bondingPercent = safeNumber(pumpFunInfo.complete_percent);
                     isBondingComplete = bondingPercent === 100 || pumpFunInfo.complete === true;
+                    console.log('✅ Found bonding curve from complete_percent:', bondingPercent);
                 } else if (pumpFunInfo.complete === true) {
                     bondingPercent = 100;
                     isBondingComplete = true;
+                    console.log('✅ Token is complete (boolean flag)');
                 } else if (pumpFunInfo.graduated === true || pumpFunInfo.raydium === true) {
                     bondingPercent = 100;
                     isBondingComplete = true;
+                    console.log('✅ Token has graduated to Raydium');
                 }
+            }
+        }
+        
+        // Fallback: Try to calculate from on-chain data if API doesn't provide it
+        if (bondingPercent === null && record.mint) {
+            try {
+                console.log('🔄 Attempting to calculate bonding curve from on-chain data...');
+                const onChainPercent = await calculateBondingCurvePercent(record.mint);
+                if (onChainPercent !== null) {
+                    bondingPercent = onChainPercent;
+                    isBondingComplete = bondingPercent >= 100;
+                    console.log('✅ Calculated bonding curve from on-chain:', bondingPercent + '%');
+                }
+            } catch (error) {
+                console.debug('⚠️ On-chain bonding curve calculation failed:', error.message);
             }
         }
 
@@ -14050,6 +14083,68 @@ function safeNumber(value) {
     }
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * Calculate bonding curve percentage from on-chain data
+ * Pump.fun bonding curve: starts with 1M SOL virtual reserves and 1B tokens
+ * Completion is when virtual SOL reserves reach 80K SOL (8% of 1M)
+ * Formula: (1M - currentVirtualSol) / (1M - 80K) * 100
+ */
+async function calculateBondingCurvePercent(mintAddress) {
+    try {
+        const connection = window.enhancedTokenFetchers?.getSolanaConnection?.('price') || 
+                          window.solanaIntegration?.connection;
+        
+        if (!connection) {
+            return null;
+        }
+        
+        const PublicKey = window.solanaWeb3?.PublicKey;
+        if (!PublicKey) {
+            return null;
+        }
+        
+        const mintPubkey = new PublicKey(mintAddress);
+        const PUMP_FUN_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+        
+        // Find bonding curve account
+        const [bondingCurve] = PublicKey.findProgramAddressSync(
+            [Buffer.from('bonding-curve'), mintPubkey.toBuffer()],
+            PUMP_FUN_PROGRAM
+        );
+        
+        const curveAccount = await connection.getAccountInfo(bondingCurve);
+        
+        if (!curveAccount || !curveAccount.data) {
+            // Bonding curve account doesn't exist - token may have graduated
+            return 100;
+        }
+        
+        const data = curveAccount.data;
+        
+        // Virtual SOL reserves at offset 8 (in lamports)
+        const virtualSolReserves = data.readBigUInt64LE(8);
+        const virtualSolReservesNumber = Number(virtualSolReserves);
+        
+        // Pump.fun bonding curve parameters:
+        // Initial: 1,000,000 SOL (1,000,000,000,000,000 lamports)
+        // Complete: 80,000 SOL (80,000,000,000,000 lamports)
+        const INITIAL_VIRTUAL_SOL = 1_000_000_000_000_000; // 1M SOL in lamports
+        const COMPLETE_VIRTUAL_SOL = 80_000_000_000_000; // 80K SOL in lamports
+        
+        // Calculate percentage: (initial - current) / (initial - complete) * 100
+        const progress = (INITIAL_VIRTUAL_SOL - virtualSolReservesNumber) / 
+                        (INITIAL_VIRTUAL_SOL - COMPLETE_VIRTUAL_SOL) * 100;
+        
+        // Clamp between 0 and 100
+        const percent = Math.max(0, Math.min(100, progress));
+        
+        return percent;
+    } catch (error) {
+        console.debug('Bonding curve calculation error:', error.message);
+        return null;
+    }
 }
 
 function normalizeTimestamp(value) {

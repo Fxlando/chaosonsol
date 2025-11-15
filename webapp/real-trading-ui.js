@@ -5525,10 +5525,12 @@ function updateTokenMetrics({
             ? `${formatUSD(profitLossSol * (solPrice || 0))} converted`
             : (holdingsValueSol !== null && holdingsValueSol > 0 ? 'Current holdings value' : '');
 
-    // Amount Invested display - show "Unknown" if we have holdings but no investment data
+    // Amount Invested display - show USD value if available, otherwise show SOL or $0
     const amountInvestedDisplay = amountInvestedSol !== null && amountInvestedSol > 0
-        ? formatSol(amountInvestedSol)
-        : (totalTokenHoldings !== null && totalTokenHoldings > 0 ? 'Unknown' : '—');
+        ? (solPrice && solPrice > 0 ? formatUSD(amountInvestedSol * solPrice) : formatSol(amountInvestedSol))
+        : (totalTokenHoldings !== null && totalTokenHoldings > 0 && holdingsValueUsd !== null && holdingsValueUsd > 0 
+            ? formatUSD(holdingsValueUsd) 
+            : '$0');
     const holdingsDisplay =
         totalTokenHoldings !== null
             ? `${totalTokenHoldings.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`
@@ -5585,9 +5587,15 @@ function updateTokenMetrics({
     
     const investedDetailEl = getElement('metric-amount-invested-detail');
     if (investedDetailEl) {
-        const detailValue = amountInvestedSol !== null && solPrice !== null 
-            ? formatUSD(amountInvestedSol * solPrice) 
-            : '';
+        let detailValue = '';
+        if (amountInvestedSol !== null && amountInvestedSol > 0 && solPrice !== null) {
+            detailValue = formatUSD(amountInvestedSol * solPrice);
+        } else if (totalTokenHoldings !== null && totalTokenHoldings > 0 && holdingsValueUsd !== null && holdingsValueUsd > 0) {
+            // Show holdings value as detail if no investment amount
+            detailValue = `Holdings: ${formatUSD(holdingsValueUsd)}`;
+        } else if (amountInvestedSol === null || amountInvestedSol === 0) {
+            detailValue = '$0';
+        }
         updateMetricSmoothly(investedDetailEl, detailValue, isInitialLoad);
     }
 

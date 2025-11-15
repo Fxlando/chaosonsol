@@ -5,6 +5,17 @@
 // Provides reliable token data even when APIs are down
 
 /**
+ * Safe number conversion helper
+ */
+function safeNumber(value) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+}
+
+/**
  * Get Solana connection from RPC Pool Manager with automatic failover
  * Uses intelligent rotation: Free RPCs first → Paid RPCs last
  * Automatically handles rate limits and failover
@@ -1380,7 +1391,37 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             
             if (response.ok) {
                 const data = await response.json();
-                return { ...data, success: true, source: 'pumpfun' };
+                // Normalize bonding curve percentage from various possible field names
+                let bondingCurvePercent = null;
+                if (data.complete_percent !== undefined) {
+                    bondingCurvePercent = safeNumber(data.complete_percent);
+                } else if (data.bonding_curve_percent !== undefined) {
+                    bondingCurvePercent = safeNumber(data.bonding_curve_percent);
+                } else if (data.bondingCurve?.percentComplete !== undefined) {
+                    bondingCurvePercent = safeNumber(data.bondingCurve.percentComplete);
+                } else if (data.bondingCurvePercentage !== undefined) {
+                    bondingCurvePercent = safeNumber(data.bondingCurvePercentage);
+                } else if (data.complete !== undefined && typeof data.complete === 'number') {
+                    bondingCurvePercent = safeNumber(data.complete);
+                }
+                
+                // Check if token has graduated (complete = true or complete_percent = 100)
+                const isComplete = data.complete === true || 
+                                  data.complete_percent === 100 || 
+                                  bondingCurvePercent === 100 ||
+                                  data.graduated === true ||
+                                  data.raydium === true;
+                
+                return { 
+                    ...data, 
+                    success: true, 
+                    source: 'pumpfun',
+                    bondingCurve: {
+                        percentComplete: bondingCurvePercent,
+                        isComplete: isComplete
+                    },
+                    bondingCurvePercentage: bondingCurvePercent
+                };
             }
             if (response.status === 530) {
                 throw new Error('Pump.fun API temporarily unavailable (530)');

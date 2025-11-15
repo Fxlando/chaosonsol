@@ -5472,6 +5472,7 @@ function updateTokenMetrics({
     priceUsd = null,
     marketCapUsd = null,
     bondingPercent = null,
+    isBondingComplete = false,
     totalTokenHoldings = null,
     holdingsValueSol = null,
     holdingsValueUsd = null,
@@ -5577,7 +5578,17 @@ function updateTokenMetrics({
     }
 
     const bondingPercentEl = getElement('metric-bonding-percent');
-    if (bondingPercentEl) bondingPercentEl.textContent = bondingDisplay;
+    if (bondingPercentEl) {
+        if (isBondingComplete) {
+            bondingPercentEl.textContent = '100%';
+            bondingPercentEl.classList.remove('text-gray-300');
+            bondingPercentEl.classList.add('text-emerald-400', 'font-semibold');
+        } else {
+            bondingPercentEl.textContent = bondingDisplay;
+            bondingPercentEl.classList.remove('text-emerald-400', 'font-semibold');
+            bondingPercentEl.classList.add('text-gray-300');
+        }
+    }
 
     const bondingBar = getElement('metric-bonding-bar');
     if (bondingBar) {
@@ -5585,6 +5596,36 @@ function updateTokenMetrics({
             ? `${Math.max(0, Math.min(100, bondingPercent))}%`
             : '0%';
         bondingBar.style.width = width;
+        
+        // Update bar color based on completion status
+        if (isBondingComplete) {
+            bondingBar.classList.remove('bg-purple-500');
+            bondingBar.classList.add('bg-emerald-500');
+        } else {
+            bondingBar.classList.remove('bg-emerald-500');
+            bondingBar.classList.add('bg-purple-500');
+        }
+    }
+    
+    // Show/hide completion badge and message
+    const completeBadge = getElement('bonding-complete-badge');
+    const completeMessage = getElement('bonding-complete-message');
+    const bondingMetric = getElement('bonding-curve-metric');
+    
+    if (isBondingComplete) {
+        if (completeBadge) completeBadge.classList.remove('hidden');
+        if (completeMessage) completeMessage.classList.remove('hidden');
+        if (bondingMetric) {
+            bondingMetric.classList.add('border-emerald-500/50', 'bg-emerald-950/20');
+            bondingMetric.classList.remove('border-neutral-900');
+        }
+    } else {
+        if (completeBadge) completeBadge.classList.add('hidden');
+        if (completeMessage) completeMessage.classList.add('hidden');
+        if (bondingMetric) {
+            bondingMetric.classList.remove('border-emerald-500/50', 'bg-emerald-950/20');
+            bondingMetric.classList.add('border-neutral-900');
+        }
     }
     
     // Debug: Log which elements were found/updated
@@ -7647,12 +7688,34 @@ async function loadLiveTokenDetail(record) {
         const priceSol = priceDetails.priceSol ?? null;
         const priceUsd = priceDetails.priceUsd ?? null;
         const marketCapUsd = priceDetails.marketCapUsd ?? (pumpFunInfo ? safeNumber(pumpFunInfo.marketCap) : null);
-        const bondingPercent =
-            pumpFunInfo && pumpFunInfo.bondingCurve && safeNumber(pumpFunInfo.bondingCurve?.percentComplete) !== null
-                ? safeNumber(pumpFunInfo.bondingCurve.percentComplete)
-                : pumpFunInfo && pumpFunInfo.bondingCurvePercentage !== undefined
-                ? safeNumber(pumpFunInfo.bondingCurvePercentage)
-                : null;
+        // Extract bonding curve percentage and completion status
+        let bondingPercent = null;
+        let isBondingComplete = false;
+        
+        if (pumpFunInfo) {
+            // Check for normalized bonding curve data
+            if (pumpFunInfo.bondingCurve?.percentComplete !== undefined && pumpFunInfo.bondingCurve.percentComplete !== null) {
+                bondingPercent = safeNumber(pumpFunInfo.bondingCurve.percentComplete);
+                isBondingComplete = pumpFunInfo.bondingCurve.isComplete === true || bondingPercent === 100;
+            } else if (pumpFunInfo.bondingCurvePercentage !== undefined && pumpFunInfo.bondingCurvePercentage !== null) {
+                bondingPercent = safeNumber(pumpFunInfo.bondingCurvePercentage);
+                isBondingComplete = bondingPercent === 100;
+            }
+            
+            // Also check direct fields from API
+            if (bondingPercent === null) {
+                if (pumpFunInfo.complete_percent !== undefined) {
+                    bondingPercent = safeNumber(pumpFunInfo.complete_percent);
+                    isBondingComplete = bondingPercent === 100 || pumpFunInfo.complete === true;
+                } else if (pumpFunInfo.complete === true) {
+                    bondingPercent = 100;
+                    isBondingComplete = true;
+                } else if (pumpFunInfo.graduated === true || pumpFunInfo.raydium === true) {
+                    bondingPercent = 100;
+                    isBondingComplete = true;
+                }
+            }
+        }
 
         const holdingsSummary = holdingsResult.summary || { totalTokenBalance: 0, totalHoldingsSol: 0 };
         const holdingsValueSol =
@@ -7703,6 +7766,7 @@ async function loadLiveTokenDetail(record) {
             priceUsd,
             marketCapUsd,
             bondingPercent,
+            isBondingComplete,
             totalTokenHoldings: holdingsSummary.totalTokenBalance,
             holdingsValueSol,
             holdingsValueUsd,

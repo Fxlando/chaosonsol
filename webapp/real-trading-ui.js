@@ -6493,22 +6493,7 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                 const isBondingComplete = bondingCache?.isComplete ?? false;
                 
                 // Get current holdings from state to preserve them if not refreshing
-                const currentHoldings = tokenDetailViewState.currentActivity ? 
-                    (() => {
-                        // Try to get from DOM as fallback
-                        const holdingsEl = document.getElementById('metric-token-holdings');
-                        if (holdingsEl && holdingsEl.textContent && holdingsEl.textContent !== '—') {
-                            // Parse from display text like "348,308.028 tokens"
-                            const match = holdingsEl.textContent.match(/[\d,]+\.?\d*/);
-                            if (match) {
-                                const balance = parseFloat(match[0].replace(/,/g, ''));
-                                if (!isNaN(balance)) {
-                                    return { totalTokenBalance: balance };
-                                }
-                            }
-                        }
-                        return null;
-                    })() : null;
+                const currentHoldings = tokenDetailViewState.currentHoldings || null;
                 
                 // Also refresh holdings if this is a user action or fallback polling
                 let holdingsData = null;

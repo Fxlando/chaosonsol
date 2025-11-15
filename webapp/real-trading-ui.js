@@ -7109,49 +7109,24 @@ function startTokenActivityStream(mint) {
         }
     };
     
-    // Fallback: Also do initial fetch and periodic polling as backup
+    // Event-driven: Only do initial fetch on load, then rely on WebSocket for all updates
     getSolPriceForActivity().then(solPrice => {
         tokenDetailViewState.solPrice = solPrice;
-    fetchPumpFunTradeFeed(mint, 20).then(latest => {
+        // Initial fetch to populate activity feed with recent trades
+        fetchPumpFunTradeFeed(mint, 20).then(latest => {
             renderTokenActivity(latest, { isLive: true, solPrice });
-        tokenDetailViewState.currentActivity = latest;
-    }).catch(error => {
-        // Silently handle API downtime
-        console.debug('Initial trade feed fetch failed:', error.message);
+            tokenDetailViewState.currentActivity = latest;
+        }).catch(error => {
+            // Silently handle API downtime - WebSocket will provide updates
+            console.debug('Initial trade feed fetch failed (WebSocket will provide updates):', error.message);
         });
     });
     
-    // Keep polling as fallback (every 30 seconds - WebSocket provides instant updates)
-    tokenDetailViewState.activityIntervalId = setInterval(async () => {
-        if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
-            stopTokenActivityStream();
-            return;
-        }
-
-        try {
-            // Refresh solPrice periodically
-            const solPrice = await getSolPriceForActivity();
-            if (solPrice) {
-                tokenDetailViewState.solPrice = solPrice;
-            }
-            
-            const latest = await fetchPumpFunTradeFeed(mint, 20);
-            renderTokenActivity(latest, { isLive: true, solPrice: solPrice || tokenDetailViewState.solPrice });
-            tokenDetailViewState.currentActivity = latest;
-        } catch (error) {
-            // Silently handle API downtime
-            const errorMessage = error.message || String(error);
-            const isApiDown = errorMessage.includes('530') || 
-                             errorMessage.includes('503') || 
-                             errorMessage.includes('502') ||
-                             errorMessage.includes('504') ||
-                             errorMessage.includes('Failed to fetch');
-            
-            if (!isApiDown) {
-                console.debug(`Live trade refresh failed for ${mint}:`, errorMessage);
-            }
-        }
-    }, 30000); // Update every 30 seconds (WebSocket provides instant updates, polling is just backup)
+    // No polling - fully event-driven via WebSocket subscriptions
+    // Activity feed updates only when:
+    // 1. WebSocket detects new trades (PumpPortal, Shyft, or Solana RPC)
+    // 2. User performs buy/sell actions
+    console.log('🔄 Activity feed is now event-driven - updates only on trade detection');
 }
 
 /**

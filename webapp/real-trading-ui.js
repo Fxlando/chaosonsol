@@ -5490,6 +5490,7 @@ function updateTokenMetrics({
     amountInvestedSol = null,
     amountSoldSol = null,
     profitLossSol = null,
+    isUnrealizedProfit = false,
     solPrice = null,
     source = ''
 } = {}) {
@@ -5516,14 +5517,28 @@ function updateTokenMetrics({
         return formatUSD(priceUsd);
     })();
 
-    // Profit/Loss display - show unrealized if we have holdings but no investment amount
-    const profitDisplay = profitLossSol !== null 
-        ? formatSol(profitLossSol) 
-        : (holdingsValueSol !== null && holdingsValueSol > 0 && totalTokenHoldings !== null && totalTokenHoldings > 0 ? 'Unrealized' : '—');
-    const profitDetail =
-        profitLossSol !== null && holdingsValueUsd !== null
-            ? `${formatUSD(profitLossSol * (solPrice || 0))} converted`
-            : (holdingsValueSol !== null && holdingsValueSol > 0 ? 'Current holdings value' : '');
+    // Profit/Loss display - show actual value even if unrealized
+    let profitDisplay = '—';
+    let profitDetail = '';
+    
+    if (profitLossSol !== null) {
+        // Always show the actual profit/loss value
+        const profitLossUsd = profitLossSol * (solPrice || 0);
+        profitDisplay = formatUSD(profitLossUsd);
+        
+        // Show detail with SOL amount and whether it's realized or unrealized
+        const solDisplay = formatSol(profitLossSol);
+        if (isUnrealizedProfit) {
+            profitDetail = `${solDisplay} (Unrealized)`;
+        } else {
+            profitDetail = `${solDisplay} (Realized + Unrealized)`;
+        }
+    } else if (holdingsValueSol !== null && holdingsValueSol > 0 && totalTokenHoldings !== null && totalTokenHoldings > 0) {
+        // If we have holdings but no profit calculation, show holdings value as unrealized
+        const holdingsUsd = holdingsValueUsd || (holdingsValueSol * (solPrice || 0));
+        profitDisplay = formatUSD(holdingsUsd);
+        profitDetail = 'Current holdings value (Unrealized)';
+    }
 
     // Amount Invested display - show USD value if available, otherwise show SOL or $0
     const amountInvestedDisplay = amountInvestedSol !== null && amountInvestedSol > 0
@@ -6538,7 +6553,31 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                     holdingsValueUsd = holdingsValueSol && currentSolPrice ? holdingsValueSol * currentSolPrice : null;
                 }
                 
-                // Update metrics with fresh data (preserve holdings if not refreshing them)
+                // Preserve profit/loss calculation from initial load
+                const profitLossState = tokenDetailViewState.currentProfitLoss || {};
+                
+                // Recalculate profit/loss if holdings changed
+                let profitLossSol = profitLossState.profitLossSol ?? null;
+                let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
+                
+                if (holdingsData && holdingsData.totalTokenBalance > 0 && priceDetails.priceSol) {
+                    // Holdings were refreshed, recalculate profit/loss if we have investment data
+                    const amountInvestedSol = profitLossState.amountInvestedSol ?? null;
+                    const amountSoldSol = profitLossState.amountSoldSol ?? null;
+                    
+                    if (holdingsValueSol !== null) {
+                        if (amountInvestedSol !== null) {
+                            profitLossSol = holdingsValueSol + (amountSoldSol || 0) - amountInvestedSol;
+                            isUnrealizedProfit = false;
+                        } else {
+                            // Unrealized profit
+                            profitLossSol = holdingsValueSol + (amountSoldSol || 0);
+                            isUnrealizedProfit = true;
+                        }
+                    }
+                }
+                
+                // Update metrics with fresh data (preserve holdings and profit/loss if not refreshing them)
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,
                     priceUsd: priceDetails.priceUsd,
@@ -6548,6 +6587,10 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                     totalTokenHoldings,
                     holdingsValueSol,
                     holdingsValueUsd,
+                    amountInvestedSol: profitLossState.amountInvestedSol ?? null,
+                    amountSoldSol: profitLossState.amountSoldSol ?? null,
+                    profitLossSol,
+                    isUnrealizedProfit,
                     solPrice: currentSolPrice,
                     source: priceDetails.source || ''
                 });
@@ -6600,6 +6643,20 @@ function startMetricsRefresh(mint, solPrice = null) {
                     }
                 }
                 
+                // Preserve profit/loss calculation from state
+                const profitLossState = tokenDetailViewState.currentProfitLoss || {};
+                let profitLossSol = profitLossState.profitLossSol ?? null;
+                let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
+                
+                // Recalculate profit/loss with new price if we have investment data
+                if (holdingsValueSol !== null && profitLossState.amountInvestedSol !== null) {
+                    profitLossSol = holdingsValueSol + (profitLossState.amountSoldSol || 0) - profitLossState.amountInvestedSol;
+                    isUnrealizedProfit = false;
+                } else if (holdingsValueSol !== null && profitLossState.amountInvestedSol === null) {
+                    profitLossSol = holdingsValueSol + (profitLossState.amountSoldSol || 0);
+                    isUnrealizedProfit = true;
+                }
+                
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,
                     priceUsd: priceDetails.priceUsd,
@@ -6607,6 +6664,10 @@ function startMetricsRefresh(mint, solPrice = null) {
                     totalTokenHoldings,
                     holdingsValueSol,
                     holdingsValueUsd,
+                    amountInvestedSol: profitLossState.amountInvestedSol ?? null,
+                    amountSoldSol: profitLossState.amountSoldSol ?? null,
+                    profitLossSol,
+                    isUnrealizedProfit,
                     solPrice: solPrice || solPriceCache.value,
                     source: priceDetails.source || ''
                 });
@@ -8110,12 +8171,28 @@ async function loadLiveTokenDetail(record) {
         // Calculate amount invested from multiple sources
         let amountInvestedSol = safeNumber(record.initialBuyAmount);
         
-        // Fallback 1: Calculate from activity feed (sum of buy transactions)
+        // Fallback 1: Calculate from activity feed (sum of buy transactions from YOUR wallets only)
         if (amountInvestedSol === null && Array.isArray(activity) && activity.length > 0) {
-            const buyTransactions = activity.filter(t => t.type === 'buy' && t.amountSol !== null && t.amountSol !== undefined);
-            if (buyTransactions.length > 0) {
-                amountInvestedSol = buyTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
-                console.log('✅ Calculated amount invested from activity feed:', amountInvestedSol, 'SOL');
+            // Get list of your wallet addresses
+            const yourWallets = getKnownWallets();
+            const yourWalletAddresses = new Set(
+                yourWallets.map(w => (w.address || w.publicKey || w.id || '').toLowerCase()).filter(Boolean)
+            );
+            
+            // Filter to only buy transactions from your wallets
+            const yourBuyTransactions = activity.filter(t => {
+                if (t.type !== 'buy' || !t.amountSol || t.amountSol <= 0) return false;
+                // Check if the trade wallet matches any of your wallets
+                const tradeWallet = (t.wallet || t.address || '').toLowerCase();
+                return yourWalletAddresses.has(tradeWallet) || 
+                       Array.from(yourWalletAddresses).some(addr => tradeWallet.includes(addr) || addr.includes(tradeWallet));
+            });
+            
+            if (yourBuyTransactions.length > 0) {
+                amountInvestedSol = yourBuyTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                console.log('✅ Calculated amount invested from YOUR wallet trades:', amountInvestedSol, 'SOL', `(${yourBuyTransactions.length} buy transactions)`);
+            } else {
+                console.log('ℹ️ No buy transactions found from your wallets in activity feed');
             }
         }
         
@@ -8162,13 +8239,22 @@ async function loadLiveTokenDetail(record) {
 
         // Calculate profit/loss
         let profitLossSol = null;
+        let isUnrealizedProfit = false;
         if (holdingsValueSol !== null && amountInvestedSol !== null) {
             const soldComponent = amountSoldSol || 0;
             profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+            console.log('💰 Calculated profit/loss:', {
+                holdingsValueSol,
+                amountSoldSol: soldComponent,
+                amountInvestedSol,
+                profitLossSol
+            });
         } else if (holdingsValueSol !== null && amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0) {
-            // If we have holdings but no investment amount, show current value as "unrealized"
+            // If we have holdings but no investment amount, calculate unrealized profit
+            // This is the current value of holdings + any sales, representing unrealized gains
             profitLossSol = holdingsValueSol + (amountSoldSol || 0);
-            console.log('ℹ️ Showing unrealized profit (no investment amount recorded)');
+            isUnrealizedProfit = true;
+            console.log('ℹ️ Showing unrealized profit (no investment amount recorded):', profitLossSol, 'SOL');
         }
 
         // Log data for debugging
@@ -8243,11 +8329,17 @@ async function loadLiveTokenDetail(record) {
             hasHoldings: holdingsSummary.totalTokenBalance > 0
         });
         
-        // Store holdings in state for preservation during event-driven refreshes
+        // Store holdings and profit/loss in state for preservation during event-driven refreshes
         tokenDetailViewState.currentHoldings = {
             totalTokenBalance: holdingsSummary.totalTokenBalance,
             holdingsValueSol,
             holdingsValueUsd
+        };
+        tokenDetailViewState.currentProfitLoss = {
+            profitLossSol,
+            isUnrealizedProfit,
+            amountInvestedSol: finalAmountInvested,
+            amountSoldSol: finalAmountSold
         };
         
         updateTokenMetrics({
@@ -8262,6 +8354,7 @@ async function loadLiveTokenDetail(record) {
             amountInvestedSol: finalAmountInvested,
             amountSoldSol: finalAmountSold,
             profitLossSol,
+            isUnrealizedProfit,
             solPrice,
             source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')
         });

@@ -1452,8 +1452,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                                 return { ...data, success: true, source: 'pumpfun' };
                             }
                         }
+                        // Handle 530 (Cloudflare service unavailable) gracefully - return null to allow fallback
                         if (response.status === 530) {
-                            throw new Error('Pump.fun API temporarily unavailable (530)');
+                            console.debug('⚠️ Pump.fun API temporarily unavailable (530) - using fallback');
+                            return null;
                         }
                         throw new Error(`Pump.fun API returned ${response.status}`);
                         

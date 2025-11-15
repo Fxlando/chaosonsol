@@ -59,6 +59,7 @@ export class TradingEngine {
 
   /**
    * Buy token (auto-detects PumpFun or DEX)
+   * IMPORTANT: Always try pump.fun first since Jupiter cannot trade bonding curve tokens
    */
   async buyToken(walletId, tokenMint, solAmount, options = {}) {
     try {
@@ -67,11 +68,11 @@ export class TradingEngine {
       // Get wallet keypair
       const keypair = this.walletManager.getWalletKeypair(walletId);
 
-      // ALWAYS try pump.fun SDK first for buy operations
-      // Pump.fun SDK can handle bonding curve tokens, and will fail gracefully if not a pump.fun token
-      // This is more reliable than detection, since detection can fail but SDK can still work
+      // Strategy 1: ALWAYS try pump.fun first (bonding curve tokens)
+      // Pump.fun SDK can handle both bonding curve and DEX tokens, so try it first
+      // If it's not a pump.fun token, it will fail gracefully and we'll try Jupiter
       try {
-        logger.info('Attempting pump.fun buy first (bonding curve tokens)...');
+        logger.info('🔄 Attempting pump.fun buy first (bonding curve tokens)...');
         const result = await this.pumpFun.buyToken(keypair, tokenMint, solAmount, options);
         
         if (result && result.success) {
@@ -101,45 +102,14 @@ export class TradingEngine {
         // If it's a real error (might still be pump.fun token), log but continue to Jupiter
       }
       
-      // For non-pump.fun tokens or if pump.fun failed, try Jupiter V6, then legacy
-      try {
-        // Try to use Jupiter V6 integration if available
-        // Using createRequire to import CommonJS module in ES module context
-        const { createRequire } = await import('module');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const require = createRequire(import.meta.url);
-        const jupiterV6Path = resolve(__dirname, '../../jupiter-v6-integration.js');
-        const { JupiterV6Integration } = require(jupiterV6Path);
-        const jupiterV6 = new JupiterV6Integration(this.solanaCore.connection, {
-          slippage: options.slippage || 1000, // 10% default
-          priorityFee: options.priorityFee || 500000 // 0.0005 SOL default
-        });
-        
-        const result = await jupiterV6.buyToken(keypair, tokenMint, solAmount, options);
-        
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-        
-        return result;
-      } catch (jupiterV6Error) {
-        logger.warn('Jupiter V6 integration not available, falling back to legacy system:', jupiterV6Error.message);
-        
-        // Fallback to legacy system
-        // Use Jupiter for DEX tokens (pump.fun tokens already handled above)
-        logger.info('Using legacy Jupiter client for DEX token');
-        const result = await this.jupiter.swapSOLToToken(keypair, tokenMint, solAmount, {
-          ...options,
-          useSharedAccounts: false // Disable shared accounts to avoid pump.fun issues
-        });
-        
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-        
-        return result;
-      }
+      // Strategy 2: Try Jupiter for DEX tokens (if pump.fun failed or not available)
+      logger.info('🔄 Attempting Jupiter for DEX token...');
+      const result = await this.jupiter.swapSOLToToken(keypair, tokenMint, solAmount, options);
+      
+      // Update wallet last used
+      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+      
+      return result;
     } catch (error) {
       logger.error('Buy token failed:', error);
       logger.error('Error details:', {
@@ -170,32 +140,11 @@ export class TradingEngine {
       // It tries pump.fun first (for bonding curve tokens), then Jupiter (for DEX tokens)
       logger.info('Using Jupiter V6 integration with automatic pump.fun fallback');
       
-      // Check if token is PumpFun token first - use pump.fun SDK directly
-      const tokenInfo = await this.pumpFun.getTokenInfo(tokenMint);
-      
-      if (tokenInfo.success && !tokenInfo.isComplete) {
-        // Use PumpFun SDK directly for bonding curve tokens (before graduation)
-        logger.info('Using PumpFun SDK for bonding curve token');
-        const result = await this.pumpFun.sellToken(keypair, tokenMint, tokenAmount, options);
-        
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-        
-        return result;
-      }
-      
-      // For graduated tokens or non-pump.fun tokens, try Jupiter V6, then legacy
       try {
         // Try to use Jupiter V6 integration if available
-        // Using createRequire to import CommonJS module in ES module context
-        const { createRequire } = await import('module');
-        const { fileURLToPath } = await import('url');
-        const { dirname, resolve } = await import('path');
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const require = createRequire(import.meta.url);
-        const jupiterV6Path = resolve(__dirname, '../../jupiter-v6-integration.js');
-        const { JupiterV6Integration } = require(jupiterV6Path);
+        // Using dynamic import for CommonJS module
+        const jupiterV6Module = await import('../../jupiter-v6-integration.js');
+        const JupiterV6Integration = jupiterV6Module.JupiterV6Integration || jupiterV6Module.default;
         const jupiterV6 = new JupiterV6Integration(this.solanaCore.connection, {
           slippage: options.slippage || 1000, // 10% default
           priorityFee: options.priorityFee || 500000 // 0.0005 SOL default
@@ -211,17 +160,28 @@ export class TradingEngine {
         logger.warn('Jupiter V6 integration not available, falling back to legacy system:', jupiterV6Error.message);
         
         // Fallback to legacy system
-        // Use Jupiter for DEX tokens (pump.fun tokens already handled above)
-        logger.info('Using legacy Jupiter client for DEX token');
-        const result = await this.jupiter.swapTokenToSOL(keypair, tokenMint, tokenAmount, {
-          ...options,
-          useSharedAccounts: false // Disable shared accounts to avoid pump.fun issues
-        });
+        // Check if token is PumpFun token
+        const tokenInfo = await this.pumpFun.getTokenInfo(tokenMint);
         
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-        
-        return result;
+        if (tokenInfo.success && !tokenInfo.isComplete) {
+          // Use PumpFun for bonding curve tokens
+          logger.info('Using PumpFun for bonding curve token');
+          const result = await this.pumpFun.sellToken(keypair, tokenMint, tokenAmount, options);
+          
+          // Update wallet last used
+          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+          
+          return result;
+        } else {
+          // Use Jupiter for DEX tokens
+          logger.info('Using Jupiter for DEX token');
+          const result = await this.jupiter.swapTokenToSOL(keypair, tokenMint, tokenAmount, options);
+          
+          // Update wallet last used
+          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+          
+          return result;
+        }
       }
     } catch (error) {
       logger.error('Sell token failed:', error);

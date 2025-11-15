@@ -5469,6 +5469,9 @@ function resetTokenMetrics() {
         bar.style.width = '0%';
     }
 }
+// Track if this is the first update for smooth initial render
+let isFirstMetricsUpdate = true;
+
 function updateTokenMetrics({
     priceSol = null,
     priceUsd = null,
@@ -5542,8 +5545,21 @@ function updateTokenMetrics({
             : '—';
 
     // Smooth metric updates using requestAnimationFrame to prevent flash
-    const updateMetricSmoothly = (element, value) => {
+    // Only animate if the value is actually changing (not initial load)
+    const updateMetricSmoothly = (element, value, isInitialLoad = false) => {
         if (!element) return;
+        
+        const currentValue = element.textContent.trim();
+        const isValueChanging = currentValue !== value && currentValue !== '—' && currentValue !== '';
+        
+        // For initial load or if value isn't changing, update immediately without animation
+        if (isInitialLoad || !isValueChanging) {
+            element.textContent = value;
+            element.classList.add('metric-value');
+            return;
+        }
+        
+        // For subsequent updates, use smooth animation
         element.classList.add('metric-value', 'updating');
         requestAnimationFrame(() => {
             element.textContent = value;

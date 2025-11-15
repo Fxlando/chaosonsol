@@ -392,54 +392,27 @@ export class JupiterClient {
    * Get quote from Jupiter API
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {
-    // CRITICAL: Jupiter API requires integer amounts in base units (no decimals)
-    // Convert decimal amounts to base units before sending to API
-    let amountInBaseUnits = amount;
-    
-    // Check if amount is in human-readable format (has decimals)
-    const isDecimal = (typeof amount === 'number' && amount % 1 !== 0) || 
-                      (typeof amount === 'string' && amount.includes('.'));
-    
-    if (isDecimal || (typeof amount === 'number' && amount < 1e12)) {
-      try {
-        // Get token decimals from mint info
-        const { PublicKey } = await import('@solana/web3.js');
-        const { getMint } = await import('@solana/spl-token');
-        
-        const mintPublicKey = new PublicKey(inputMint);
-        const mintInfo = await getMint(this.solanaCore.connection, mintPublicKey);
-        const decimals = mintInfo.decimals || 6; // Default to 6 decimals
-        
-        // Convert human-readable amount to base units (integer, no decimals)
-        amountInBaseUnits = Math.floor(Number(amount) * Math.pow(10, decimals));
-        logger.info(`💰 Converted amount for Jupiter: ${amount} → ${amountInBaseUnits} (${decimals} decimals)`);
-        
-        // Validate: amount must be a positive integer
-        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
-          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Must be positive integer.`);
-        }
-      } catch (error) {
-        logger.warn(`⚠️ Could not get mint info for ${inputMint}, assuming 6 decimals:`, error.message);
-        // Default to 6 decimals if we can't fetch mint info
-        amountInBaseUnits = Math.floor(Number(amount) * 1e6);
-        
-        // Validate
-        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
-          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Original: ${amount}`);
-        }
-      }
-    } else {
-      // Amount is already in base units, but ensure it's an integer
-      amountInBaseUnits = Math.floor(Number(amount));
-      if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
-        throw new Error(`Invalid amount: ${amountInBaseUnits}. Must be positive integer.`);
-      }
+    // Ensure amount is an integer string (Jupiter API requires integer, no decimals)
+    // Convert to integer to handle any edge cases where amount might be a decimal
+    let amountInteger = amount;
+    if (typeof amount === 'number' && amount % 1 !== 0) {
+      logger.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. Flooring to integer.`);
+      amountInteger = Math.floor(amount);
+    } else if (typeof amount === 'string' && amount.includes('.')) {
+      logger.warn(`⚠️ Warning: getQuote received decimal string ${amount}. Converting to integer.`);
+      amountInteger = Math.floor(parseFloat(amount));
     }
     
-    // Use converted amount for the rest of the function
-    amount = amountInBaseUnits;
+    // Ensure it's a string representation of an integer (no decimals)
+    const amountString = Math.floor(Number(amountInteger)).toString();
+    
+    // Validate: amount must be positive
+    if (parseInt(amountString) <= 0) {
+      throw new Error(`Invalid amount for quote: ${amountString}. Must be positive integer.`);
+    }
+    
     const slippageBps = options.slippageBps || Math.floor(this.config.defaultSlippage * 100);
-    const cacheKey = `quote_${inputMint}_${outputMint}_${amount}_${slippageBps}`;
+    const cacheKey = `quote_${inputMint}_${outputMint}_${amountString}_${slippageBps}`;
     const cached = this.cache.get(cacheKey);
     
     if (cached && Date.now() - cached.timestamp < 5000) {
@@ -447,13 +420,15 @@ export class JupiterClient {
     }
 
     try {
+      logger.debug(`Requesting quote: ${inputMint} -> ${outputMint}, amount: ${amountString}`);
+      
       const response = await this.performJupiterRequest({
         endpoint: 'quote',
         method: 'GET',
         params: {
           inputMint: inputMint,
           outputMint: outputMint,
-          amount: amount.toString(),
+          amount: amountString, // Always integer string, no decimals
           slippageBps: slippageBps.toString(),
           onlyDirectRoutes: options.onlyDirectRoutes || false,
           asLegacyTransaction: false
@@ -505,27 +480,11 @@ export class JupiterClient {
    */
   async getSwapTransaction(quote, userPublicKey, options = {}) {
     try {
-      // Check if this is a pump.fun/Simple AMM route - shared accounts not supported
-      const isPumpFunRoute = quote.routePlan?.some(route => 
-        route.swapInfo?.label === 'Pump.fun' || 
-        route.swapInfo?.ammKey === 'HwDSEZcEupbtZE5wcAnjYKKqG9cZidSM1UZgz6j67sir'
-      ) || quote.rawResponse?.routePlan?.some(route => 
-        route.swapInfo?.label === 'Pump.fun' || 
-        route.swapInfo?.ammKey === 'HwDSEZcEupbtZE5wcAnjYKKqG9cZidSM1UZgz6j67sir'
-      );
-      
-      // Disable shared accounts for pump.fun/Simple AMM routes
-      const useSharedAccounts = isPumpFunRoute ? false : (options.useSharedAccounts !== false);
-      
-      if (isPumpFunRoute) {
-        logger.info('Detected pump.fun route - disabling shared accounts (not supported)');
-      }
-      
       const swapPayload = {
         quoteResponse: quote.rawResponse || quote,
         userPublicKey: userPublicKey.toString(),
         wrapAndUnwrapSol: options.wrapAndUnwrapSol !== false,
-        useSharedAccounts: useSharedAccounts,
+        useSharedAccounts: options.useSharedAccounts !== false,
         feeAccount: options.feeAccount || null,
         trackingAccount: options.trackingAccount || null,
         asLegacyTransaction: false,
@@ -673,9 +632,31 @@ export class JupiterClient {
    */
   async swapSOLToToken(walletKeypair, outputMint, solAmount, options = {}) {
     const solMint = 'So11111111111111111111111111111111111111112'; // SOL
-    const amount = Math.floor(solAmount * LAMPORTS_PER_SOL);
     
-    return await this.executeSwap(walletKeypair, solMint, outputMint, amount, options);
+    // Convert SOL amount to lamports (base units)
+    // SOL has 9 decimals (LAMPORTS_PER_SOL = 1e9), NOT 6 or 12!
+    let amountInLamports;
+    
+    // Check if solAmount is already in lamports or needs conversion
+    const isLikelyHumanReadable = solAmount < 1e6 || 
+                                   (typeof solAmount === 'string' && solAmount.includes('.'));
+    
+    if (isLikelyHumanReadable) {
+      // Convert SOL to lamports (1 SOL = 1e9 lamports)
+      amountInLamports = Math.floor(Number(solAmount) * LAMPORTS_PER_SOL);
+      logger.debug(`Converted SOL amount: ${solAmount} SOL → ${amountInLamports} lamports`);
+    } else {
+      // Already in lamports, but ensure it's an integer
+      amountInLamports = Math.floor(Number(solAmount));
+      logger.debug(`Using SOL amount as-is (already in lamports): ${amountInLamports}`);
+    }
+    
+    // Validate: amount must be a positive integer
+    if (!Number.isInteger(amountInLamports) || amountInLamports <= 0) {
+      throw new Error(`Invalid SOL amount: ${amountInLamports}. Must be positive integer lamports. Original: ${solAmount}`);
+    }
+    
+    return await this.executeSwap(walletKeypair, solMint, outputMint, amountInLamports, options);
   }
 
   /**

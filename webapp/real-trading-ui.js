@@ -5569,32 +5569,36 @@ function updateTokenMetrics({
         });
     };
 
-    updateMetricSmoothly(getElement('metric-profit-loss'), profitDisplay);
-    updateMetricSmoothly(getElement('metric-profit-loss-detail'), profitDetail);
-    updateMetricSmoothly(getElement('metric-amount-invested'), amountInvestedDisplay);
+    // Use isInitialLoad flag for first update to prevent pop
+    const isInitialLoad = isFirstMetricsUpdate;
+    isFirstMetricsUpdate = false;
+    
+    updateMetricSmoothly(getElement('metric-profit-loss'), profitDisplay, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-profit-loss-detail'), profitDetail, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-amount-invested'), amountInvestedDisplay, isInitialLoad);
     
     const investedDetailEl = getElement('metric-amount-invested-detail');
     if (investedDetailEl) {
         const detailValue = amountInvestedSol !== null && solPrice !== null 
             ? formatUSD(amountInvestedSol * solPrice) 
             : '';
-        updateMetricSmoothly(investedDetailEl, detailValue);
+        updateMetricSmoothly(investedDetailEl, detailValue, isInitialLoad);
     }
 
-    updateMetricSmoothly(getElement('metric-token-holdings'), holdingsDisplay);
-    updateMetricSmoothly(getElement('metric-token-holdings-detail'), holdingsDetail);
-    updateMetricSmoothly(getElement('metric-holdings-value'), formatMaybeSol(holdingsValueSol));
+    updateMetricSmoothly(getElement('metric-token-holdings'), holdingsDisplay, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-token-holdings-detail'), holdingsDetail, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-holdings-value'), formatMaybeSol(holdingsValueSol), isInitialLoad);
     
     const holdingsValueDetailEl = getElement('metric-holdings-value-detail');
     if (holdingsValueDetailEl) {
-        updateMetricSmoothly(holdingsValueDetailEl, holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '');
+        updateMetricSmoothly(holdingsValueDetailEl, holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '', isInitialLoad);
     }
 
-    updateMetricSmoothly(getElement('metric-amount-sold'), amountSoldDisplay);
-    updateMetricSmoothly(getElement('metric-amount-sold-detail'), amountSoldDetail);
-    updateMetricSmoothly(getElement('metric-price-per-token'), priceDisplay);
-    updateMetricSmoothly(getElement('metric-price-per-token-detail'), priceDetail);
-    updateMetricSmoothly(getElement('metric-market-cap'), marketCapDisplay);
+    updateMetricSmoothly(getElement('metric-amount-sold'), amountSoldDisplay, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-amount-sold-detail'), amountSoldDetail, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-price-per-token'), priceDisplay, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-price-per-token-detail'), priceDetail, isInitialLoad);
+    updateMetricSmoothly(getElement('metric-market-cap'), marketCapDisplay, isInitialLoad);
 
     const marketCapDetailEl = getElement('metric-market-cap-detail');
     if (marketCapDetailEl) {
@@ -9254,6 +9258,8 @@ function handleTokenArchive() {
 
 function populateTokenDetailView(record) {
     if (!record) return;
+    // Reset first update flag when switching to a new token
+    isFirstMetricsUpdate = true;
     stopTokenActivityStream();
     stopMetricsRefresh();
     tokenRegistry.current = record;

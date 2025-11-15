@@ -41,7 +41,24 @@ class JupiterV6Integration {
 
   // Get quote for swap with retry across multiple API endpoints
   async getQuote(inputMint, outputMint, amount, slippage = null, apiUrl = null) {
-    const cacheKey = `${inputMint}_${outputMint}_${amount}_${slippage || this.config.slippage}`;
+    // Ensure amount is an integer (base units) - Jupiter API requires integer strings
+    // If amount is a decimal, it should have been converted before calling this function
+    // But we'll ensure it's an integer here as a safety check
+    let amountInteger = amount;
+    if (typeof amount === 'number' && amount % 1 !== 0) {
+      // If it's a decimal number, log warning and floor it
+      console.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. This should be in base units. Flooring to integer.`);
+      amountInteger = Math.floor(amount);
+    } else if (typeof amount === 'string' && amount.includes('.')) {
+      // If it's a decimal string, convert to integer
+      console.warn(`⚠️ Warning: getQuote received decimal string ${amount}. Converting to integer.`);
+      amountInteger = Math.floor(parseFloat(amount));
+    }
+    
+    // Ensure it's a string representation of an integer (no decimals)
+    const amountString = Math.floor(Number(amountInteger)).toString();
+    
+    const cacheKey = `${inputMint}_${outputMint}_${amountString}_${slippage || this.config.slippage}`;
     const urlToUse = apiUrl || this.apiUrl;
     
     return await smartCacheManager.getOrFetch('jupiter-quote', cacheKey, async () => {
@@ -50,7 +67,7 @@ class JupiterV6Integration {
           const params = new URLSearchParams({
             inputMint,
             outputMint,
-            amount: amount.toString(),
+            amount: amountString, // Always integer string, no decimals
             slippageBps: (slippage || this.config.slippage).toString()
           });
 
@@ -461,12 +478,17 @@ class JupiterV6Integration {
     }
     
     // Strategy 2: Try Jupiter with DEX swap
-    // Convert human-readable token amount to base units (Jupiter expects base units)
+    // ALWAYS convert human-readable token amount to base units (Jupiter REQUIRES base units as integer)
+    // Jupiter API will fail with "ParseIntError" if we send decimals
     let amountInBaseUnits = tokenAmount;
     
-    // Check if tokenAmount looks like human-readable format (has decimal places or is large)
-    // If amount is less than 1e12, it might be human-readable, convert it
-    if (tokenAmount < 1e12) {
+    // Check if tokenAmount is in human-readable format (has decimals or is a reasonable number)
+    // If amount is less than 1e12 OR has decimal places, it's likely human-readable
+    const isDecimal = (typeof tokenAmount === 'number' && tokenAmount % 1 !== 0) || 
+                      (typeof tokenAmount === 'string' && tokenAmount.includes('.'));
+    const isLikelyHumanReadable = tokenAmount < 1e12 || isDecimal;
+    
+    if (isLikelyHumanReadable) {
       try {
         // Get token mint info to determine decimals
         const { PublicKey } = require('@solana/web3.js');
@@ -476,14 +498,31 @@ class JupiterV6Integration {
         const mintInfo = await getMint(this.connection, mintPublicKey);
         const decimals = mintInfo.decimals || 6; // Default to 6 if not found
         
-        // Convert human-readable amount to base units
-        amountInBaseUnits = Math.floor(tokenAmount * Math.pow(10, decimals));
-        console.log(`💰 Converted token amount: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
+        // Convert human-readable amount to base units (integer, no decimals)
+        amountInBaseUnits = Math.floor(Number(tokenAmount) * Math.pow(10, decimals));
+        console.log(`💰 Converted token amount for Jupiter: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
+        
+        // Validate: amount must be an integer
+        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Must be positive integer.`);
+        }
       } catch (error) {
         console.warn(`⚠️ Could not get mint info for ${tokenMint}, assuming 6 decimals:`, error.message);
         // Default to 6 decimals if we can't fetch mint info
-        amountInBaseUnits = Math.floor(tokenAmount * 1e6);
+        amountInBaseUnits = Math.floor(Number(tokenAmount) * 1e6);
+        
+        // Validate
+        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Original: ${tokenAmount}`);
+        }
       }
+    } else {
+      // Amount is already in base units, but ensure it's an integer
+      amountInBaseUnits = Math.floor(Number(tokenAmount));
+      if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+        throw new Error(`Invalid amount: ${amountInBaseUnits}. Must be positive integer.`);
+      }
+      console.log(`💰 Using amount as-is (already in base units): ${amountInBaseUnits}`);
     }
     
     // Try Jupiter with retry logic

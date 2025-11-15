@@ -5575,10 +5575,11 @@ function updateTokenMetrics({
     updateMetricSmoothly(getElement('metric-market-cap'), marketCapDisplay);
 
     const marketCapDetailEl = getElement('metric-market-cap-detail');
-    if (marketCapDetailEl && marketCapUsd !== null) {
-        marketCapDetailEl.textContent = solPrice ? `${formatSol(marketCapUsd / solPrice)} equivalent` : '';
-    } else if (marketCapDetailEl) {
-        marketCapDetailEl.textContent = '';
+    if (marketCapDetailEl) {
+        const detailValue = marketCapUsd !== null && solPrice
+            ? `${formatSol(marketCapUsd / solPrice)} equivalent`
+            : '';
+        updateMetricSmoothly(marketCapDetailEl, detailValue);
     }
 
     const bondingPercentEl = getElement('metric-bonding-percent');

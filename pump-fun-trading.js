@@ -256,10 +256,15 @@ class PumpFunTrading {
       };
       
     } catch (error) {
-      console.error(`❌ Pump.Fun sell failed:`, error.message);
+      console.error(`❌ Pump.Fun sell failed:`, error);
+      // Include full error details for debugging
+      const errorMessage = error.message || error.toString();
+      const errorDetails = error.stack || error.response?.data || error;
+      console.error(`❌ Pump.Fun sell error details:`, errorDetails);
       return {
         success: false,
-        error: error.message
+        error: errorMessage,
+        errorDetails: errorDetails
       };
     }
   }

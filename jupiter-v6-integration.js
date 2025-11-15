@@ -306,8 +306,9 @@ class JupiterV6Integration {
         );
 
         if (confirmation.value.err) {
-          console.log(`❌ Transaction failed with error: ${JSON.stringify(confirmation.value.err)}`);
-          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+          const errorMsg = JSON.stringify(confirmation.value.err);
+          console.error(`❌ Transaction failed with error: ${errorMsg}`);
+          throw new Error(`Transaction failed: ${errorMsg}`);
         }
         
         console.log(`✅ Transaction confirmed on-chain: ${signature}`);

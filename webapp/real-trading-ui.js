@@ -6386,12 +6386,112 @@ function stopTokenActivityStream() {
     }
 }
 
-// Frequent refresh for market cap and price updates
-// Optimized for maximum frequency without hitting rate limits
+// Event-driven metrics refresh system
+// Updates only on events (buy/sell actions, new trades, price changes) + fallback polling
 let lastExternalApiCall = 0;
 const EXTERNAL_API_INTERVAL = 5000; // Call Jupiter/DexScreener every 5 seconds max
 let solPriceCache = { value: null, timestamp: 0 };
 const SOL_PRICE_CACHE_DURATION = 30000; // Cache SOL price for 30 seconds
+
+// Debouncing for event-driven updates
+let metricsRefreshDebounceTimer = null;
+const METRICS_REFRESH_DEBOUNCE = 2000; // Wait 2 seconds after last event before refreshing
+let lastMetricsRefresh = 0;
+const MIN_METRICS_REFRESH_INTERVAL = 3000; // Minimum 3 seconds between refreshes
+
+// Event-driven metrics refresh function
+async function refreshMetricsOnEvent(mint, reason = 'event') {
+    if (!mint) return;
+    
+    // Check if we're on the token detail page for this mint
+    const tokenDetailPage = document.getElementById('token-detail-page');
+    if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
+        return;
+    }
+    
+    if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
+        return;
+    }
+    
+    // Debounce rapid events
+    const now = Date.now();
+    if (now - lastMetricsRefresh < MIN_METRICS_REFRESH_INTERVAL) {
+        // Clear existing debounce timer and set a new one
+        if (metricsRefreshDebounceTimer) {
+            clearTimeout(metricsRefreshDebounceTimer);
+        }
+        metricsRefreshDebounceTimer = setTimeout(() => {
+            refreshMetricsOnEvent(mint, reason);
+        }, METRICS_REFRESH_DEBOUNCE);
+        return;
+    }
+    
+    lastMetricsRefresh = now;
+    console.log(`🔄 Refreshing metrics (${reason}) for`, mint);
+    
+    try {
+        // Get SOL price (cached)
+        let currentSolPrice = solPriceCache.value;
+        if (!currentSolPrice || (now - solPriceCache.timestamp) > SOL_PRICE_CACHE_DURATION) {
+            try {
+                currentSolPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
+                if (currentSolPrice) {
+                    solPriceCache = { value: currentSolPrice, timestamp: now };
+                    tokenDetailViewState.solPrice = currentSolPrice;
+                }
+            } catch (error) {
+                console.debug('SOL price fetch failed, using cache:', error.message);
+            }
+        }
+        
+        // Fetch fresh price and market cap data
+        const priceDetails = await fetchTokenPriceDetails(mint, { 
+            solPrice: currentSolPrice,
+            preferOnChain: false
+        });
+        
+        if (priceDetails) {
+            const hasData = priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null;
+            
+            if (hasData) {
+                // Use cached bonding curve value
+                const bondingCache = tokenDetailViewState.bondingCurveCache;
+                const bondingPercent = bondingCache?.percent ?? null;
+                const isBondingComplete = bondingCache?.isComplete ?? false;
+                
+                // Also refresh holdings if this is a user action
+                let holdingsData = null;
+                if (reason === 'user-action') {
+                    try {
+                        const holdingsResult = await fetchWalletHoldingsForMint(mint, { 
+                            source: tokenDetailViewState.holdingsSource || 'jito',
+                            priceSol: priceDetails.priceSol
+                        });
+                        holdingsData = holdingsResult.summary || { totalTokenBalance: 0, totalHoldingsSol: 0 };
+                    } catch (error) {
+                        console.debug('Holdings refresh failed:', error.message);
+                    }
+                }
+                
+                // Update metrics with fresh data
+                updateTokenMetrics({
+                    priceSol: priceDetails.priceSol,
+                    priceUsd: priceDetails.priceUsd,
+                    marketCapUsd: priceDetails.marketCapUsd,
+                    bondingPercent,
+                    isBondingComplete,
+                    totalTokenHoldings: holdingsData?.totalTokenBalance ?? null,
+                    holdingsValueSol: holdingsData ? (priceDetails.priceSol ? holdingsData.totalTokenBalance * priceDetails.priceSol : holdingsData.totalHoldingsSol) : null,
+                    holdingsValueUsd: holdingsData && currentSolPrice ? (priceDetails.priceSol ? holdingsData.totalTokenBalance * priceDetails.priceSol * currentSolPrice : holdingsData.totalHoldingsSol * currentSolPrice) : null,
+                    solPrice: currentSolPrice,
+                    source: priceDetails.source || ''
+                });
+            }
+        }
+    } catch (error) {
+        console.warn('Metrics refresh error:', error.message);
+    }
+}
 
 function startMetricsRefresh(mint, solPrice = null) {
     stopMetricsRefresh(); // Clear any existing interval
@@ -6404,9 +6504,8 @@ function startMetricsRefresh(mint, solPrice = null) {
         tokenDetailViewState.solPrice = solPrice;
     }
     
-    // Refresh every 3 seconds for fast updates (like a live chart)
-    // Aggressively tries ALL APIs in parallel to get fastest response
-    console.log('🔄 Starting metrics refresh for', mint, '- will update every 3 seconds');
+    // Event-driven updates with 30-second fallback polling
+    console.log('🔄 Starting event-driven metrics refresh for', mint, '- updates on events + 30s fallback');
     
     // Do an immediate update on start
     (async () => {
@@ -6429,6 +6528,7 @@ function startMetricsRefresh(mint, solPrice = null) {
         }
     })();
     
+    // Fallback polling every 30 seconds (safety net for missed events)
     tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
         // Check if token detail page is visible
         const tokenDetailPage = document.getElementById('token-detail-page');
@@ -6443,36 +6543,16 @@ function startMetricsRefresh(mint, solPrice = null) {
             return;
         }
         
-        try {
-            // Get SOL price (cached for 30 seconds to avoid excessive API calls)
-            let currentSolPrice = solPriceCache.value;
-            const now = Date.now();
-            if (!currentSolPrice || (now - solPriceCache.timestamp) > SOL_PRICE_CACHE_DURATION) {
-                try {
-                    currentSolPrice = await (solanaIntegration?.getSolPrice?.() || Promise.resolve(null));
-                    if (currentSolPrice) {
-                        solPriceCache = { value: currentSolPrice, timestamp: now };
-                        tokenDetailViewState.solPrice = currentSolPrice;
-                    }
-                } catch (error) {
-                    // Use cached value if fetch fails
-                    console.debug('SOL price fetch failed, using cache:', error.message);
-                }
-            }
-            
-            // Fetch price and market cap data - try ALL APIs aggressively in parallel
-            // No throttling - API Pool Manager handles rate limits intelligently
-            const priceDetails = await fetchTokenPriceDetails(mint, { 
-                solPrice: currentSolPrice,
-                preferOnChain: false // Always try all APIs for fastest response
-            });
-            
-            if (priceDetails) {
-                // Always update if we have any data (price, market cap, or both)
-                const hasData = priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null;
-                
-                if (hasData) {
-                    // Use cached bonding curve value (don't recalculate every 3 seconds)
+        // Fallback refresh (only if no recent event-driven refresh)
+        const timeSinceLastRefresh = Date.now() - lastMetricsRefresh;
+        if (timeSinceLastRefresh < 25000) {
+            // Recent event-driven refresh, skip this fallback
+            return;
+        }
+        
+        console.log('🔄 Fallback metrics refresh (30s interval)');
+        await refreshMetricsOnEvent(mint, 'fallback-polling');
+    }, 30000); // 30 seconds fallback polling
                     const cachedBonding = tokenDetailViewState.bondingCurveCache;
                     updateTokenMetrics({
                         priceSol: priceDetails.priceSol,

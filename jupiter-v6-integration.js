@@ -102,12 +102,25 @@ class JupiterV6Integration {
   // Get quote from Orca API
   async getOrcaQuote(inputMint, outputMint, amount, slippage = null) {
     try {
+      // Ensure amount is an integer (base units) - Orca API also requires integers
+      let amountInteger = amount;
+      if (typeof amount === 'number' && amount % 1 !== 0) {
+        console.warn(`⚠️ Warning: getOrcaQuote received decimal amount ${amount}. Flooring to integer.`);
+        amountInteger = Math.floor(amount);
+      } else if (typeof amount === 'string' && amount.includes('.')) {
+        console.warn(`⚠️ Warning: getOrcaQuote received decimal string ${amount}. Converting to integer.`);
+        amountInteger = Math.floor(parseFloat(amount));
+      }
+      
+      // Ensure it's a string representation of an integer (no decimals)
+      const amountString = Math.floor(Number(amountInteger)).toString();
+      
       const slippageDecimal = (slippage || this.config.slippage) / 10000;
       const response = await axios.get(`${this.orcaApiUrl}/v1/quote`, {
         params: {
           inputMint: inputMint,
           outputMint: outputMint,
-          amount: amount.toString(),
+          amount: amountString, // Always integer string, no decimals
           slippage: slippageDecimal.toString()
         },
         timeout: 10000

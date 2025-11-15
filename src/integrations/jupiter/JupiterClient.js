@@ -241,11 +241,14 @@ export class JupiterClient {
   }
 
   async performJupiterRequest({ endpoint = '', method = 'GET', params, data, headers = {}, timeout = 10000 }) {
+    // CRITICAL: Log immediately to verify new code is running
+    logger.error(`🚨🚨🚨 [performJupiterRequest] NEW CODE VERSION - Called with endpoint: ${endpoint}`);
+    
     const requestUrl = this.buildJupiterUrl(endpoint);
     
     // Log params before sending (especially amount) to debug
     if (params && params.amount) {
-      logger.info(`🔍 [performJupiterRequest] Endpoint: ${endpoint}, params.amount: ${params.amount} (type: ${typeof params.amount})`);
+      logger.error(`🚨 [performJupiterRequest] BEFORE FIX: params.amount = ${params.amount} (type: ${typeof params.amount})`);
       // Validate amount is an integer string
       const amountValue = String(params.amount);
       if (amountValue.includes('.') || isNaN(parseInt(amountValue))) {

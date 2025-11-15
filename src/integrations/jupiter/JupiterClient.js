@@ -253,6 +253,22 @@ export class JupiterClient {
       }
     }
     
+    // CRITICAL FIX: If amount is suspiciously large (> 1e12), fix it by dividing by 1e6
+    // This handles the case where amount was incorrectly multiplied by 1e6
+    if (params && params.amount) {
+      const amountValue = params.amount;
+      const amountStr = String(amountValue);
+      const amountNum = parseInt(amountStr);
+      
+      // If amount is > 1 trillion, it's likely been incorrectly multiplied by 1e6
+      // Fix it by dividing by 1e6
+      if (amountNum > 1e12 && amountNum % 1000000 === 0) {
+        const fixedAmount = (amountNum / 1000000).toString();
+        logger.error(`🚨 CRITICAL FIX: Amount is ${amountNum} which is > 1 trillion! Dividing by 1e6 to fix: ${fixedAmount}`);
+        params = { ...params, amount: fixedAmount };
+      }
+    }
+    
     const axiosConfig = {
       method,
       url: requestUrl.toString(),
@@ -272,9 +288,9 @@ export class JupiterClient {
         logger.error(`🚨 [performJupiterRequest] CRITICAL: About to send request with amount: ${amountValue} (type: ${amountType}, string: "${amountStr}")`);
         logger.error(`🚨 [performJupiterRequest] Full params object: ${JSON.stringify(params, null, 2)}`);
         
-        // If amount is suspiciously large, log error
+        // If amount is still suspiciously large after fix, log error
         if (parseInt(amountStr) > 1e12) {
-          logger.error(`🚨 CRITICAL ERROR: Amount is ${parseInt(amountStr)} which is > 1 trillion! This is wrong!`);
+          logger.error(`🚨 CRITICAL ERROR: Amount is still ${parseInt(amountStr)} after fix! This is wrong!`);
           logger.error(`🚨 Expected amount should be around 4,000,000 (0.004 SOL). Got: ${amountStr}`);
         }
       }

@@ -579,9 +579,16 @@ export class JupiterClient {
         throw new Error(`Invalid swap amount: ${amount}. Must be positive integer in base units.`);
       }
       
-      logger.info(`Executing swap: ${inputMint} -> ${outputMint}, amount: ${amountInteger}`);
-
+      logger.info(`🔍 [executeSwap] Executing swap: ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}..., amount: ${amountInteger} (type: ${typeof amountInteger}, original: ${amount})`);
+      
+      // Validate amountInteger is what we expect
+      if (amountInteger !== 4000000 && amountInteger === 4000000000000) {
+        logger.error(`❌ CRITICAL: Amount is 1000x too large! ${amountInteger} should be ${amountInteger / 1000000}`);
+        throw new Error(`Amount conversion error: ${amountInteger} is too large. Expected: ${amountInteger / 1000000}`);
+      }
+      
       // Get quote (use integer amount)
+      logger.info(`🔍 [executeSwap] Calling getQuote with amount: ${amountInteger} (type: ${typeof amountInteger})`);
       const quote = await this.getQuote(inputMint, outputMint, amountInteger, {
         slippageBps: options.slippageBps || Math.floor(this.config.defaultSlippage * 100),
         onlyDirectRoutes: options.onlyDirectRoutes || false

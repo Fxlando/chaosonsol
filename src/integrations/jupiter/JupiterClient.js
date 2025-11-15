@@ -241,37 +241,7 @@ export class JupiterClient {
   }
 
   async performJupiterRequest({ endpoint = '', method = 'GET', params, data, headers = {}, timeout = 10000 }) {
-    // CRITICAL: Log immediately to verify new code is running
-    logger.error(`🚨🚨🚨 [performJupiterRequest] NEW CODE VERSION - Called with endpoint: ${endpoint}`);
-    
     const requestUrl = this.buildJupiterUrl(endpoint);
-    
-    // Log params before sending (especially amount) to debug
-    if (params && params.amount) {
-      logger.error(`🚨 [performJupiterRequest] BEFORE FIX: params.amount = ${params.amount} (type: ${typeof params.amount})`);
-      // Validate amount is an integer string
-      const amountValue = String(params.amount);
-      if (amountValue.includes('.') || isNaN(parseInt(amountValue))) {
-        logger.error(`❌ ERROR: Invalid amount in params: ${amountValue}`);
-      }
-    }
-    
-    // CRITICAL FIX: If amount is suspiciously large (> 1e12), fix it by dividing by 1e6
-    // This handles the case where amount was incorrectly multiplied by 1e6
-    if (params && params.amount) {
-      const amountValue = params.amount;
-      const amountStr = String(amountValue);
-      const amountNum = parseInt(amountStr);
-      
-      // If amount is > 1 trillion, it's likely been incorrectly multiplied by 1e6
-      // Fix it by dividing by 1e6
-      if (amountNum > 1e12 && amountNum % 1000000 === 0) {
-        const fixedAmount = (amountNum / 1000000).toString();
-        logger.error(`🚨 CRITICAL FIX: Amount is ${amountNum} which is > 1 trillion! Dividing by 1e6 to fix: ${fixedAmount}`);
-        params = { ...params, amount: fixedAmount };
-      }
-    }
-    
     const axiosConfig = {
       method,
       url: requestUrl.toString(),
@@ -283,20 +253,6 @@ export class JupiterClient {
     };
 
     try {
-      // Log right before axios call - CRITICAL DEBUG
-      if (params && params.amount) {
-        const amountValue = params.amount;
-        const amountType = typeof amountValue;
-        const amountStr = String(amountValue);
-        logger.error(`🚨 [performJupiterRequest] CRITICAL: About to send request with amount: ${amountValue} (type: ${amountType}, string: "${amountStr}")`);
-        logger.error(`🚨 [performJupiterRequest] Full params object: ${JSON.stringify(params, null, 2)}`);
-        
-        // If amount is still suspiciously large after fix, log error
-        if (parseInt(amountStr) > 1e12) {
-          logger.error(`🚨 CRITICAL ERROR: Amount is still ${parseInt(amountStr)} after fix! This is wrong!`);
-          logger.error(`🚨 Expected amount should be around 4,000,000 (0.004 SOL). Got: ${amountStr}`);
-        }
-      }
       return await axios(axiosConfig);
     } catch (error) {
       const message = typeof error?.message === 'string' ? error.message : '';
@@ -433,84 +389,13 @@ export class JupiterClient {
   }
 
   /**
-   * Validate if a trading route exists for a token pair
-   * This helps catch tokens with no liquidity before attempting to swap
-   */
-  async validateTokenRoutes(inputMint, outputMint, amount) {
-    try {
-      // Ensure amount is an integer string
-      const amountString = Math.floor(Number(amount)).toString();
-      
-      const testUrl = `${this.apiUrl}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountString}&slippageBps=100`;
-      
-      try {
-        const response = await axios.get(testUrl, {
-          timeout: 5000,
-          headers: { 'Accept': 'application/json' }
-        });
-        
-        if (response.data && !response.data.error) {
-          const routeCount = response.data.routePlan?.length || 0;
-          logger.info(`✅ Route validation: Found ${routeCount} route(s) for ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}...`);
-          return {
-            valid: true,
-            routes: routeCount,
-            quote: response.data
-          };
-        } else {
-          logger.warn(`⚠️ Route validation: No routes found - ${response.data?.error || 'Unknown error'}`);
-          return {
-            valid: false,
-            error: response.data?.error || 'No routes available',
-            errorCode: response.data?.errorCode || 'COULD_NOT_FIND_ANY_ROUTE'
-          };
-        }
-      } catch (error) {
-        if (error.response?.status === 400) {
-          const errorData = error.response.data || {};
-          logger.warn(`⚠️ Route validation failed: ${errorData.error || error.message}`);
-          return {
-            valid: false,
-            error: errorData.error || 'No routes available',
-            errorCode: errorData.errorCode || 'COULD_NOT_FIND_ANY_ROUTE'
-          };
-        }
-        // Network error - don't fail validation, let the actual quote attempt handle it
-        logger.warn(`⚠️ Route validation network error: ${error.message}`);
-        return {
-          valid: true, // Allow attempt if it's just a network issue
-          routes: 0,
-          warning: error.message
-        };
-      }
-    } catch (error) {
-      logger.warn(`⚠️ Route validation error: ${error.message}`);
-      return {
-        valid: true, // Allow attempt if validation fails
-        routes: 0,
-        warning: error.message
-      };
-    }
-  }
-
-  /**
    * Get quote from Jupiter API
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {
-    // CRITICAL FIX: If amount is suspiciously large (> 1e12), it's likely been incorrectly multiplied by 1e6
-    // This can happen if something thinks the amount has 6 decimals when it already has 9 decimals
+    // Ensure amount is an integer string (Jupiter API requires integer, no decimals)
+    // Convert to integer to handle any edge cases where amount might be a decimal
     let amountInteger = amount;
-    
-    // Convert to number first for validation
-    const amountNum = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
-    
-    // If amount > 1 trillion and divisible by 1e6, it's likely been incorrectly multiplied
-    // Fix it by dividing by 1e6 (e.g., 4000000000000 -> 4000000)
-    if (amountNum > 1e12 && amountNum % 1000000 === 0) {
-      const fixedAmount = Math.floor(amountNum / 1000000);
-      logger.error(`🚨 CRITICAL FIX in getQuote: Amount ${amountNum} is > 1 trillion and divisible by 1e6. Fixing to ${fixedAmount}`);
-      amountInteger = fixedAmount;
-    } else if (typeof amount === 'number' && amount % 1 !== 0) {
+    if (typeof amount === 'number' && amount % 1 !== 0) {
       logger.warn(`⚠️ Warning: getQuote received decimal amount ${amount}. Flooring to integer.`);
       amountInteger = Math.floor(amount);
     } else if (typeof amount === 'string' && amount.includes('.')) {
@@ -535,39 +420,19 @@ export class JupiterClient {
     }
 
     try {
-      // Log the actual amount being sent to debug
-      logger.info(`🔍 [getQuote] Requesting quote: ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}..., amount: ${amountString} (type: ${typeof amountString}, original: ${amount}, integer: ${amountInteger})`);
-      
-      // Final validation - ensure amountString is exactly what we expect
-      const finalAmount = Math.floor(Number(amountString)).toString();
-      if (finalAmount !== amountString) {
-        logger.warn(`⚠️ Amount string mismatch: ${amountString} -> ${finalAmount}`);
-      }
-      
-      // Double-check: amount should not have decimals
-      if (finalAmount.includes('.') || parseFloat(finalAmount) % 1 !== 0) {
-        logger.error(`❌ ERROR: Amount still has decimals: ${finalAmount}. This should not happen!`);
-        throw new Error(`Invalid amount format: ${finalAmount}. Amount must be an integer string.`);
-      }
-      
-      // CRITICAL: Log and validate right before creating params
-      logger.error(`🚨 [getQuote] BEFORE performJupiterRequest: finalAmount = "${finalAmount}" (type: ${typeof finalAmount}, parsed: ${parseInt(finalAmount)})`);
-      
-      const paramsObject = {
-        inputMint: inputMint,
-        outputMint: outputMint,
-        amount: finalAmount, // Final validated integer string, no decimals
-        slippageBps: slippageBps.toString(),
-        onlyDirectRoutes: options.onlyDirectRoutes || false,
-        asLegacyTransaction: false
-      };
-      
-      logger.error(`🚨 [getQuote] Params object created: ${JSON.stringify(paramsObject, null, 2)}`);
+      logger.debug(`Requesting quote: ${inputMint} -> ${outputMint}, amount: ${amountString}`);
       
       const response = await this.performJupiterRequest({
         endpoint: 'quote',
         method: 'GET',
-        params: paramsObject,
+        params: {
+          inputMint: inputMint,
+          outputMint: outputMint,
+          amount: amountString, // Always integer string, no decimals
+          slippageBps: slippageBps.toString(),
+          onlyDirectRoutes: options.onlyDirectRoutes || false,
+          asLegacyTransaction: false
+        },
         timeout: 10000,
         headers: {
           'Content-Type': 'application/json'
@@ -686,46 +551,16 @@ export class JupiterClient {
         throw new Error(`Invalid swap amount: ${amount}. Must be positive integer in base units.`);
       }
       
-      logger.info(`🔍 [executeSwap] Executing swap: ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}..., amount: ${amountInteger} (type: ${typeof amountInteger}, original: ${amount})`);
-      
-      // Validate amountInteger is reasonable - SOL amounts should typically be < 1e12 lamports
-      // If amount > 1e12, it's likely been incorrectly multiplied (e.g., 4,000,000 -> 4,000,000,000,000)
-      if (amountInteger > 1e12) {
-        logger.error(`❌ CRITICAL: Amount is suspiciously large! ${amountInteger} lamports (${amountInteger / 1e9} SOL). This suggests a conversion error.`);
-        // Don't throw - just log, as some large amounts might be legitimate
-        // But log a warning so we can track this
-      }
-      
-      // Validate route exists before attempting swap (helps catch liquidity issues early)
-      if (options.validateRoute !== false) {
-        logger.info(`🔍 [executeSwap] Validating route availability...`);
-        const routeValidation = await this.validateTokenRoutes(inputMint, outputMint, amountInteger);
-        
-        if (!routeValidation.valid) {
-          const errorMsg = `Token has no available trading routes. ${routeValidation.error || 'No liquidity pools found on any DEX.'}`;
-          logger.error(`❌ ${errorMsg}`);
-          throw new Error(errorMsg);
-        }
-        
-        if (routeValidation.routes === 0 && !routeValidation.warning) {
-          logger.warn(`⚠️ Route validation found 0 routes but allowing attempt anyway`);
-        }
-      }
-      
+      logger.info(`Executing swap: ${inputMint} -> ${outputMint}, amount: ${amountInteger}`);
+
       // Get quote (use integer amount)
-      logger.info(`🔍 [executeSwap] Calling getQuote with amount: ${amountInteger} (type: ${typeof amountInteger})`);
       const quote = await this.getQuote(inputMint, outputMint, amountInteger, {
         slippageBps: options.slippageBps || Math.floor(this.config.defaultSlippage * 100),
         onlyDirectRoutes: options.onlyDirectRoutes || false
       });
 
       if (!quote.success) {
-        // Provide more helpful error messages
-        const errorMsg = quote.error || 'Failed to get quote';
-        if (errorMsg.includes('COULD_NOT_FIND_ANY_ROUTE') || errorMsg.includes('Could not find any route')) {
-          throw new Error(`Token has no available trading routes. This token may have insufficient liquidity or no DEX pairs available. Try checking the token on Raydium, Orca, or other DEX platforms.`);
-        }
-        throw new Error(errorMsg);
+        throw new Error(quote.error || 'Failed to get quote');
       }
 
       logger.debug(`Quote received: ${quote.inputAmount} -> ${quote.outputAmount} (${quote.priceImpactPct}% impact)`);

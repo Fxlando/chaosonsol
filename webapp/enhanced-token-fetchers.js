@@ -455,6 +455,13 @@ async function fetchDexScreenerPrice(mintAddress) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
+            // Properly handle rate limit errors (429) so API Pool Manager can detect them
+            if (response.status === 429) {
+                const error = new Error(`DexScreener rate limit exceeded (429)`);
+                error.status = 429;
+                error.code = 429;
+                throw error;
+            }
             throw new Error(`DexScreener API returned ${response.status}`);
         }
         
@@ -925,6 +932,13 @@ async function fetchDexScreenerMetadata(mintAddress) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
+            // Properly handle rate limit errors (429) so API Pool Manager can detect them
+            if (response.status === 429) {
+                const error = new Error(`DexScreener rate limit exceeded (429)`);
+                error.status = 429;
+                error.code = 429;
+                throw error;
+            }
             throw new Error(`DexScreener API returned ${response.status}`);
         }
         

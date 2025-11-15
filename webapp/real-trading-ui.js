@@ -6261,8 +6261,8 @@ function startMetricsRefresh(mint, solPrice = null) {
         tokenDetailViewState.solPrice = solPrice;
     }
     
-    // Refresh every 1 second for maximum responsiveness
-    // Uses intelligent caching to avoid rate limits
+    // Refresh every 3 seconds for fast updates (like a live chart)
+    // Aggressively tries ALL APIs in parallel to get fastest response
     tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
         // Check if token detail page is visible
         const tokenDetailPage = document.getElementById('token-detail-page');
@@ -6294,22 +6294,14 @@ function startMetricsRefresh(mint, solPrice = null) {
                 }
             }
             
-            // Determine if we should call external APIs (Jupiter/DexScreener)
-            const shouldCallExternalApi = (now - lastExternalApiCall) >= EXTERNAL_API_INTERVAL;
-            
-            // Fetch price and market cap data
-            // Uses dedicated price RPC (on-chain) for fast updates, external APIs only periodically
+            // Fetch price and market cap data - try ALL APIs aggressively in parallel
+            // No throttling - API Pool Manager handles rate limits intelligently
             const priceDetails = await fetchTokenPriceDetails(mint, { 
                 solPrice: currentSolPrice,
-                preferOnChain: !shouldCallExternalApi // Prefer on-chain if we just called external APIs
+                preferOnChain: false // Always try all APIs for fastest response
             });
             
             if (priceDetails) {
-                // Track when we called external APIs
-                if (priceDetails.source === 'jupiter' || priceDetails.source === 'dexscreener') {
-                    lastExternalApiCall = now;
-                }
-                
                 // Update only price and market cap (preserve other metrics)
                 if (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null) {
                     updateTokenMetrics({
@@ -6326,7 +6318,7 @@ function startMetricsRefresh(mint, solPrice = null) {
             // Silently handle errors - don't spam console
             console.debug('Market cap refresh error:', error.message);
         }
-    }, 1000); // Every 1 second for maximum responsiveness
+    }, 3000); // Every 3 seconds for fast updates (like a live chart)
 }
 
 function stopMetricsRefresh() {

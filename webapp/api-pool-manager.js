@@ -240,16 +240,23 @@
                 maxRetries = pool.length; // Try all APIs
             }
 
-            // If parallel mode, try top 2-3 fastest APIs simultaneously
+            // If parallel mode, try ALL available APIs simultaneously for fastest response
             if (parallel) {
-                const topApis = pool
+                const availableApis = pool
                     .filter(api => this.isApiAvailable(api.url))
                     .sort((a, b) => {
+                        // Sort by speed first, then by cost (free first)
                         const aPerf = this.getApiPerformance(a.url);
                         const bPerf = this.getApiPerformance(b.url);
-                        return aPerf.avgResponseTime - bPerf.avgResponseTime;
-                    })
-                    .slice(0, 3); // Top 3 fastest
+                        const speedDiff = aPerf.avgResponseTime - bPerf.avgResponseTime;
+                        if (Math.abs(speedDiff) > 100) {
+                            return speedDiff; // Prioritize speed if >100ms difference
+                        }
+                        return a.cost - b.cost; // Otherwise prioritize free APIs
+                    });
+                
+                // Try ALL available APIs in parallel (not just top 3) for fastest response
+                const topApis = availableApis;
 
                 if (topApis.length > 0) {
                     const startTime = Date.now();

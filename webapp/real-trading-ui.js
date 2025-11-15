@@ -5507,13 +5507,19 @@ function updateTokenMetrics({
         return formatUSD(priceUsd);
     })();
 
-    const profitDisplay = profitLossSol !== null ? formatSol(profitLossSol) : '—';
+    // Profit/Loss display - show unrealized if we have holdings but no investment amount
+    const profitDisplay = profitLossSol !== null 
+        ? formatSol(profitLossSol) 
+        : (holdingsValueSol !== null && holdingsValueSol > 0 && totalTokenHoldings !== null && totalTokenHoldings > 0 ? 'Unrealized' : '—');
     const profitDetail =
         profitLossSol !== null && holdingsValueUsd !== null
             ? `${formatUSD(profitLossSol * (solPrice || 0))} converted`
-            : '';
+            : (holdingsValueSol !== null && holdingsValueSol > 0 ? 'Current holdings value' : '');
 
-    const amountInvestedDisplay = amountInvestedSol !== null ? formatSol(amountInvestedSol) : '—';
+    // Amount Invested display - show "Unknown" if we have holdings but no investment data
+    const amountInvestedDisplay = amountInvestedSol !== null && amountInvestedSol > 0
+        ? formatSol(amountInvestedSol)
+        : (totalTokenHoldings !== null && totalTokenHoldings > 0 ? 'Unknown' : '—');
     const holdingsDisplay =
         totalTokenHoldings !== null
             ? `${totalTokenHoldings.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`

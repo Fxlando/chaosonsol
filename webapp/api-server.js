@@ -1273,6 +1273,9 @@ register('get', '/config', async () => {
       },
       birdeye: {
         apiKey: process.env.BIRDEYE_API_KEY || '9ddbf4282f714067a229ad9caedd1b41'
+      },
+      moralis: {
+        apiKey: process.env.MORALIS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjY3MWQyMmQ5LTllZTQtNDJmNi1iMzE1LTRkN2M5MTQxMjE1MSIsIm9yZ0lkIjoiNDgxNDM3IiwidXNlcklkIjoiNDk1MzA0IiwidHlwZUlkIjoiODdkMjNkYjctZTBkMC00NjY4LTkzYzYtMTUzYzRkMjQxZWEzIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NjMxNjU5NDEsImV4cCI6NDkxODkyNTk0MX0.9ZJGROi8myhSMDhZi1icj5YBava7ecojyZG6Ruf5PU4'
       }
     }
   };

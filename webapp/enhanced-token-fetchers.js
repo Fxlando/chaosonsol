@@ -173,8 +173,10 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                         
                     case 'onchain':
                         try {
+                            console.log('🔄 Attempting on-chain price calculation for:', mintAddress);
                             const connection = getSolanaConnection('price');
                             if (!connection) {
+                                console.debug('⚠️ No RPC connection available for on-chain price calculation');
                                 return null; // Return null instead of throwing
                             }
                             const onChainData = await calculateOnChainPrice(mintAddress);
@@ -189,10 +191,11 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                                     source: 'on-chain'
                                 };
                             }
+                            console.debug('⚠️ On-chain price calculation returned no price data');
                             // Return null instead of throwing - allows other APIs to be tried
                             return null;
                         } catch (error) {
-                            console.debug('⚠️ On-chain price calculation error:', error.message);
+                            console.warn('⚠️ On-chain price calculation error:', error.message);
                             return null; // Return null to allow fallback to other APIs
                         }
                         
@@ -523,6 +526,7 @@ async function fetchDexScreenerPrice(mintAddress) {
  */
 async function calculateOnChainPrice(mintAddress) {
     try {
+        console.log('🔧 Starting on-chain price calculation for:', mintAddress);
         // Use dedicated price RPC for price calculations
         const connection = getSolanaConnection('price');
         
@@ -542,34 +546,64 @@ async function calculateOnChainPrice(mintAddress) {
         const PUMP_FUN_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
         
         try {
+            console.log('🔍 Looking for Pump.fun bonding curve account...');
+            
+            // Browser-compatible Buffer alternative
+            const encoder = new TextEncoder();
+            const bondingCurveSeed = encoder.encode('bonding-curve');
+            
             const [bondingCurve] = PublicKey.findProgramAddressSync(
-                [Buffer.from('bonding-curve'), mintPubkey.toBuffer()],
+                [bondingCurveSeed, mintPubkey.toBuffer()],
                 PUMP_FUN_PROGRAM
             );
             
+            console.log('🔍 Bonding curve address:', bondingCurve.toBase58());
             const curveAccount = await connection.getAccountInfo(bondingCurve);
             
             if (curveAccount && curveAccount.data) {
+                console.log('✅ Bonding curve account found, parsing price data...');
                 // Parse bonding curve data (this is Pump.fun specific)
                 const data = curveAccount.data;
                 
+                // Browser-compatible readBigUInt64LE function
+                function readBigUInt64LE(buffer, offset) {
+                    let result = 0n;
+                    for (let i = 0; i < 8; i++) {
+                        result |= BigInt(buffer[offset + i]) << BigInt(i * 8);
+                    }
+                    return result;
+                }
+                
                 // Virtual SOL reserves at offset 8
-                const virtualSolReserves = data.readBigUInt64LE(8);
+                const virtualSolReserves = readBigUInt64LE(data, 8);
                 // Virtual token reserves at offset 16  
-                const virtualTokenReserves = data.readBigUInt64LE(16);
+                const virtualTokenReserves = readBigUInt64LE(data, 16);
+                
+                console.log('📊 Bonding curve reserves:', {
+                    virtualSolReserves: virtualSolReserves.toString(),
+                    virtualTokenReserves: virtualTokenReserves.toString()
+                });
                 
                 if (virtualTokenReserves > 0n) {
-                    const priceSol = Number(virtualSolReserves) / Number(virtualTokenReserves);
+                    // Convert virtual SOL reserves from lamports to SOL, then divide by token reserves
+                    const virtualSolReservesSol = Number(virtualSolReserves) / 1_000_000_000; // Convert lamports to SOL
+                    const priceSol = virtualSolReservesSol / Number(virtualTokenReserves);
+                    console.log('✅ Calculated price from bonding curve:', priceSol, 'SOL per token');
                     return { priceSol };
+                } else {
+                    console.debug('⚠️ Virtual token reserves is 0, cannot calculate price');
                 }
+            } else {
+                console.debug('⚠️ Bonding curve account not found or has no data');
             }
         } catch (curveError) {
             // Bonding curve not found, try alternative methods
-            console.debug('Bonding curve not found, trying alternative price calculation');
+            console.debug('⚠️ Bonding curve lookup failed:', curveError.message);
         }
         
         throw new Error('Could not calculate price from bonding curve');
     } catch (error) {
+        console.debug('❌ On-chain price calculation failed:', error.message);
         throw new Error(`On-chain calculation failed: ${error.message}`);
     }
 }

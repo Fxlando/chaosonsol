@@ -6263,6 +6263,29 @@ function startMetricsRefresh(mint, solPrice = null) {
     
     // Refresh every 3 seconds for fast updates (like a live chart)
     // Aggressively tries ALL APIs in parallel to get fastest response
+    console.log('🔄 Starting metrics refresh for', mint, '- will update every 3 seconds');
+    
+    // Do an immediate update on start
+    (async () => {
+        try {
+            const priceDetails = await fetchTokenPriceDetails(mint, { 
+                solPrice: solPrice || solPriceCache.value,
+                preferOnChain: false
+            });
+            if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null)) {
+                updateTokenMetrics({
+                    priceSol: priceDetails.priceSol,
+                    priceUsd: priceDetails.priceUsd,
+                    marketCapUsd: priceDetails.marketCapUsd,
+                    solPrice: solPrice || solPriceCache.value,
+                    source: priceDetails.source || ''
+                });
+            }
+        } catch (error) {
+            console.debug('Initial metrics refresh error:', error.message);
+        }
+    })();
+    
     tokenDetailViewState.metricsRefreshIntervalId = setInterval(async () => {
         // Check if token detail page is visible
         const tokenDetailPage = document.getElementById('token-detail-page');
@@ -6312,11 +6335,16 @@ function startMetricsRefresh(mint, solPrice = null) {
                         source: priceDetails.source || ''
                         // Don't update other fields - keep existing values
                     });
+                    console.debug(`✅ Market cap updated: $${priceDetails.marketCapUsd?.toFixed(2) || 'N/A'} (source: ${priceDetails.source || 'unknown'})`);
+                } else {
+                    console.debug('⚠️ Price details returned but all values are null');
                 }
+            } else {
+                console.debug('⚠️ No price details returned from fetchTokenPriceDetails');
             }
         } catch (error) {
-            // Silently handle errors - don't spam console
-            console.debug('Market cap refresh error:', error.message);
+            // Log errors for debugging
+            console.warn('Market cap refresh error:', error.message);
         }
     }, 3000); // Every 3 seconds for fast updates (like a live chart)
 }
@@ -6753,12 +6781,12 @@ function startTokenActivityStream(mint) {
     // Fallback: Also do initial fetch and periodic polling as backup
     getSolPriceForActivity().then(solPrice => {
         tokenDetailViewState.solPrice = solPrice;
-        fetchPumpFunTradeFeed(mint, 20).then(latest => {
+    fetchPumpFunTradeFeed(mint, 20).then(latest => {
             renderTokenActivity(latest, { isLive: true, solPrice });
-            tokenDetailViewState.currentActivity = latest;
-        }).catch(error => {
-            // Silently handle API downtime
-            console.debug('Initial trade feed fetch failed:', error.message);
+        tokenDetailViewState.currentActivity = latest;
+    }).catch(error => {
+        // Silently handle API downtime
+        console.debug('Initial trade feed fetch failed:', error.message);
         });
     });
     

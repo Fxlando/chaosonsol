@@ -8135,12 +8135,28 @@ async function loadLiveTokenDetail(record) {
             amountSoldSol = runtimeAutomations.stats.totalVolume;
         }
         
-        // Fallback: Calculate from activity feed (sum of sell transactions)
+        // Fallback: Calculate from activity feed (sum of sell transactions from YOUR wallets only)
         if (amountSoldSol === null && Array.isArray(activity) && activity.length > 0) {
-            const sellTransactions = activity.filter(t => t.type === 'sell' && t.amountSol !== null && t.amountSol !== undefined);
-            if (sellTransactions.length > 0) {
-                amountSoldSol = sellTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
-                console.log('✅ Calculated amount sold from activity feed:', amountSoldSol, 'SOL');
+            // Get list of your wallet addresses
+            const yourWallets = getKnownWallets();
+            const yourWalletAddresses = new Set(
+                yourWallets.map(w => (w.address || w.publicKey || w.id || '').toLowerCase()).filter(Boolean)
+            );
+            
+            // Filter to only sell transactions from your wallets
+            const yourSellTransactions = activity.filter(t => {
+                if (t.type !== 'sell' || !t.amountSol || t.amountSol <= 0) return false;
+                // Check if the trade wallet matches any of your wallets
+                const tradeWallet = (t.wallet || t.address || '').toLowerCase();
+                return yourWalletAddresses.has(tradeWallet) || 
+                       Array.from(yourWalletAddresses).some(addr => tradeWallet.includes(addr) || addr.includes(tradeWallet));
+            });
+            
+            if (yourSellTransactions.length > 0) {
+                amountSoldSol = yourSellTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                console.log('✅ Calculated amount sold from YOUR wallet trades:', amountSoldSol, 'SOL', `(${yourSellTransactions.length} sell transactions)`);
+            } else {
+                console.log('ℹ️ No sell transactions found from your wallets in activity feed');
             }
         }
 

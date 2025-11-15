@@ -172,22 +172,29 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                         throw new Error('Moralis returned no price data');
                         
                     case 'onchain':
-                        const connection = getSolanaConnection('price');
-                        if (!connection) {
-                            throw new Error('No RPC connection available');
+                        try {
+                            const connection = getSolanaConnection('price');
+                            if (!connection) {
+                                return null; // Return null instead of throwing
+                            }
+                            const onChainData = await calculateOnChainPrice(mintAddress);
+                            if (onChainData && onChainData.priceSol) {
+                                const priceSol = onChainData.priceSol;
+                                const priceUsd = solPrice ? priceSol * solPrice : null;
+                                console.log('✅ On-chain price calculation successful:', priceSol, 'SOL');
+                                return {
+                                    priceSol,
+                                    priceUsd,
+                                    marketCapUsd: null,
+                                    source: 'on-chain'
+                                };
+                            }
+                            // Return null instead of throwing - allows other APIs to be tried
+                            return null;
+                        } catch (error) {
+                            console.debug('⚠️ On-chain price calculation error:', error.message);
+                            return null; // Return null to allow fallback to other APIs
                         }
-                        const onChainData = await calculateOnChainPrice(mintAddress);
-                        if (onChainData && onChainData.priceSol) {
-                            const priceSol = onChainData.priceSol;
-                            const priceUsd = solPrice ? priceSol * solPrice : null;
-                            return {
-                                priceSol,
-                                priceUsd,
-                                marketCapUsd: null,
-                                source: 'on-chain'
-                            };
-                        }
-                        throw new Error('On-chain calculation returned no price');
                         
                     default:
                         throw new Error(`Unknown price API: ${api.url}`);
@@ -1390,6 +1397,18 @@ async function fetchBirdeyeMetadata(mintAddress) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
+            // Handle 401 (Unauthorized) gracefully - API key might be invalid/expired
+            if (response.status === 401) {
+                console.debug('⚠️ Birdeye API key invalid or expired (401) - skipping');
+                return null;
+            }
+            // Silently handle network/DNS errors
+            const errorMsg = `Birdeye API returned ${response.status}`;
+            if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+                errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+                errorMsg.includes('Failed to fetch')) {
+                return null;
+            }
             throw new Error(`Birdeye API returned ${response.status}`);
         }
         

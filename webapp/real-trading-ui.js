@@ -14133,8 +14133,12 @@ async function calculateBondingCurvePercent(mintAddress) {
         
         console.log('🔍 Finding bonding curve account...');
         // Find bonding curve account
+        // Convert string to Uint8Array (browser-compatible)
+        const bondingCurveSeed = new TextEncoder().encode('bonding-curve');
+        const mintBuffer = mintPubkey.toBuffer();
+        const seeds = [bondingCurveSeed, mintBuffer];
         const [bondingCurve] = PublicKey.findProgramAddressSync(
-            [Buffer.from('bonding-curve'), mintPubkey.toBuffer()],
+            seeds,
             PUMP_FUN_PROGRAM
         );
         
@@ -14158,7 +14162,16 @@ async function calculateBondingCurvePercent(mintAddress) {
         const data = curveAccount.data;
         
         // Virtual SOL reserves at offset 8 (in lamports)
-        const virtualSolReserves = data.readBigUInt64LE(8);
+        // Browser-compatible BigUInt64LE read (little-endian)
+        function readBigUInt64LE(buffer, offset) {
+            let result = 0n;
+            for (let i = 0; i < 8; i++) {
+                result |= BigInt(buffer[offset + i]) << BigInt(i * 8);
+            }
+            return result;
+        }
+        
+        const virtualSolReserves = readBigUInt64LE(data, 8);
         const virtualSolReservesNumber = Number(virtualSolReserves);
         const virtualSolReservesSol = virtualSolReservesNumber / 1_000_000_000; // Convert lamports to SOL
         

@@ -6492,9 +6492,27 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                 const bondingPercent = bondingCache?.percent ?? null;
                 const isBondingComplete = bondingCache?.isComplete ?? false;
                 
-                // Also refresh holdings if this is a user action
+                // Get current holdings from state to preserve them if not refreshing
+                const currentHoldings = tokenDetailViewState.currentActivity ? 
+                    (() => {
+                        // Try to get from DOM as fallback
+                        const holdingsEl = document.getElementById('metric-token-holdings');
+                        if (holdingsEl && holdingsEl.textContent && holdingsEl.textContent !== '—') {
+                            // Parse from display text like "348,308.028 tokens"
+                            const match = holdingsEl.textContent.match(/[\d,]+\.?\d*/);
+                            if (match) {
+                                const balance = parseFloat(match[0].replace(/,/g, ''));
+                                if (!isNaN(balance)) {
+                                    return { totalTokenBalance: balance };
+                                }
+                            }
+                        }
+                        return null;
+                    })() : null;
+                
+                // Also refresh holdings if this is a user action or fallback polling
                 let holdingsData = null;
-                if (reason === 'user-action') {
+                if (reason === 'user-action' || reason === 'fallback-polling') {
                     try {
                         const holdingsResult = await fetchWalletHoldingsForMint(mint, { 
                             source: tokenDetailViewState.holdingsSource || 'jito',
@@ -6506,16 +6524,32 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                     }
                 }
                 
-                // Update metrics with fresh data
+                // Calculate holdings values
+                let totalTokenHoldings = null;
+                let holdingsValueSol = null;
+                let holdingsValueUsd = null;
+                
+                if (holdingsData && holdingsData.totalTokenBalance > 0) {
+                    totalTokenHoldings = holdingsData.totalTokenBalance;
+                    holdingsValueSol = priceDetails.priceSol ? holdingsData.totalTokenBalance * priceDetails.priceSol : holdingsData.totalHoldingsSol;
+                    holdingsValueUsd = holdingsValueSol && currentSolPrice ? holdingsValueSol * currentSolPrice : null;
+                } else if (currentHoldings && currentHoldings.totalTokenBalance > 0 && priceDetails.priceSol) {
+                    // Preserve existing holdings if we have price but didn't refresh holdings
+                    totalTokenHoldings = currentHoldings.totalTokenBalance;
+                    holdingsValueSol = currentHoldings.totalTokenBalance * priceDetails.priceSol;
+                    holdingsValueUsd = holdingsValueSol && currentSolPrice ? holdingsValueSol * currentSolPrice : null;
+                }
+                
+                // Update metrics with fresh data (preserve holdings if not refreshing them)
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,
                     priceUsd: priceDetails.priceUsd,
                     marketCapUsd: priceDetails.marketCapUsd,
                     bondingPercent,
                     isBondingComplete,
-                    totalTokenHoldings: holdingsData?.totalTokenBalance ?? null,
-                    holdingsValueSol: holdingsData ? (priceDetails.priceSol ? holdingsData.totalTokenBalance * priceDetails.priceSol : holdingsData.totalHoldingsSol) : null,
-                    holdingsValueUsd: holdingsData && currentSolPrice ? (priceDetails.priceSol ? holdingsData.totalTokenBalance * priceDetails.priceSol * currentSolPrice : holdingsData.totalHoldingsSol * currentSolPrice) : null,
+                    totalTokenHoldings,
+                    holdingsValueSol,
+                    holdingsValueUsd,
                     solPrice: currentSolPrice,
                     source: priceDetails.source || ''
                 });
@@ -8171,6 +8205,13 @@ async function loadLiveTokenDetail(record) {
             hasPrice: priceSol !== null,
             hasHoldings: holdingsSummary.totalTokenBalance > 0
         });
+        
+        // Store holdings in state for preservation during event-driven refreshes
+        tokenDetailViewState.currentHoldings = {
+            totalTokenBalance: holdingsSummary.totalTokenBalance,
+            holdingsValueSol,
+            holdingsValueUsd
+        };
         
         updateTokenMetrics({
             priceSol,

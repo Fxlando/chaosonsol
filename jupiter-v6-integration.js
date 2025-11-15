@@ -339,20 +339,39 @@ class JupiterV6Integration {
   async buyToken(wallet, tokenMint, solAmount, options = {}) {
     const errors = [];
     
-    // Strategy 1: Try pump.fun first if applicable
+    // Strategy 1: ALWAYS try pump.fun first (bonding curve tokens)
+    // Pump.fun SDK can handle both bonding curve and DEX tokens, so try it first
+    // If it's not a pump.fun token, it will fail gracefully and we'll try Jupiter
     try {
-      const isPumpFun = await this.isPumpFunToken(tokenMint);
-      if (isPumpFun) {
-        console.log('🎯 Detected pump.fun token - using bonding curve swap');
-        const result = await this.pumpFunTrading.buyToken(wallet, tokenMint, solAmount, options);
-        if (result && result.success) {
-          return result;
-        }
-        errors.push({ method: 'pump.fun', error: result?.error || 'Unknown error' });
+      console.log('🔄 Attempting pump.fun buy first (bonding curve tokens)...');
+      const result = await this.pumpFunTrading.buyToken(wallet, tokenMint, solAmount, options);
+      if (result && result.success) {
+        console.log('✅ Pump.fun buy successful');
+        return result;
+      }
+      // If pump.fun returns a result but not successful, log and continue
+      if (result) {
+        console.warn('⚠️ Pump.fun returned non-success:', result.error || 'Unknown error');
+        errors.push({ method: 'pump.fun', error: result.error || 'Unknown error' });
+      } else {
+        errors.push({ method: 'pump.fun', error: 'No result returned' });
       }
     } catch (error) {
+      // Pump.fun failed - check if it's a detection error or actual failure
       console.warn('⚠️ Pump.fun buy attempt failed:', error.message);
-      errors.push({ method: 'pump.fun', error: error.message });
+      
+      // If error suggests it's not a pump.fun token, continue to Jupiter
+      // Otherwise, log the error and continue
+      const isNotPumpFunError = error.message?.includes('not found') || 
+                                error.message?.includes('invalid') ||
+                                error.message?.includes('Not a pump.fun token');
+      
+      if (!isNotPumpFunError) {
+        // Real error from pump.fun, might still be pump.fun token with other issue
+        errors.push({ method: 'pump.fun', error: error.message });
+      } else {
+        console.log('ℹ️ Token appears to not be on pump.fun, trying Jupiter...');
+      }
     }
     
     // Strategy 2: Try Jupiter with DEX swap
@@ -401,23 +420,43 @@ class JupiterV6Integration {
   }
 
   // Sell token for SOL with multiple retry strategies
+  // IMPORTANT: Always try pump.fun first since Jupiter cannot trade bonding curve tokens
   async sellToken(wallet, tokenMint, tokenAmount, options = {}) {
     const errors = [];
     
-    // Strategy 1: Try pump.fun first if applicable
+    // Strategy 1: ALWAYS try pump.fun first (bonding curve tokens)
+    // Pump.fun SDK can handle both bonding curve and DEX tokens, so try it first
+    // If it's not a pump.fun token, it will fail gracefully and we'll try Jupiter
     try {
-      const isPumpFun = await this.isPumpFunToken(tokenMint);
-      if (isPumpFun) {
-        console.log('🎯 Detected pump.fun token - using bonding curve swap');
-        const result = await this.pumpFunTrading.sellToken(wallet, tokenMint, tokenAmount, options);
-        if (result && result.success) {
-          return result;
-        }
-        errors.push({ method: 'pump.fun', error: result?.error || 'Unknown error' });
+      console.log('🔄 Attempting pump.fun sell first (bonding curve tokens)...');
+      const result = await this.pumpFunTrading.sellToken(wallet, tokenMint, tokenAmount, options);
+      if (result && result.success) {
+        console.log('✅ Pump.fun sell successful');
+        return result;
+      }
+      // If pump.fun returns a result but not successful, log and continue
+      if (result) {
+        console.warn('⚠️ Pump.fun returned non-success:', result.error || 'Unknown error');
+        errors.push({ method: 'pump.fun', error: result.error || 'Unknown error' });
+      } else {
+        errors.push({ method: 'pump.fun', error: 'No result returned' });
       }
     } catch (error) {
+      // Pump.fun failed - check if it's a detection error or actual failure
       console.warn('⚠️ Pump.fun sell attempt failed:', error.message);
-      errors.push({ method: 'pump.fun', error: error.message });
+      
+      // If error suggests it's not a pump.fun token, continue to Jupiter
+      // Otherwise, log the error and continue
+      const isNotPumpFunError = error.message?.includes('not found') || 
+                                error.message?.includes('invalid') ||
+                                error.message?.includes('Not a pump.fun token');
+      
+      if (!isNotPumpFunError) {
+        // Real error from pump.fun, might still be pump.fun token with other issue
+        errors.push({ method: 'pump.fun', error: error.message });
+      } else {
+        console.log('ℹ️ Token appears to not be on pump.fun, trying Jupiter...');
+      }
     }
     
     // Strategy 2: Try Jupiter with DEX swap

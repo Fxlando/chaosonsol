@@ -242,6 +242,17 @@ export class JupiterClient {
 
   async performJupiterRequest({ endpoint = '', method = 'GET', params, data, headers = {}, timeout = 10000 }) {
     const requestUrl = this.buildJupiterUrl(endpoint);
+    
+    // Log params before sending (especially amount) to debug
+    if (params && params.amount) {
+      logger.info(`🔍 [performJupiterRequest] Endpoint: ${endpoint}, params.amount: ${params.amount} (type: ${typeof params.amount})`);
+      // Validate amount is an integer string
+      const amountValue = String(params.amount);
+      if (amountValue.includes('.') || isNaN(parseInt(amountValue))) {
+        logger.error(`❌ ERROR: Invalid amount in params: ${amountValue}`);
+      }
+    }
+    
     const axiosConfig = {
       method,
       url: requestUrl.toString(),
@@ -253,6 +264,10 @@ export class JupiterClient {
     };
 
     try {
+      // Log right before axios call
+      if (params && params.amount) {
+        logger.info(`🔍 [performJupiterRequest] About to send request with amount: ${params.amount}`);
+      }
       return await axios(axiosConfig);
     } catch (error) {
       const message = typeof error?.message === 'string' ? error.message : '';

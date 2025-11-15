@@ -264,6 +264,12 @@
                             const responseTime = Date.now() - startTime;
                             this.recordResponseTime(api.url, responseTime, false);
                             
+                            // Silently handle network errors - don't throw, allow fallback
+                            if (this.isNetworkError(error)) {
+                                // Network errors are expected, silently skip
+                                return null;
+                            }
+                            
                             // Check if rate limited
                             if (this.isRateLimitError(error)) {
                                 this.markRateLimited(api.url, error);
@@ -276,7 +282,7 @@
                     try {
                         const results = await Promise.allSettled(promises);
                         for (const result of results) {
-                            if (result.status === 'fulfilled') {
+                            if (result.status === 'fulfilled' && result.value !== null) {
                                 return result.value.result;
                             }
                         }
@@ -304,6 +310,14 @@
                 } catch (error) {
                     const responseTime = Date.now() - startTime;
                     this.recordResponseTime(api.url, responseTime, false);
+                    
+                    // Silently handle network errors - don't log as error, just skip
+                    if (this.isNetworkError(error)) {
+                        // Network errors are expected, silently skip to next API
+                        attempts++;
+                        continue;
+                    }
+                    
                     errors.push({ api: api.url, error });
 
                     // Check if rate limited
@@ -334,6 +348,23 @@
                    errorMsg.includes('rate limit') ||
                    errorMsg.includes('too many requests') ||
                    (errorMsg.includes('403') && errorMsg.includes('forbidden'));
+        }
+
+        /**
+         * Check if error is a network/DNS error (should be silently handled)
+         */
+        isNetworkError(error) {
+            const errorMsg = error?.message || '';
+            const errorName = error?.name || '';
+            
+            return errorName === 'AbortError' ||
+                   errorMsg.includes('ERR_NAME_NOT_RESOLVED') ||
+                   errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+                   errorMsg.includes('Failed to fetch') ||
+                   errorMsg.includes('NetworkError') ||
+                   errorMsg.includes('Network request failed') ||
+                   errorMsg.includes('net::ERR_NAME_NOT_RESOLVED') ||
+                   errorMsg.includes('net::ERR_INTERNET_DISCONNECTED');
         }
 
         /**

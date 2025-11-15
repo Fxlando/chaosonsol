@@ -136,7 +136,8 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                                 source: 'jupiter'
                             };
                         }
-                        throw new Error('Jupiter returned no price data');
+                        // Return null instead of throwing - allows silent fallback
+                        return null;
                         
                     case 'dexscreener':
                         const dexData = await fetchDexScreenerPrice(mintAddress);

@@ -656,6 +656,12 @@ function ensureGlobalFunction(name) {
 
 missingGlobalHandlers.forEach(ensureGlobalFunction);
 
+// Expose navigateToPage globally for inline onclick handlers
+function navigateToPage(page) {
+    switchView(page);
+}
+window.navigateToPage = navigateToPage;
+
 function hydrateTopBar() {
     updateActiveViewLabel(rtCurrentView);
     updateTopbarSyncTimestamp(Date.now());

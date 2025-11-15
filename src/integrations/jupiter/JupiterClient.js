@@ -420,7 +420,20 @@ export class JupiterClient {
     }
 
     try {
-      logger.debug(`Requesting quote: ${inputMint} -> ${outputMint}, amount: ${amountString}`);
+      // Log the actual amount being sent to debug
+      logger.info(`🔍 [getQuote] Requesting quote: ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}..., amount: ${amountString} (type: ${typeof amountString}, original: ${amount}, integer: ${amountInteger})`);
+      
+      // Final validation - ensure amountString is exactly what we expect
+      const finalAmount = Math.floor(Number(amountString)).toString();
+      if (finalAmount !== amountString) {
+        logger.warn(`⚠️ Amount string mismatch: ${amountString} -> ${finalAmount}`);
+      }
+      
+      // Double-check: amount should not have decimals
+      if (finalAmount.includes('.') || parseFloat(finalAmount) % 1 !== 0) {
+        logger.error(`❌ ERROR: Amount still has decimals: ${finalAmount}. This should not happen!`);
+        throw new Error(`Invalid amount format: ${finalAmount}. Amount must be an integer string.`);
+      }
       
       const response = await this.performJupiterRequest({
         endpoint: 'quote',
@@ -428,7 +441,7 @@ export class JupiterClient {
         params: {
           inputMint: inputMint,
           outputMint: outputMint,
-          amount: amountString, // Always integer string, no decimals
+          amount: finalAmount, // Final validated integer string, no decimals
           slippageBps: slippageBps.toString(),
           onlyDirectRoutes: options.onlyDirectRoutes || false,
           asLegacyTransaction: false

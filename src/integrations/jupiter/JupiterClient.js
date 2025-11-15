@@ -505,11 +505,27 @@ export class JupiterClient {
    */
   async getSwapTransaction(quote, userPublicKey, options = {}) {
     try {
+      // Check if this is a pump.fun/Simple AMM route - shared accounts not supported
+      const isPumpFunRoute = quote.routePlan?.some(route => 
+        route.swapInfo?.label === 'Pump.fun' || 
+        route.swapInfo?.ammKey === 'HwDSEZcEupbtZE5wcAnjYKKqG9cZidSM1UZgz6j67sir'
+      ) || quote.rawResponse?.routePlan?.some(route => 
+        route.swapInfo?.label === 'Pump.fun' || 
+        route.swapInfo?.ammKey === 'HwDSEZcEupbtZE5wcAnjYKKqG9cZidSM1UZgz6j67sir'
+      );
+      
+      // Disable shared accounts for pump.fun/Simple AMM routes
+      const useSharedAccounts = isPumpFunRoute ? false : (options.useSharedAccounts !== false);
+      
+      if (isPumpFunRoute) {
+        logger.info('Detected pump.fun route - disabling shared accounts (not supported)');
+      }
+      
       const swapPayload = {
         quoteResponse: quote.rawResponse || quote,
         userPublicKey: userPublicKey.toString(),
         wrapAndUnwrapSol: options.wrapAndUnwrapSol !== false,
-        useSharedAccounts: options.useSharedAccounts !== false,
+        useSharedAccounts: useSharedAccounts,
         feeAccount: options.feeAccount || null,
         trackingAccount: options.trackingAccount || null,
         asLegacyTransaction: false,

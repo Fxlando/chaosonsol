@@ -8857,6 +8857,11 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
                     errorMessage = 'Price moved too much (slippage exceeded). Try again.';
                 } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
                     errorMessage = 'Network error. Please check your connection and try again.';
+                } else if (errorMessage.includes('COULD_NOT_FIND_ANY_ROUTE') || 
+                          errorMessage.includes('Could not find any route') ||
+                          errorMessage.includes('no available trading routes') ||
+                          errorMessage.includes('No liquidity pools')) {
+                    errorMessage = `❌ Token has no available trading routes. This token may have insufficient liquidity or no DEX pairs available on Jupiter. Try checking if the token is available on Raydium, Orca, or pump.fun.`;
                 }
                 
                 throw new Error(errorMessage);
@@ -8965,7 +8970,17 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
         }
     } catch (error) {
         console.error('Wallet action failed:', error);
-        notify(`Trade failed: ${error.message || error}`, 'error');
+        const errorMsg = error.message || error;
+        
+        // Show more helpful error messages
+        if (errorMsg.includes('no available trading routes') || 
+            errorMsg.includes('insufficient liquidity') ||
+            errorMsg.includes('No liquidity pools')) {
+            notify(errorMsg, 'error');
+            addConsoleLog(`⚠️ ${errorMsg}`, 'warning');
+        } else {
+            notify(`Trade failed: ${errorMsg}`, 'error');
+        }
     }
 }
 

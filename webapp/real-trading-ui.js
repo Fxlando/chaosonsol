@@ -6091,7 +6091,7 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false, so
             }
         } else {
             // Full render for initial load or when structure changes significantly
-            const rows = entries
+    const rows = entries
                 .slice(0, 20) // Limit to 20 rows for performance
                 .map((entry) => createActivityRow(entry, solPrice).outerHTML)
                 .join('');
@@ -6108,14 +6108,14 @@ function createActivityRow(entry, solPrice) {
     const row = document.createElement('tr');
     row.className = 'border-b border-neutral-800 last:border-b-0 activity-row';
     
-    const age = entry.timestamp ? formatRelativeTime(entry.timestamp) : '—';
-    const walletLabel = entry.wallet ? truncateMiddle(entry.wallet) : '—';
-    const typeBadgeClass =
-        entry.type === 'buy'
-            ? 'text-emerald-300'
-            : entry.type === 'sell'
-            ? 'text-rose-300'
-            : 'text-gray-300';
+            const age = entry.timestamp ? formatRelativeTime(entry.timestamp) : '—';
+            const walletLabel = entry.wallet ? truncateMiddle(entry.wallet) : '—';
+            const typeBadgeClass =
+                entry.type === 'buy'
+                    ? 'text-emerald-300'
+                    : entry.type === 'sell'
+                    ? 'text-rose-300'
+                    : 'text-gray-300';
     
     // Build amount label with SOL and USD
     let amountLabel = '—';
@@ -6132,12 +6132,12 @@ function createActivityRow(entry, solPrice) {
     }
 
     row.innerHTML = `
-        <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
-        <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
-        <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
+                    <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
+                    <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
+                    <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
         <td class="py-2 text-sm text-right text-gray-200">${amountLabel.includes('<') ? amountLabel : escapeHtml(amountLabel)}</td>
-    `;
-    
+            `;
+
     return row;
 }
 
@@ -6366,7 +6366,7 @@ function handlePumpPortalMessage(data) {
             renderTokenActivity(updatedActivity, { isLive: true, solPrice });
             
             // Trigger metrics refresh when new trade is detected
-            if (tokenRegistry.current && tokenRegistry.current.mint === currentMint) {
+                if (tokenRegistry.current && tokenRegistry.current.mint === currentMint) {
                 refreshMetricsOnEvent(currentMint, 'new-trade');
             }
         }
@@ -6411,7 +6411,7 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
     if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
         return;
     }
-    
+
     if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
         return;
     }
@@ -6845,11 +6845,11 @@ function handleShyftMessage(data) {
             
             // Refresh activity feed
             if (tokenDetailViewState.currentActivity) {
-                fetchPumpFunTradeFeed(mint, 20).then(latest => {
+    fetchPumpFunTradeFeed(mint, 20).then(latest => {
                     const solPrice = tokenDetailViewState.solPrice || null;
                     renderTokenActivity(latest, { isLive: true, solPrice });
-                    tokenDetailViewState.currentActivity = latest;
-                }).catch(error => {
+        tokenDetailViewState.currentActivity = latest;
+    }).catch(error => {
                     console.debug('Shyft-triggered activity refresh failed:', error);
                 });
             }
@@ -6978,10 +6978,10 @@ function subscribeToSolanaRpcTokenAccount(mint) {
     // Get the token mint public key
     if (!window.solanaWeb3?.PublicKey) {
         console.warn('Solana Web3 not available for RPC subscription');
-        return;
-    }
+            return;
+        }
 
-    try {
+        try {
         const mintPubkey = new window.solanaWeb3.PublicKey(mint);
         
         // Subscribe to account changes for the token mint
@@ -6997,7 +6997,7 @@ function subscribeToSolanaRpcTokenAccount(mint) {
             solanaRpcSubscriptions.set(mint, subscriptionId);
             console.log(`🔵 Subscribed to Solana RPC monitoring (FREE) for token: ${mint.substring(0, 8)}...`);
         }
-    } catch (error) {
+        } catch (error) {
         console.error('Failed to subscribe to Solana RPC token account:', error);
     }
 }
@@ -7995,12 +7995,32 @@ async function loadLiveTokenDetail(record) {
         let holdingsValueSol = null;
         if (priceSol !== null && holdingsSummary.totalTokenBalance > 0) {
             holdingsValueSol = holdingsSummary.totalTokenBalance * priceSol;
+            console.log('💰 Calculated holdingsValueSol:', {
+                tokenBalance: holdingsSummary.totalTokenBalance,
+                priceSol: priceSol,
+                holdingsValueSol: holdingsValueSol
+            });
         } else if (holdingsSummary.totalHoldingsSol > 0) {
             holdingsValueSol = holdingsSummary.totalHoldingsSol;
+            console.log('💰 Using totalHoldingsSol from summary:', holdingsValueSol);
+        } else if (holdingsSummary.totalTokenBalance > 0) {
+            // If we have tokens but no price yet, log it for debugging
+            console.warn('⚠️ Have token balance but no priceSol yet:', {
+                totalTokenBalance: holdingsSummary.totalTokenBalance,
+                priceSol: priceSol,
+                priceUsd: priceUsd
+            });
         }
         
         const holdingsValueUsd =
             holdingsValueSol !== null && solPrice ? holdingsValueSol * solPrice : null;
+
+        console.log('💰 Final holdings values:', {
+            holdingsValueSol,
+            holdingsValueUsd,
+            solPrice,
+            hasPrice: priceSol !== null
+        });
 
         // Calculate amount invested from multiple sources
         let amountInvestedSol = safeNumber(record.initialBuyAmount);

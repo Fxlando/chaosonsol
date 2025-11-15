@@ -392,6 +392,52 @@ export class JupiterClient {
    * Get quote from Jupiter API
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {
+    // CRITICAL: Jupiter API requires integer amounts in base units (no decimals)
+    // Convert decimal amounts to base units before sending to API
+    let amountInBaseUnits = amount;
+    
+    // Check if amount is in human-readable format (has decimals)
+    const isDecimal = (typeof amount === 'number' && amount % 1 !== 0) || 
+                      (typeof amount === 'string' && amount.includes('.'));
+    
+    if (isDecimal || (typeof amount === 'number' && amount < 1e12)) {
+      try {
+        // Get token decimals from mint info
+        const { PublicKey } = await import('@solana/web3.js');
+        const { getMint } = await import('@solana/spl-token');
+        
+        const mintPublicKey = new PublicKey(inputMint);
+        const mintInfo = await getMint(this.solanaCore.connection, mintPublicKey);
+        const decimals = mintInfo.decimals || 6; // Default to 6 decimals
+        
+        // Convert human-readable amount to base units (integer, no decimals)
+        amountInBaseUnits = Math.floor(Number(amount) * Math.pow(10, decimals));
+        logger.info(`💰 Converted amount for Jupiter: ${amount} → ${amountInBaseUnits} (${decimals} decimals)`);
+        
+        // Validate: amount must be a positive integer
+        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Must be positive integer.`);
+        }
+      } catch (error) {
+        logger.warn(`⚠️ Could not get mint info for ${inputMint}, assuming 6 decimals:`, error.message);
+        // Default to 6 decimals if we can't fetch mint info
+        amountInBaseUnits = Math.floor(Number(amount) * 1e6);
+        
+        // Validate
+        if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+          throw new Error(`Invalid amount after conversion: ${amountInBaseUnits}. Original: ${amount}`);
+        }
+      }
+    } else {
+      // Amount is already in base units, but ensure it's an integer
+      amountInBaseUnits = Math.floor(Number(amount));
+      if (!Number.isInteger(amountInBaseUnits) || amountInBaseUnits <= 0) {
+        throw new Error(`Invalid amount: ${amountInBaseUnits}. Must be positive integer.`);
+      }
+    }
+    
+    // Use converted amount for the rest of the function
+    amount = amountInBaseUnits;
     const slippageBps = options.slippageBps || Math.floor(this.config.defaultSlippage * 100);
     const cacheKey = `quote_${inputMint}_${outputMint}_${amount}_${slippageBps}`;
     const cached = this.cache.get(cacheKey);

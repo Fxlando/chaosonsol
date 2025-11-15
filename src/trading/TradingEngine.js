@@ -115,9 +115,10 @@ export class TradingEngine {
       
       try {
         // Try to use Jupiter V6 integration if available
-        // Using dynamic import for CommonJS module
-        const jupiterV6Module = await import('../../jupiter-v6-integration.js');
-        const JupiterV6Integration = jupiterV6Module.JupiterV6Integration || jupiterV6Module.default;
+        // Using createRequire to import CommonJS module in ES module context
+        const { createRequire } = await import('module');
+        const require = createRequire(import.meta.url);
+        const { JupiterV6Integration } = require('../../jupiter-v6-integration.js');
         const jupiterV6 = new JupiterV6Integration(this.solanaCore.connection, {
           slippage: options.slippage || 1000, // 10% default
           priorityFee: options.priorityFee || 500000 // 0.0005 SOL default

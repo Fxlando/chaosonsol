@@ -264,9 +264,19 @@ export class JupiterClient {
     };
 
     try {
-      // Log right before axios call
+      // Log right before axios call - CRITICAL DEBUG
       if (params && params.amount) {
-        logger.info(`🔍 [performJupiterRequest] About to send request with amount: ${params.amount}`);
+        const amountValue = params.amount;
+        const amountType = typeof amountValue;
+        const amountStr = String(amountValue);
+        logger.error(`🚨 [performJupiterRequest] CRITICAL: About to send request with amount: ${amountValue} (type: ${amountType}, string: "${amountStr}")`);
+        logger.error(`🚨 [performJupiterRequest] Full params object: ${JSON.stringify(params, null, 2)}`);
+        
+        // If amount is suspiciously large, log error
+        if (parseInt(amountStr) > 1e12) {
+          logger.error(`🚨 CRITICAL ERROR: Amount is ${parseInt(amountStr)} which is > 1 trillion! This is wrong!`);
+          logger.error(`🚨 Expected amount should be around 4,000,000 (0.004 SOL). Got: ${amountStr}`);
+        }
       }
       return await axios(axiosConfig);
     } catch (error) {

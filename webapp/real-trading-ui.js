@@ -5591,13 +5591,43 @@ function updateTokenMetrics({
         updateMetricSmoothly(investedDetailEl, detailValue, isInitialLoad);
     }
 
-    updateMetricSmoothly(getElement('metric-token-holdings'), holdingsDisplay, isInitialLoad);
-    updateMetricSmoothly(getElement('metric-token-holdings-detail'), holdingsDetail, isInitialLoad);
-    updateMetricSmoothly(getElement('metric-holdings-value'), formatMaybeSol(holdingsValueSol), isInitialLoad);
+    // Debug: Log what we're trying to display
+    console.log('📊 Updating metric displays:', {
+        totalTokenHoldings,
+        holdingsDisplay,
+        holdingsValueSol,
+        holdingsValueUsd,
+        holdingsDetail,
+        amountInvestedSol,
+        amountInvestedDisplay
+    });
     
+    const tokenHoldingsEl = getElement('metric-token-holdings');
+    const tokenHoldingsDetailEl = getElement('metric-token-holdings-detail');
+    const holdingsValueEl = getElement('metric-holdings-value');
     const holdingsValueDetailEl = getElement('metric-holdings-value-detail');
+    
+    console.log('📊 Metric elements found:', {
+        tokenHoldingsEl: !!tokenHoldingsEl,
+        tokenHoldingsDetailEl: !!tokenHoldingsDetailEl,
+        holdingsValueEl: !!holdingsValueEl,
+        holdingsValueDetailEl: !!holdingsValueDetailEl
+    });
+    
+    updateMetricSmoothly(tokenHoldingsEl, holdingsDisplay, isInitialLoad);
+    updateMetricSmoothly(tokenHoldingsDetailEl, holdingsDetail, isInitialLoad);
+    
+    // Format holdings value - handle null/0 values properly
+    const holdingsValueDisplay = holdingsValueSol !== null && holdingsValueSol > 0 
+        ? formatSol(holdingsValueSol) 
+        : (totalTokenHoldings !== null && totalTokenHoldings > 0 ? 'Calculating...' : '—');
+    updateMetricSmoothly(holdingsValueEl, holdingsValueDisplay, isInitialLoad);
+    
     if (holdingsValueDetailEl) {
-        updateMetricSmoothly(holdingsValueDetailEl, holdingsValueUsd !== null ? formatUSD(holdingsValueUsd) : '', isInitialLoad);
+        const detailValue = holdingsValueUsd !== null && holdingsValueUsd > 0 
+            ? formatUSD(holdingsValueUsd) 
+            : '';
+        updateMetricSmoothly(holdingsValueDetailEl, detailValue, isInitialLoad);
     }
 
     updateMetricSmoothly(getElement('metric-amount-sold'), amountSoldDisplay, isInitialLoad);

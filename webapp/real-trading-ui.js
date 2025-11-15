@@ -5505,6 +5505,39 @@ function updateTokenMetrics({
         return;
     }
     
+    // Preserve existing profit/loss values from state when not explicitly provided
+    // This prevents partial updates (e.g., bondingPercent only) from resetting profit/loss to null
+    const profitLossState = tokenDetailViewState.currentProfitLoss || {};
+    if (profitLossSol === null && profitLossState.profitLossSol !== undefined) {
+        profitLossSol = profitLossState.profitLossSol;
+        isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
+    }
+    
+    // Preserve existing holdings values when not explicitly provided
+    const holdingsState = tokenDetailViewState.currentHoldings || {};
+    if (totalTokenHoldings === null && holdingsState.totalTokenBalance !== undefined) {
+        totalTokenHoldings = holdingsState.totalTokenBalance;
+    }
+    if (holdingsValueSol === null && holdingsState.holdingsValueSol !== undefined) {
+        holdingsValueSol = holdingsState.holdingsValueSol;
+    }
+    if (holdingsValueUsd === null && holdingsState.holdingsValueUsd !== undefined) {
+        holdingsValueUsd = holdingsState.holdingsValueUsd;
+    }
+    
+    // Preserve investment/sold amounts when not explicitly provided
+    if (amountInvestedSol === null && profitLossState.amountInvestedSol !== undefined) {
+        amountInvestedSol = profitLossState.amountInvestedSol;
+    }
+    if (amountSoldSol === null && profitLossState.amountSoldSol !== undefined) {
+        amountSoldSol = profitLossState.amountSoldSol;
+    }
+    
+    // Preserve solPrice from state if not provided (needed for USD calculations)
+    if (solPrice === null && tokenDetailViewState.solPrice !== undefined) {
+        solPrice = tokenDetailViewState.solPrice;
+    }
+    
     const formatMaybeSol = (value) => (value !== null ? formatSol(value) : '—');
     const formatMaybeUsd = (value) => (value !== null ? formatUSD(value) : '—');
 

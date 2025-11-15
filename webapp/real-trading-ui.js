@@ -12,6 +12,10 @@ let vanityVisibility = new Set();
 let rtAutoScroll = true;
 let closeMobileSidebar = () => {};
 const MIN_RENT_BUFFER_SOL = 0.001;
+// Store selected sell percentage for each wallet (key: walletId_tokenMint, value: percentage)
+let selectedSellPercentages = new Map();
+// Store selected buy amount for each wallet (key: walletId_tokenMint, value: solAmount)
+let selectedBuyAmounts = new Map();
 
 const CREATOR_WALLET_STORAGE_KEY = 'chaosbot_creator_wallet';
 const CREATOR_WALLET_TARGET_SOL = 1; // Target SOL used for sidebar progress
@@ -6017,11 +6021,25 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                 const quickBuyOptions = [0.1, 0.5, 1];
                 const quickBuyButtons = quickBuyOptions
                     .map(
-                        (amount) => `
-                            <button class="px-2 py-1 rounded-md text-[11px] font-medium bg-neutral-900 text-gray-300 border border-neutral-800 hover:bg-neutral-800 transition"
-                                onclick="handleQuickBuy('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${amount})">
+                        (amount) => {
+                            // Check if this amount is selected
+                            const key = `${holding.walletId}_${holding.tokenMint || ''}`;
+                            const selected = selectedBuyAmounts.get(key);
+                            const isSelected = selected && selected.solAmount === amount;
+                            
+                            const baseClasses = 'px-2 py-1 rounded-md text-[11px] font-medium border transition';
+                            const defaultClasses = 'bg-neutral-900 text-gray-300 border-neutral-800 hover:bg-neutral-800';
+                            const selectedClasses = 'bg-emerald-900/70 text-emerald-200 border-emerald-800 hover:bg-emerald-800/80';
+                            
+                            return `
+                            <button class="${baseClasses} ${isSelected ? selectedClasses : defaultClasses}"
+                                data-wallet-id="${holding.walletId}"
+                                data-token-mint="${holding.tokenMint || ''}"
+                                data-buy-amount="${amount}"
+                                onclick="handleBuyAmountSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${amount})">
                                 ${amount}
-                    </button>`
+                    </button>`;
+                        }
                     )
                     .join('');
 
@@ -6029,11 +6047,25 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                     holding.tokenBalance && holding.tokenBalance > 0
                         ? [25, 50, 100]
                               .map(
-                                  (percentage) => `
-                                <button class="px-2 py-1 rounded-md text-[11px] bg-neutral-900 text-gray-400 border border-neutral-800 hover:bg-neutral-800 transition"
-                                    onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${percentage}, ${holding.tokenBalance})">
+                                  (percentage) => {
+                                      // Check if this percentage is selected
+                                      const key = `${holding.walletId}_${holding.tokenMint || ''}`;
+                                      const selected = selectedSellPercentages.get(key);
+                                      const isSelected = selected && selected.percentage === percentage;
+                                      
+                                      const baseClasses = 'px-2 py-1 rounded-md text-[11px] border transition';
+                                      const defaultClasses = 'bg-neutral-900 text-gray-400 border-neutral-800 hover:bg-neutral-800';
+                                      const selectedClasses = 'bg-rose-900/70 text-rose-200 border-rose-800 hover:bg-rose-800/80';
+                                      
+                                      return `
+                                <button class="${baseClasses} ${isSelected ? selectedClasses : defaultClasses}"
+                                    data-wallet-id="${holding.walletId}"
+                                    data-token-mint="${holding.tokenMint || ''}"
+                                    data-percentage="${percentage}"
+                                    onclick="handleSellPercentageSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${percentage}, ${holding.tokenBalance})">
                                 ${percentage}%
-                            </button>`
+                            </button>`;
+                                  }
                               )
                               .join('')
                         : '';
@@ -6049,7 +6081,7 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                         ${
                             holding.tokenBalance && holding.tokenBalance > 0
                                 ? `<button class="px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/70 text-rose-200 border border-rose-900 hover:bg-rose-800/80 transition"
-                                    onclick="handleWalletTradeAction('sell-percentage', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', 100, ${holding.tokenBalance})">
+                                    onclick="handleWalletTradeAction('sell', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')">
                                     Sell
                                 </button>`
                                 : ''
@@ -8484,6 +8516,97 @@ async function loadLiveTokenDetail(record) {
     }
 }
 
+// Handle buy amount selection (doesn't execute, just stores the selection)
+function handleBuyAmountSelection(walletId, walletAddress, tokenMint, solAmount) {
+    const amount = Number(solAmount);
+    
+    if (!Number.isFinite(amount) || amount <= 0) {
+        notify('Invalid buy amount.', 'warning');
+        return;
+    }
+    
+    const key = `${walletId}_${tokenMint}`;
+    selectedBuyAmounts.set(key, {
+        solAmount: amount,
+        walletAddress: walletAddress
+    });
+    
+    // Update UI to show selected amount
+    updateBuyAmountButtons(walletId, tokenMint);
+    
+    // Show feedback
+    const current = tokenRegistry.current;
+    if (current && current.mint === tokenMint) {
+        addConsoleLog(`📌 Selected ${amount} SOL buy from ${walletAddress}`, 'info');
+    }
+}
+
+// Handle sell percentage selection (doesn't execute, just stores the selection)
+function handleSellPercentageSelection(walletId, walletAddress, tokenMint, percentage, tokenBalance) {
+    const key = `${walletId}_${tokenMint}`;
+    selectedSellPercentages.set(key, {
+        percentage: percentage,
+        tokenBalance: tokenBalance,
+        walletAddress: walletAddress
+    });
+    
+    // Update UI to show selected percentage
+    updateSellPercentageButtons(walletId, tokenMint);
+    
+    // Show feedback
+    const current = tokenRegistry.current;
+    if (current && current.mint === tokenMint) {
+        const tokenAmount = tokenBalance * (percentage / 100);
+        addConsoleLog(`📌 Selected ${percentage}% sell (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`, 'info');
+    }
+}
+
+// Update buy amount button styles to show selected state
+function updateBuyAmountButtons(walletId, tokenMint) {
+    const key = `${walletId}_${tokenMint}`;
+    const selected = selectedBuyAmounts.get(key);
+    
+    // Find all buy amount buttons for this wallet/token
+    const buttons = document.querySelectorAll(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-buy-amount]`);
+    buttons.forEach(button => {
+        const buttonAmount = parseFloat(button.getAttribute('data-buy-amount'));
+        if (selected && selected.solAmount === buttonAmount) {
+            // Selected style
+            button.className = button.className.replace(/bg-neutral-900|bg-neutral-800/g, 'bg-emerald-900/70');
+            button.className = button.className.replace(/text-gray-300|text-gray-400/g, 'text-emerald-200');
+            button.className = button.className.replace(/border-neutral-800/g, 'border-emerald-800');
+        } else {
+            // Default style
+            button.className = button.className.replace(/bg-emerald-900\/70/g, 'bg-neutral-900');
+            button.className = button.className.replace(/text-emerald-200/g, 'text-gray-300');
+            button.className = button.className.replace(/border-emerald-800/g, 'border-neutral-800');
+        }
+    });
+}
+
+// Update sell percentage button styles to show selected state
+function updateSellPercentageButtons(walletId, tokenMint) {
+    const key = `${walletId}_${tokenMint}`;
+    const selected = selectedSellPercentages.get(key);
+    
+    // Find all percentage buttons for this wallet/token
+    const buttons = document.querySelectorAll(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-percentage]`);
+    buttons.forEach(button => {
+        const buttonPercentage = parseInt(button.getAttribute('data-percentage'));
+        if (selected && selected.percentage === buttonPercentage) {
+            // Selected style
+            button.className = button.className.replace(/bg-neutral-900|bg-neutral-800/g, 'bg-rose-900/70');
+            button.className = button.className.replace(/text-gray-400|text-gray-300/g, 'text-rose-200');
+            button.className = button.className.replace(/border-neutral-800/g, 'border-rose-800');
+        } else {
+            // Default style
+            button.className = button.className.replace(/bg-rose-900\/70/g, 'bg-neutral-900');
+            button.className = button.className.replace(/text-rose-200/g, 'text-gray-400');
+            button.className = button.className.replace(/border-rose-800/g, 'border-neutral-800');
+        }
+    });
+}
+
 async function handleWalletTradeAction(action, walletId, walletAddress, tokenMint, percentage = null, tokenBalance = null) {
     const current = tokenRegistry.current;
     if (!walletId) {
@@ -8500,44 +8623,158 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
 
     try {
         if (action === 'buy') {
-            const input = prompt('Enter SOL amount to buy with this wallet:', '0.1');
-            const amount = Number(input);
-            if (!Number.isFinite(amount) || amount <= 0) {
-                notify('Buy cancelled.', 'info');
-                return;
+            // Check for selected buy amount first
+            const key = `${walletId}_${tokenMint}`;
+            const selected = selectedBuyAmounts.get(key);
+            
+            let amount;
+            if (selected && selected.solAmount) {
+                amount = selected.solAmount;
+                // Clear selection after use
+                selectedBuyAmounts.delete(key);
+                updateBuyAmountButtons(walletId, tokenMint);
+            } else {
+                // Fallback to prompt if no selection
+                const input = prompt('Enter SOL amount to buy with this wallet:', '0.1');
+                amount = Number(input);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                    notify('Buy cancelled.', 'info');
+                    return;
+                }
             }
+            
             addConsoleLog(`🟢 Executing buy of ${amount} SOL from ${walletAddress}`, 'info');
-            const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
-            if (!response?.success) {
-                throw new Error(response?.error || 'Buy operation failed');
+            
+            try {
+                const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
+                
+                if (!response?.success) {
+                    // Provide more detailed error message
+                    const errorMsg = response?.error || 'Transaction failed';
+                    console.error('Buy transaction error:', {
+                        walletId,
+                        tokenMint,
+                        amount,
+                        error: errorMsg,
+                        fullResponse: response
+                    });
+                    throw new Error(errorMsg);
+                }
+                
+                notify(`✅ Successfully bought with ${amount} SOL`, 'success');
+                
+                // Trigger immediate metrics refresh
+                if (current && current.mint === tokenMint) {
+                    refreshMetricsOnEvent(tokenMint, 'user-action');
+                }
+            } catch (buyError) {
+                // Enhanced error handling
+                console.error('Buy transaction failed:', {
+                    error: buyError,
+                    walletId,
+                    tokenMint,
+                    amount
+                });
+                
+                let errorMessage = buyError.message || 'Transaction failed';
+                
+                // Provide more user-friendly error messages
+                if (errorMessage.includes('insufficient funds') || errorMessage.includes('balance')) {
+                    errorMessage = 'Insufficient SOL balance for this purchase';
+                } else if (errorMessage.includes('slippage') || errorMessage.includes('price')) {
+                    errorMessage = 'Price moved too much (slippage exceeded). Try again.';
+                } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                }
+                
+                throw new Error(errorMessage);
             }
-            notify(`Submitted buy for ${amount} SOL`, 'success');
-            // Trigger immediate metrics refresh
-            if (current && current.mint === tokenMint) {
-                refreshMetricsOnEvent(tokenMint, 'user-action');
+        } else if (action === 'sell' || action === 'sell-percentage') {
+            // For 'sell' action, check for selected percentage first
+            let sellPercentage = percentage;
+            let sellTokenBalance = tokenBalance;
+            
+            if (action === 'sell') {
+                const key = `${walletId}_${tokenMint}`;
+                const selected = selectedSellPercentages.get(key);
+                
+                if (!selected || !selected.percentage) {
+                    notify('Please select a sell percentage (25%, 50%, or 100%) before clicking Sell.', 'warning');
+                    return;
+                }
+                
+                sellPercentage = selected.percentage;
+                sellTokenBalance = selected.tokenBalance;
+                
+                // Clear selection after use
+                selectedSellPercentages.delete(key);
             }
-        } else if (action === 'sell-percentage') {
-            if (!tokenBalance || tokenBalance <= 0) {
+            
+            if (!sellTokenBalance || sellTokenBalance <= 0) {
                 notify('No token balance available to sell.', 'warning');
                 return;
             }
-            const tokenAmount = tokenBalance * (percentage / 100);
+            
+            const tokenAmount = sellTokenBalance * (sellPercentage / 100);
             if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
                 notify('Sell amount is zero.', 'warning');
                 return;
             }
+            
             addConsoleLog(
-                `🔻 Selling ${percentage}% (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`,
+                `🔻 Executing sell: ${sellPercentage}% (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`,
                 'info'
             );
-            const response = await window.apiClient.sellToken(walletId, tokenMint, tokenAmount, { executor: 'jito' });
-            if (!response?.success) {
-                throw new Error(response?.error || 'Sell operation failed');
-            }
-            notify(`Submitted sell for ${percentage}% of holdings`, 'success');
-            // Trigger immediate metrics refresh
-            if (current && current.mint === tokenMint) {
-                refreshMetricsOnEvent(tokenMint, 'user-action');
+            
+            try {
+                const response = await window.apiClient.sellToken(walletId, tokenMint, tokenAmount, { executor: 'jito' });
+                
+                if (!response?.success) {
+                    // Provide more detailed error message
+                    const errorMsg = response?.error || 'Transaction failed';
+                    console.error('Sell transaction error:', {
+                        walletId,
+                        tokenMint,
+                        tokenAmount,
+                        error: errorMsg,
+                        fullResponse: response
+                    });
+                    throw new Error(errorMsg);
+                }
+                
+                notify(`✅ Successfully sold ${sellPercentage}% (${tokenAmount.toFixed(6)} tokens)`, 'success');
+                
+                // Trigger immediate metrics refresh
+                if (current && current.mint === tokenMint) {
+                    refreshMetricsOnEvent(tokenMint, 'user-action');
+                }
+                
+                // Update UI to clear selection
+                if (action === 'sell') {
+                    updateSellPercentageButtons(walletId, tokenMint);
+                }
+            } catch (sellError) {
+                // Enhanced error handling
+                console.error('Sell transaction failed:', {
+                    error: sellError,
+                    walletId,
+                    tokenMint,
+                    tokenAmount,
+                    percentage: sellPercentage
+                });
+                
+                let errorMessage = sellError.message || 'Transaction failed';
+                
+                // Provide more user-friendly error messages
+                if (errorMessage.includes('insufficient funds') || errorMessage.includes('balance')) {
+                    errorMessage = 'Insufficient balance for transaction fees or token amount';
+                } else if (errorMessage.includes('slippage') || errorMessage.includes('price')) {
+                    errorMessage = 'Price moved too much (slippage exceeded). Try again.';
+                } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                }
+                
+                throw new Error(errorMessage);
             }
         }
 
@@ -8552,46 +8789,8 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
 }
 
 async function handleQuickBuy(walletId, walletAddress, tokenMint, solAmount) {
-    const amount = Number(solAmount);
-
-    if (!walletId) {
-        notify('This wallet is tracked read-only. Import the private key to trade.', 'warning');
-        return;
-    }
-
-    if (!Number.isFinite(amount) || amount <= 0) {
-        notify('Invalid quick buy amount.', 'warning');
-        return;
-    }
-
-    try {
-        await ensureApiClientReady();
-    } catch (error) {
-        notify(`Backend unavailable: ${error.message || error}`, 'error');
-        return;
-    }
-
-    try {
-        addConsoleLog(`🟢 Quick buy ${amount} SOL from ${walletAddress}`, 'info');
-        const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
-        if (!response?.success) {
-            throw new Error(response?.error || 'Buy operation failed');
-        }
-        notify(`Submitted buy for ${amount} SOL`, 'success');
-        
-        // Trigger immediate metrics refresh
-        const current = tokenRegistry.current;
-        if (current && current.mint === tokenMint) {
-            refreshMetricsOnEvent(tokenMint, 'user-action');
-        }
-
-        if (tokenRegistry.current && tokenRegistry.current.mint === tokenMint) {
-            setTimeout(() => loadLiveTokenDetail(tokenRegistry.current), 1500);
-        }
-    } catch (error) {
-        console.error('Quick buy failed:', error);
-        notify(`Quick buy failed: ${error.message || error}`, 'error');
-    }
+    // Just select the amount, don't execute
+    handleBuyAmountSelection(walletId, walletAddress, tokenMint, solAmount);
 }
 
 function resyncTokenHoldings() {

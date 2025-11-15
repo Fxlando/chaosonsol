@@ -5194,7 +5194,9 @@ const tokenDetailViewState = {
     holdingsSource: 'jito',
     activityIntervalId: null,
     currentActivity: [], // Store current activity feed for WebSocket updates
-    metricsRefreshIntervalId: null // Interval for frequent market cap/price updates
+    metricsRefreshIntervalId: null, // Interval for frequent market cap/price updates
+    bondingCurveRefreshIntervalId: null, // Interval for bonding curve updates (less frequent)
+    bondingCurveCache: { percent: null, timestamp: 0 } // Cache bonding curve to avoid recalculating every 3 seconds
 };
 
 let archivedImportedTokens = new Set();
@@ -6409,6 +6411,99 @@ function stopMetricsRefresh() {
         clearInterval(tokenDetailViewState.metricsRefreshIntervalId);
         tokenDetailViewState.metricsRefreshIntervalId = null;
     }
+    if (tokenDetailViewState.bondingCurveRefreshIntervalId) {
+        clearInterval(tokenDetailViewState.bondingCurveRefreshIntervalId);
+        tokenDetailViewState.bondingCurveRefreshIntervalId = null;
+    }
+}
+
+/**
+ * Start bonding curve refresh (less frequent - every 30 seconds)
+ * Bonding curve doesn't change as fast as price/market cap
+ */
+function startBondingCurveRefresh(mint) {
+    // Clear any existing interval
+    if (tokenDetailViewState.bondingCurveRefreshIntervalId) {
+        clearInterval(tokenDetailViewState.bondingCurveRefreshIntervalId);
+    }
+    
+    if (!mint) return;
+    
+    // Refresh every 30 seconds (bonding curve changes slowly)
+    tokenDetailViewState.bondingCurveRefreshIntervalId = setInterval(async () => {
+        // Check if token detail page is visible
+        const tokenDetailPage = document.getElementById('token-detail-page');
+        if (!tokenDetailPage || tokenDetailPage.classList.contains('hidden')) {
+            stopMetricsRefresh();
+            return;
+        }
+        
+        // Only refresh if we're still on the token detail page for this mint
+        if (!tokenRegistry.current || tokenRegistry.current.mint !== mint) {
+            stopMetricsRefresh();
+            return;
+        }
+        
+        // Check if cache is still fresh (less than 30 seconds old)
+        const cache = tokenDetailViewState.bondingCurveCache;
+        const now = Date.now();
+        if (cache.percent !== null && (now - cache.timestamp) < 30000) {
+            // Use cached value - no need to recalculate
+            return;
+        }
+        
+        try {
+            console.log('🔄 Refreshing bonding curve (30s interval)...');
+            let bondingPercent = null;
+            let isBondingComplete = false;
+            
+            // Try Moralis API first
+            if (window.enhancedTokenFetchers?.fetchMoralisBondingCurve) {
+                try {
+                    const moralisBonding = await window.enhancedTokenFetchers.fetchMoralisBondingCurve(mint);
+                    if (moralisBonding && moralisBonding.bondingCurvePercentage !== null) {
+                        bondingPercent = moralisBonding.bondingCurvePercentage;
+                        isBondingComplete = moralisBonding.isComplete === true || bondingPercent >= 100;
+                        console.log('✅ Bonding curve refreshed from Moralis:', bondingPercent + '%');
+                    }
+                } catch (error) {
+                    console.debug('Moralis bonding curve refresh failed:', error.message);
+                }
+            }
+            
+            // Fallback to on-chain calculation
+            if (bondingPercent === null) {
+                try {
+                    const onChainPercent = await calculateBondingCurvePercent(mint);
+                    if (onChainPercent !== null) {
+                        bondingPercent = onChainPercent;
+                        isBondingComplete = bondingPercent >= 100;
+                        console.log('✅ Bonding curve refreshed from on-chain:', bondingPercent + '%');
+                    }
+                } catch (error) {
+                    console.debug('On-chain bonding curve refresh failed:', error.message);
+                }
+            }
+            
+            // Update cache and UI if we got new data
+            if (bondingPercent !== null) {
+                tokenDetailViewState.bondingCurveCache = {
+                    percent: bondingPercent,
+                    isComplete: isBondingComplete,
+                    timestamp: Date.now()
+                };
+                
+                // Update only the bonding curve metric (don't reload everything)
+                updateTokenMetrics({
+                    bondingPercent,
+                    isBondingComplete
+                    // Other fields will keep their existing values
+                });
+            }
+        } catch (error) {
+            console.debug('Bonding curve refresh error:', error.message);
+        }
+    }, 30000); // Every 30 seconds
 }
 
 // Shyft WebSocket Manager for Real-time Transaction Monitoring
@@ -7811,6 +7906,15 @@ async function loadLiveTokenDetail(record) {
             console.debug('ℹ️ Bonding curve data unavailable - token may have completed bonding or API unavailable.');
         }
 
+        // Cache bonding curve data (only recalculate every 30 seconds)
+        if (bondingPercent !== null) {
+            tokenDetailViewState.bondingCurveCache = {
+                percent: bondingPercent,
+                isComplete: isBondingComplete,
+                timestamp: Date.now()
+            };
+        }
+        
         updateTokenMetrics({
             priceSol,
             priceUsd,
@@ -7826,6 +7930,9 @@ async function loadLiveTokenDetail(record) {
             solPrice,
             source: priceDetails.source || (pumpFunInfo?.success ? 'pumpfun' : '')
         });
+        
+        // Start bonding curve refresh (every 30 seconds - it doesn't change that fast)
+        startBondingCurveRefresh(record.mint);
 
         renderTokenHoldingsTable(holdingsResult.holdings, {
             priceSol,

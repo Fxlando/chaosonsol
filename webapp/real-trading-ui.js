@@ -14093,39 +14093,59 @@ function safeNumber(value) {
  */
 async function calculateBondingCurvePercent(mintAddress) {
     try {
+        console.log('🔧 Starting on-chain bonding curve calculation for:', mintAddress);
+        
         const connection = window.enhancedTokenFetchers?.getSolanaConnection?.('price') || 
                           window.solanaIntegration?.connection;
         
         if (!connection) {
+            console.warn('⚠️ No Solana connection available for bonding curve calculation');
             return null;
         }
+        console.log('✅ Connection available');
         
         const PublicKey = window.solanaWeb3?.PublicKey;
         if (!PublicKey) {
+            console.warn('⚠️ Solana Web3.js PublicKey not available');
             return null;
         }
+        console.log('✅ PublicKey available');
         
         const mintPubkey = new PublicKey(mintAddress);
         const PUMP_FUN_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
         
+        console.log('🔍 Finding bonding curve account...');
         // Find bonding curve account
         const [bondingCurve] = PublicKey.findProgramAddressSync(
             [Buffer.from('bonding-curve'), mintPubkey.toBuffer()],
             PUMP_FUN_PROGRAM
         );
         
+        console.log('🔍 Bonding curve address:', bondingCurve.toString());
+        console.log('🔍 Fetching account info...');
+        
         const curveAccount = await connection.getAccountInfo(bondingCurve);
         
-        if (!curveAccount || !curveAccount.data) {
+        if (!curveAccount) {
+            console.log('✅ Bonding curve account not found - token has graduated to Raydium (100%)');
             // Bonding curve account doesn't exist - token may have graduated
             return 100;
         }
         
+        if (!curveAccount.data) {
+            console.warn('⚠️ Bonding curve account exists but has no data');
+            return 100;
+        }
+        
+        console.log('✅ Bonding curve account found, parsing data...');
         const data = curveAccount.data;
         
         // Virtual SOL reserves at offset 8 (in lamports)
         const virtualSolReserves = data.readBigUInt64LE(8);
         const virtualSolReservesNumber = Number(virtualSolReserves);
+        const virtualSolReservesSol = virtualSolReservesNumber / 1_000_000_000; // Convert lamports to SOL
+        
+        console.log('📊 Virtual SOL reserves:', virtualSolReservesSol.toFixed(2), 'SOL');
         
         // Pump.fun bonding curve parameters:
         // Initial: 1,000,000 SOL (1,000,000,000,000,000 lamports)
@@ -14140,9 +14160,15 @@ async function calculateBondingCurvePercent(mintAddress) {
         // Clamp between 0 and 100
         const percent = Math.max(0, Math.min(100, progress));
         
+        console.log('✅ Calculated bonding curve:', percent.toFixed(2) + '%');
         return percent;
     } catch (error) {
-        console.debug('Bonding curve calculation error:', error.message);
+        console.error('❌ Bonding curve calculation error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         return null;
     }
 }

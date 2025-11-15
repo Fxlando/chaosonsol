@@ -5601,8 +5601,49 @@ function updateTokenMetrics({
     const isInitialLoad = isFirstMetricsUpdate;
     isFirstMetricsUpdate = false;
     
-    updateMetricSmoothly(getElement('metric-profit-loss'), profitDisplay, isInitialLoad);
-    updateMetricSmoothly(getElement('metric-profit-loss-detail'), profitDetail, isInitialLoad);
+    // Apply color to profit/loss based on value (green for profit, red for loss)
+    const profitLossEl = getElement('metric-profit-loss');
+    const profitLossDetailEl = getElement('metric-profit-loss-detail');
+    
+    if (profitLossEl) {
+        // Remove existing color classes
+        profitLossEl.classList.remove('text-emerald-400', 'text-emerald-300', 'text-rose-400', 'text-rose-300', 'text-white', 'text-gray-400');
+        
+        // Apply color based on profit/loss value
+        if (profitLossSol !== null) {
+            if (profitLossSol > 0) {
+                profitLossEl.classList.add('text-emerald-400'); // Green for profit
+            } else if (profitLossSol < 0) {
+                profitLossEl.classList.add('text-rose-400'); // Red for loss
+            } else {
+                profitLossEl.classList.add('text-white'); // White for break-even
+            }
+        } else {
+            profitLossEl.classList.add('text-white'); // Default white
+        }
+    }
+    
+    // Also apply color to detail text
+    if (profitLossDetailEl) {
+        // Remove existing color classes
+        profitLossDetailEl.classList.remove('text-emerald-400', 'text-emerald-300', 'text-rose-400', 'text-rose-300', 'text-gray-500', 'text-gray-400');
+        
+        // Apply color based on profit/loss value
+        if (profitLossSol !== null) {
+            if (profitLossSol > 0) {
+                profitLossDetailEl.classList.add('text-emerald-300'); // Lighter green for detail
+            } else if (profitLossSol < 0) {
+                profitLossDetailEl.classList.add('text-rose-300'); // Lighter red for detail
+            } else {
+                profitLossDetailEl.classList.add('text-gray-400'); // Gray for break-even
+            }
+        } else {
+            profitLossDetailEl.classList.add('text-gray-500'); // Default gray
+        }
+    }
+    
+    updateMetricSmoothly(profitLossEl, profitDisplay, isInitialLoad);
+    updateMetricSmoothly(profitLossDetailEl, profitDetail, isInitialLoad);
     updateMetricSmoothly(getElement('metric-amount-invested'), amountInvestedDisplay, isInitialLoad);
     
     const investedDetailEl = getElement('metric-amount-invested-detail');

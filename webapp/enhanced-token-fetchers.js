@@ -1145,6 +1145,134 @@ async function fetchMoralisMetadata(mintAddress) {
 }
 
 /**
+ * Fetch bonding curve data from Moralis Pump.fun API
+ * Tries multiple endpoints to get bonding curve percentage
+ */
+async function fetchMoralisBondingCurve(mintAddress) {
+    try {
+        const apiKey = getMoralisApiKey();
+        if (!apiKey) {
+            return null;
+        }
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        // Strategy 1: Try individual token price endpoint (might include bonding data)
+        try {
+            const response = await fetch(
+                `https://solana-gateway.moralis.io/token/mainnet/${mintAddress}/price`,
+                {
+                    signal: controller.signal,
+                    headers: {
+                        'accept': 'application/json',
+                        'X-API-Key': apiKey
+                    }
+                }
+            );
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const data = await response.json();
+                // Check if response includes bonding curve data
+                if (data.bondingProgress !== undefined) {
+                    const percent = safeNumber(data.bondingProgress);
+                    if (percent !== null) {
+                        console.log('✅ Moralis bonding curve from price endpoint:', percent + '%');
+                        return {
+                            bondingCurvePercentage: percent,
+                            bondingCurve: {
+                                percentComplete: percent,
+                                isComplete: percent >= 100
+                            },
+                            isComplete: percent >= 100,
+                            source: 'moralis-price'
+                        };
+                    }
+                }
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.debug('Moralis price endpoint failed, trying bonding list:', error.message);
+            }
+        }
+        
+        // Strategy 2: Query bonding tokens list and find our token
+        const listController = new AbortController();
+        const listTimeoutId = setTimeout(() => listController.abort(), 8000);
+        
+        try {
+            const listResponse = await fetch(
+                `https://solana-gateway.moralis.io/token/mainnet/exchange/pumpfun/bonding?limit=100`,
+                {
+                    signal: listController.signal,
+                    headers: {
+                        'accept': 'application/json',
+                        'X-API-Key': apiKey
+                    }
+                }
+            );
+            
+            clearTimeout(listTimeoutId);
+            
+            if (listResponse.ok) {
+                const listData = await listResponse.json();
+                
+                // Find our token in the bonding list
+                if (listData.result && Array.isArray(listData.result)) {
+                    const token = listData.result.find(t => 
+                        t.address?.toLowerCase() === mintAddress.toLowerCase() ||
+                        t.mint?.toLowerCase() === mintAddress.toLowerCase()
+                    );
+                    
+                    if (token && token.bondingProgress !== undefined) {
+                        const percent = safeNumber(token.bondingProgress);
+                        if (percent !== null) {
+                            console.log('✅ Moralis bonding curve from bonding list:', percent + '%');
+                            return {
+                                bondingCurvePercentage: percent,
+                                bondingCurve: {
+                                    percentComplete: percent,
+                                    isComplete: percent >= 100
+                                },
+                                isComplete: percent >= 100,
+                                source: 'moralis-bonding-list'
+                            };
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.debug('Moralis bonding list endpoint failed:', error.message);
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return null; // Timeout - silent fail
+        }
+        
+        // Silently handle network errors
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('ERR_NAME_NOT_RESOLVED') || 
+            errorMsg.includes('ERR_INTERNET_DISCONNECTED') ||
+            errorMsg.includes('Failed to fetch')) {
+            return null;
+        }
+        
+        // Only log non-network errors
+        if (error.message && !error.message.includes('401') && !error.message.includes('404')) {
+            console.debug('Moralis bonding curve fetch error:', error.message);
+        }
+        
+        return null;
+    }
+}
+
+/**
  * Fetch trades from Moralis Pump.fun API
  */
 async function fetchMoralisTrades(mintAddress, limit = 20) {
@@ -1616,6 +1744,7 @@ if (typeof window !== 'undefined') {
         fetchPumpFunTokenDetails,
         fetchDexScreenerMetadata,
         fetchBirdeyeMetadata,
+        fetchMoralisBondingCurve,
         retryWithBackoff,
         fetchJupiterPrice,
         fetchDexScreenerPrice,

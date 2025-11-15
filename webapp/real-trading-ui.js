@@ -7735,7 +7735,24 @@ async function loadLiveTokenDetail(record) {
             }
         }
         
-        // Fallback: Try to calculate from on-chain data if API doesn't provide it
+        // Fallback 1: Try Moralis API for bonding curve data
+        if (bondingPercent === null && record.mint) {
+            try {
+                console.log('🔄 Attempting to fetch bonding curve from Moralis API...');
+                if (window.enhancedTokenFetchers?.fetchMoralisBondingCurve) {
+                    const moralisBonding = await window.enhancedTokenFetchers.fetchMoralisBondingCurve(record.mint);
+                    if (moralisBonding && moralisBonding.bondingCurvePercentage !== null) {
+                        bondingPercent = moralisBonding.bondingCurvePercentage;
+                        isBondingComplete = moralisBonding.isComplete === true || bondingPercent >= 100;
+                        console.log('✅ Found bonding curve from Moralis:', bondingPercent + '%');
+                    }
+                }
+            } catch (error) {
+                console.debug('⚠️ Moralis bonding curve fetch failed:', error.message);
+            }
+        }
+        
+        // Fallback 2: Try to calculate from on-chain data if APIs don't provide it
         if (bondingPercent === null && record.mint) {
             try {
                 console.log('🔄 Attempting to calculate bonding curve from on-chain data...');

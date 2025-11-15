@@ -73,7 +73,7 @@ class SettingsManager {
 
             // Moralis Pump.fun API (optional - for Pump.fun specific data)
             moralis: {
-                apiKey: '' // Moralis API key for Pump.fun token data (price, metadata, trades)
+                apiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjY3MWQyMmQ5LTllZTQtNDJmNi1iMzE1LTRkN2M5MTQxMjE1MSIsIm9yZ0lkIjoiNDgxNDM3IiwidXNlcklkIjoiNDk1MzA0IiwidHlwZUlkIjoiODdkMjNkYjctZTBkMC00NjY4LTkzYzYtMTUzYzRkMjQxZWEzIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NjMxNjU5NDEsImV4cCI6NDkxODkyNTk0MX0.9ZJGROi8myhSMDhZi1icj5YBava7ecojyZG6Ruf5PU4' // Moralis API key for Pump.fun token data (price, metadata, trades)
             },
 
             // Jito Settings

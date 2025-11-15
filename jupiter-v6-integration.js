@@ -21,6 +21,10 @@ class JupiterV6Integration {
       'https://api.jup.ag',
       'https://public.jupiterapi.com'
     ];
+    
+    // Alternative DEX aggregator APIs as fallbacks
+    this.orcaApiUrl = 'https://api.mainnet.orca.so';
+    this.meteoraApiUrl = 'https://dlmm-api.meteora.ag';
     this.solMint = 'So11111111111111111111111111111111111111112';
     this.rateLimitManager = new RateLimitManager();
     
@@ -78,26 +82,68 @@ class JupiterV6Integration {
     });
   }
   
-  // Get quote with retry across multiple API endpoints
+  // Get quote from Orca API
+  async getOrcaQuote(inputMint, outputMint, amount, slippage = null) {
+    try {
+      const slippageDecimal = (slippage || this.config.slippage) / 10000;
+      const response = await axios.get(`${this.orcaApiUrl}/v1/quote`, {
+        params: {
+          inputMint: inputMint,
+          outputMint: outputMint,
+          amount: amount.toString(),
+          slippage: slippageDecimal.toString()
+        },
+        timeout: 10000
+      });
+      
+      if (response.data && response.data.quote) {
+        return {
+          inAmount: response.data.quote.inputAmount,
+          outAmount: response.data.quote.outputAmount,
+          priceImpactPct: response.data.quote.priceImpact || 0,
+          route: response.data.quote.route || []
+        };
+      }
+      throw new Error('Invalid Orca quote response');
+    } catch (error) {
+      throw new Error(`Orca API failed: ${error.message}`);
+    }
+  }
+  
+  // Get quote with retry across multiple API endpoints and aggregators
   async getQuoteWithRetry(inputMint, outputMint, amount, slippage = null) {
     const errors = [];
     
-    // Try each API endpoint
+    // Strategy 1: Try Jupiter endpoints
     for (const apiUrl of this.alternativeApiUrls) {
       try {
-        console.log(`🔄 Trying quote from ${apiUrl}...`);
+        console.log(`🔄 Trying Jupiter quote from ${apiUrl}...`);
         const quote = await this.getQuote(inputMint, outputMint, amount, slippage, apiUrl);
-        console.log(`✅ Successfully got quote from ${apiUrl}`);
-        return quote;
+        console.log(`✅ Successfully got quote from Jupiter (${apiUrl})`);
+        return { ...quote, source: 'jupiter', apiUrl };
       } catch (error) {
-        console.warn(`⚠️ Failed to get quote from ${apiUrl}:`, error.message);
-        errors.push({ apiUrl, error: error.message });
+        console.warn(`⚠️ Jupiter quote failed from ${apiUrl}:`, error.message);
+        errors.push({ source: 'Jupiter', apiUrl, error: error.message });
         continue;
       }
     }
     
+    // Strategy 2: Try Orca API (currently requires SDK - will be skipped)
+    // When Orca SDK is integrated, uncomment this section
+    /*
+    try {
+      console.log(`🔄 Trying Orca quote...`);
+      const quote = await this.getOrcaQuote(inputMint, outputMint, amount, slippage);
+      console.log(`✅ Successfully got quote from Orca`);
+      return { ...quote, source: 'orca' };
+    } catch (error) {
+      console.warn(`⚠️ Orca quote failed:`, error.message);
+      errors.push({ source: 'Orca', error: error.message });
+    }
+    */
+    
     // If all endpoints failed, throw with all errors
-    throw new Error(`All Jupiter API endpoints failed. Errors: ${errors.map(e => `${e.apiUrl}: ${e.error}`).join('; ')}`);
+    throw new Error(`All swap APIs failed. Errors: ${errors.map(e => `${e.source}${e.apiUrl ? ` (${e.apiUrl})` : ''}: ${e.error}`).join('; ')}`);
   }
 
   // Get swap transaction with retry across multiple API endpoints
@@ -182,7 +228,7 @@ class JupiterV6Integration {
           try {
             console.log(`🔄 Attempt ${retries + 1}/${maxRetries} - Slippage: ${slippage}bps, Priority: ${priorityFee} lamports`);
             
-            // Get quote with retry across multiple endpoints
+            // Get quote with retry across multiple endpoints and aggregators
             const quote = await this.getQuoteWithRetry(
               inputMint, 
               outputMint, 
@@ -190,13 +236,20 @@ class JupiterV6Integration {
               slippage
             );
 
-            console.log(`💱 Swap Quote: ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
+            const quoteSource = quote.source || 'jupiter';
+            console.log(`💱 Swap Quote (${quoteSource}): ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
 
+            // Handle Orca quotes - use Jupiter for execution since Orca doesn't have simple swap API
+            // The quote gives us price info, but we execute via Jupiter
+            // Note: This means we might not get the exact Orca route, but Jupiter should find similar route
+            
             // Get swap transaction with retry across multiple endpoints
+            // Works for both Jupiter and Orca quotes (Orca quotes fall back to Jupiter execution)
             const swapTransactionBase64 = await this.getSwapTransactionWithRetry(
               wallet, 
               quote, 
-              priorityFee
+              priorityFee,
+              quoteSource
             );
 
         // Deserialize and sign transaction (handle both legacy and versioned transactions)

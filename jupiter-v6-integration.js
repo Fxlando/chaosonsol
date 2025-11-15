@@ -16,6 +16,11 @@ class JupiterV6Integration {
       ...config
     };
     this.apiUrl = 'https://public.jupiterapi.com'; // QuickNode public endpoint
+    this.alternativeApiUrls = [
+      'https://quote-api.jup.ag',
+      'https://api.jup.ag',
+      'https://public.jupiterapi.com'
+    ];
     this.solMint = 'So11111111111111111111111111111111111111112';
     this.rateLimitManager = new RateLimitManager();
     
@@ -30,9 +35,10 @@ class JupiterV6Integration {
     return await this.pumpFunTrading.isPumpFunToken(tokenMint);
   }
 
-  // Get quote for swap with caching
-  async getQuote(inputMint, outputMint, amount, slippage = null) {
+  // Get quote for swap with retry across multiple API endpoints
+  async getQuote(inputMint, outputMint, amount, slippage = null, apiUrl = null) {
     const cacheKey = `${inputMint}_${outputMint}_${amount}_${slippage || this.config.slippage}`;
+    const urlToUse = apiUrl || this.apiUrl;
     
     return await smartCacheManager.getOrFetch('jupiter-quote', cacheKey, async () => {
       return await this.rateLimitManager.makeRequest('jupiter-quote', async () => {
@@ -44,8 +50,14 @@ class JupiterV6Integration {
             slippageBps: (slippage || this.config.slippage).toString()
           });
 
-          console.log(`🔍 Jupiter Quote Request: ${this.apiUrl}/quote?${params}`);
-          const response = await axios.get(`${this.apiUrl}/quote?${params}`);
+          const quoteUrl = `${urlToUse}/quote?${params}`;
+          console.log(`🔍 Jupiter Quote Request: ${quoteUrl}`);
+          const response = await axios.get(quoteUrl, {
+            timeout: 10000,
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
           
           if (!response.data) {
             throw new Error('No quote received from Jupiter');
@@ -55,19 +67,43 @@ class JupiterV6Integration {
         } catch (error) {
           // Log more detailed error information
           if (error.response) {
-            console.error(`❌ Jupiter API Error ${error.response.status}:`, error.response.data);
+            console.error(`❌ Jupiter API Error ${error.response.status} (${urlToUse}):`, error.response.data);
             throw new Error(`Jupiter API ${error.response.status}: ${JSON.stringify(error.response.data)}`);
           } else {
-            console.error(`❌ Jupiter Request Error:`, error.message);
+            console.error(`❌ Jupiter Request Error (${urlToUse}):`, error.message);
             throw new Error(`Failed to get quote: ${error.message}`);
           }
         }
       });
     });
   }
+  
+  // Get quote with retry across multiple API endpoints
+  async getQuoteWithRetry(inputMint, outputMint, amount, slippage = null) {
+    const errors = [];
+    
+    // Try each API endpoint
+    for (const apiUrl of this.alternativeApiUrls) {
+      try {
+        console.log(`🔄 Trying quote from ${apiUrl}...`);
+        const quote = await this.getQuote(inputMint, outputMint, amount, slippage, apiUrl);
+        console.log(`✅ Successfully got quote from ${apiUrl}`);
+        return quote;
+      } catch (error) {
+        console.warn(`⚠️ Failed to get quote from ${apiUrl}:`, error.message);
+        errors.push({ apiUrl, error: error.message });
+        continue;
+      }
+    }
+    
+    // If all endpoints failed, throw with all errors
+    throw new Error(`All Jupiter API endpoints failed. Errors: ${errors.map(e => `${e.apiUrl}: ${e.error}`).join('; ')}`);
+  }
 
-  // Get swap transaction
-  async getSwapTransaction(wallet, quoteResponse, priorityFee = null) {
+  // Get swap transaction with retry across multiple API endpoints
+  async getSwapTransaction(wallet, quoteResponse, priorityFee = null, apiUrl = null) {
+    const urlToUse = apiUrl || this.apiUrl;
+    
     return await this.rateLimitManager.makeRequest('jupiter-swap', async () => {
       try {
         const swapData = {
@@ -77,8 +113,11 @@ class JupiterV6Integration {
           prioritizationFeeLamports: priorityFee || this.config.priorityFee
         };
 
-        const response = await axios.post(`${this.apiUrl}/swap`, swapData, {
-          headers: { 'Content-Type': 'application/json' }
+        const swapUrl = `${urlToUse}/swap`;
+        console.log(`🔄 Getting swap transaction from ${swapUrl}...`);
+        const response = await axios.post(swapUrl, swapData, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 15000
         });
 
         if (!response.data || !response.data.swapTransaction) {
@@ -87,34 +126,78 @@ class JupiterV6Integration {
 
         return response.data.swapTransaction;
       } catch (error) {
-        throw new Error(`Failed to get swap transaction: ${error.message}`);
+        throw new Error(`Failed to get swap transaction from ${urlToUse}: ${error.message}`);
       }
     });
   }
+  
+  // Get swap transaction with retry across multiple API endpoints
+  async getSwapTransactionWithRetry(wallet, quoteResponse, priorityFee = null) {
+    const errors = [];
+    
+    // Try each API endpoint
+    for (const apiUrl of this.alternativeApiUrls) {
+      try {
+        console.log(`🔄 Trying swap transaction from ${apiUrl}...`);
+        const swapTx = await this.getSwapTransaction(wallet, quoteResponse, priorityFee, apiUrl);
+        console.log(`✅ Successfully got swap transaction from ${apiUrl}`);
+        return swapTx;
+      } catch (error) {
+        console.warn(`⚠️ Failed to get swap transaction from ${apiUrl}:`, error.message);
+        errors.push({ apiUrl, error: error.message });
+        continue;
+      }
+    }
+    
+    // If all endpoints failed, throw with all errors
+    throw new Error(`All Jupiter swap endpoints failed. Errors: ${errors.map(e => `${e.apiUrl}: ${e.error}`).join('; ')}`);
+  }
 
-  // Execute swap with retries
+  // Execute swap with retries and multiple API endpoints
   async executeSwap(wallet, inputMint, outputMint, amount, options = {}) {
     let retries = 0;
     const maxRetries = options.maxRetries || this.config.maxRetries;
+    
+    // Try different slippage configurations
+    const slippageConfigs = [
+      options.slippage || this.config.slippage,  // Original slippage
+      (options.slippage || this.config.slippage) * 2,  // 2x slippage
+      (options.slippage || this.config.slippage) * 5,  // 5x slippage (for volatile tokens)
+      500,  // 5% slippage
+      1000  // 10% slippage
+    ];
+    
+    // Try different priority fees
+    const priorityFeeConfigs = [
+      options.priorityFee || this.config.priorityFee,
+      (options.priorityFee || this.config.priorityFee) * 2,
+      (options.priorityFee || this.config.priorityFee) * 5,
+      5000,  // 5000 lamports
+      10000  // 10000 lamports
+    ];
 
     while (retries < maxRetries) {
-      try {
-        // Get quote
-        const quote = await this.getQuote(
-          inputMint, 
-          outputMint, 
-          amount, 
-          options.slippage
-        );
+      for (const slippage of slippageConfigs) {
+        for (const priorityFee of priorityFeeConfigs) {
+          try {
+            console.log(`🔄 Attempt ${retries + 1}/${maxRetries} - Slippage: ${slippage}bps, Priority: ${priorityFee} lamports`);
+            
+            // Get quote with retry across multiple endpoints
+            const quote = await this.getQuoteWithRetry(
+              inputMint, 
+              outputMint, 
+              amount, 
+              slippage
+            );
 
-        console.log(`💱 Swap Quote: ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
+            console.log(`💱 Swap Quote: ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
 
-        // Get swap transaction
-        const swapTransactionBase64 = await this.getSwapTransaction(
-          wallet, 
-          quote, 
-          options.priorityFee
-        );
+            // Get swap transaction with retry across multiple endpoints
+            const swapTransactionBase64 = await this.getSwapTransactionWithRetry(
+              wallet, 
+              quote, 
+              priorityFee
+            );
 
         // Deserialize and sign transaction (handle both legacy and versioned transactions)
         const transactionBuffer = Buffer.from(swapTransactionBase64, 'base64');
@@ -215,55 +298,90 @@ class JupiterV6Integration {
 
   // Buy token with SOL
   async buyToken(wallet, tokenMint, solAmount, options = {}) {
-    // Check if this is a pump.fun token
-    const isPumpFun = await this.isPumpFunToken(tokenMint);
+    const errors = [];
     
-    if (isPumpFun) {
-      console.log('🎯 Detected pump.fun token - using bonding curve swap');
-      return await this.pumpFunTrading.buyToken(wallet, tokenMint, solAmount, options);
-    }
-    
-    // Otherwise use Jupiter for DEX tokens
-    const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
-    const result = await this.executeSwap(
-      wallet,
-      this.solMint,
-      tokenMint,
-      lamports,
-      options
-    );
-
-    // Log trade for P&L tracking
-    if (result && result.success) {
-      try {
-        const tradeTracker = require('./trade-tracker');
-        tradeTracker.recordBuy({
-          wallet: wallet.publicKey.toString(),
-          tokenMint: tokenMint,
-          solAmount: solAmount,
-          tokensReceived: parseFloat(result.outAmount) / 1e6, // Assume 6 decimals
-          txSignature: result.signature,
-          source: options.source || 'manual',
-          session: options.session || null
-        });
-      } catch (trackError) {
-        console.log('⚠️ Failed to track buy trade:', trackError.message);
+    // Strategy 1: Try pump.fun first if applicable
+    try {
+      const isPumpFun = await this.isPumpFunToken(tokenMint);
+      if (isPumpFun) {
+        console.log('🎯 Detected pump.fun token - using bonding curve swap');
+        const result = await this.pumpFunTrading.buyToken(wallet, tokenMint, solAmount, options);
+        if (result && result.success) {
+          return result;
+        }
+        errors.push({ method: 'pump.fun', error: result?.error || 'Unknown error' });
       }
+    } catch (error) {
+      console.warn('⚠️ Pump.fun buy attempt failed:', error.message);
+      errors.push({ method: 'pump.fun', error: error.message });
     }
-
-    return result;
+    
+    // Strategy 2: Try Jupiter with DEX swap
+    let result = null;
+    try {
+      console.log('🔄 Attempting Jupiter DEX swap...');
+      const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+      result = await this.executeSwap(
+        wallet,
+        this.solMint,
+        tokenMint,
+        lamports,
+        { ...options, maxRetries: 3 }
+      );
+      
+      if (result && result.success) {
+        // Log trade for P&L tracking
+        try {
+          const tradeTracker = require('./trade-tracker');
+          tradeTracker.recordBuy({
+            wallet: wallet.publicKey.toString(),
+            tokenMint: tokenMint,
+            solAmount: solAmount,
+            tokensReceived: parseFloat(result.outAmount) / 1e6, // Assume 6 decimals
+            txSignature: result.signature,
+            source: options.source || 'manual',
+            session: options.session || null
+          });
+        } catch (trackError) {
+          console.log('⚠️ Failed to track buy trade:', trackError.message);
+        }
+        
+        return result;
+      }
+      errors.push({ method: 'Jupiter DEX', error: result?.error || 'Unknown error' });
+    } catch (error) {
+      console.warn('⚠️ Jupiter DEX buy attempt failed:', error.message);
+      errors.push({ method: 'Jupiter DEX', error: error.message });
+    }
+    
+    // If all strategies failed, return error with details
+    return {
+      success: false,
+      error: `All buy strategies failed. Errors: ${errors.map(e => `${e.method}: ${e.error}`).join('; ')}`
+    };
   }
 
-  // Sell token for SOL
+  // Sell token for SOL with multiple retry strategies
   async sellToken(wallet, tokenMint, tokenAmount, options = {}) {
-    // Check if this is a pump.fun token
-    const isPumpFun = await this.isPumpFunToken(tokenMint);
+    const errors = [];
     
-    if (isPumpFun) {
-      console.log('🎯 Detected pump.fun token - using bonding curve swap');
-      return await this.pumpFunTrading.sellToken(wallet, tokenMint, tokenAmount, options);
+    // Strategy 1: Try pump.fun first if applicable
+    try {
+      const isPumpFun = await this.isPumpFunToken(tokenMint);
+      if (isPumpFun) {
+        console.log('🎯 Detected pump.fun token - using bonding curve swap');
+        const result = await this.pumpFunTrading.sellToken(wallet, tokenMint, tokenAmount, options);
+        if (result && result.success) {
+          return result;
+        }
+        errors.push({ method: 'pump.fun', error: result?.error || 'Unknown error' });
+      }
+    } catch (error) {
+      console.warn('⚠️ Pump.fun sell attempt failed:', error.message);
+      errors.push({ method: 'pump.fun', error: error.message });
     }
     
+    // Strategy 2: Try Jupiter with DEX swap
     // Convert human-readable token amount to base units (Jupiter expects base units)
     let amountInBaseUnits = tokenAmount;
     
@@ -289,46 +407,60 @@ class JupiterV6Integration {
       }
     }
     
-    // Otherwise use Jupiter for DEX tokens
-    const result = await this.executeSwap(
-      wallet,
-      tokenMint,
-      this.solMint,
-      amountInBaseUnits,
-      options
-    );
-
-    // Log trade for P&L tracking
-    if (result && result.success) {
-      try {
-        const tradeTracker = require('./trade-tracker');
-        const axios = require('axios');
-        
-        // Get current SOL price for USD conversion
-        let solPriceUSD = 187; // Default fallback
+    // Try Jupiter with retry logic
+    let result = null;
+    try {
+      console.log('🔄 Attempting Jupiter DEX swap...');
+      result = await this.executeSwap(
+        wallet,
+        tokenMint,
+        this.solMint,
+        amountInBaseUnits,
+        { ...options, maxRetries: 3 }
+      );
+      
+      if (result && result.success) {
+        // Log trade for P&L tracking
         try {
-          const priceResponse = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL');
-          solPriceUSD = parseFloat(priceResponse.data.data.rates.USD);
-        } catch (e) {
-          // Use fallback price
+          const tradeTracker = require('./trade-tracker');
+          const axios = require('axios');
+          
+          // Get current SOL price for USD conversion
+          let solPriceUSD = 187; // Default fallback
+          try {
+            const priceResponse = await axios.get('https://api.coinbase.com/v2/exchange-rates?currency=SOL');
+            solPriceUSD = parseFloat(priceResponse.data.data.rates.USD);
+          } catch (e) {
+            // Use fallback price
+          }
+
+          tradeTracker.recordSell({
+            wallet: wallet.publicKey.toString(),
+            tokenMint: tokenMint,
+            tokensSold: tokenAmount, // Keep original human-readable amount for tracking
+            solReceived: parseFloat(result.outAmount) / LAMPORTS_PER_SOL,
+            txSignature: result.signature,
+            source: options.source || 'manual',
+            session: options.session || null,
+            solPriceUSD: solPriceUSD
+          });
+        } catch (trackError) {
+          console.log('⚠️ Failed to track sell trade:', trackError.message);
         }
-
-        tradeTracker.recordSell({
-          wallet: wallet.publicKey.toString(),
-          tokenMint: tokenMint,
-          tokensSold: tokenAmount, // Keep original human-readable amount for tracking
-          solReceived: parseFloat(result.outAmount) / LAMPORTS_PER_SOL,
-          txSignature: result.signature,
-          source: options.source || 'manual',
-          session: options.session || null,
-          solPriceUSD: solPriceUSD
-        });
-      } catch (trackError) {
-        console.log('⚠️ Failed to track sell trade:', trackError.message);
+        
+        return result;
       }
+      errors.push({ method: 'Jupiter DEX', error: result?.error || 'Unknown error' });
+    } catch (error) {
+      console.warn('⚠️ Jupiter DEX sell attempt failed:', error.message);
+      errors.push({ method: 'Jupiter DEX', error: error.message });
     }
-
-    return result;
+    
+    // If all strategies failed, return error with details
+    return {
+      success: false,
+      error: `All sell strategies failed. Errors: ${errors.map(e => `${e.method}: ${e.error}`).join('; ')}`
+    };
   }
 
   // Get token price in SOL with caching

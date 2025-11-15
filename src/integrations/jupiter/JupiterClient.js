@@ -545,10 +545,16 @@ export class JupiterClient {
    */
   async executeSwap(walletKeypair, inputMint, outputMint, amount, options = {}) {
     try {
-      logger.info(`Executing swap: ${inputMint} -> ${outputMint}, amount: ${amount}`);
+      // Ensure amount is an integer (no decimals) before proceeding
+      const amountInteger = Math.floor(Number(amount));
+      if (!Number.isInteger(amountInteger) || amountInteger <= 0) {
+        throw new Error(`Invalid swap amount: ${amount}. Must be positive integer in base units.`);
+      }
+      
+      logger.info(`Executing swap: ${inputMint} -> ${outputMint}, amount: ${amountInteger}`);
 
-      // Get quote
-      const quote = await this.getQuote(inputMint, outputMint, amount, {
+      // Get quote (use integer amount)
+      const quote = await this.getQuote(inputMint, outputMint, amountInteger, {
         slippageBps: options.slippageBps || Math.floor(this.config.defaultSlippage * 100),
         onlyDirectRoutes: options.onlyDirectRoutes || false
       });

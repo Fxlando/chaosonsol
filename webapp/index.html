@@ -38,6 +38,46 @@
             --glass-bg: rgba(23, 23, 23, 0.88);
         }
 
+        /* Smooth UI transitions for token detail page */
+        #token-detail-page [id^="metric-"] {
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        
+        #token-activity-body tr {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            animation: fadeInRow 0.3s ease;
+        }
+        
+        @keyframes fadeInRow {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Prevent flash on metric updates */
+        .metric-value {
+            transition: opacity 0.15s ease;
+        }
+        
+        .metric-value.updating {
+            opacity: 0.6;
+        }
+        
+        /* Smooth scroll for activity feed */
+        #token-activity-table {
+            scroll-behavior: smooth;
+        }
+        
+        /* Prevent layout shift during updates */
+        #token-activity-body {
+            min-height: 100px;
+        }
+
         .sr-only {
             position: absolute;
             width: 1px;

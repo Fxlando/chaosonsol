@@ -5581,15 +5581,22 @@ function updateTokenMetrics({
 
     const bondingPercentEl = getElement('metric-bonding-percent');
     if (bondingPercentEl) {
-        if (isBondingComplete) {
-            bondingPercentEl.textContent = '100%';
-            bondingPercentEl.classList.remove('text-gray-300');
-            bondingPercentEl.classList.add('text-emerald-400', 'font-semibold');
-        } else {
-            bondingPercentEl.textContent = bondingDisplay;
-            bondingPercentEl.classList.remove('text-emerald-400', 'font-semibold');
-            bondingPercentEl.classList.add('text-gray-300');
-        }
+        // Smooth update with fade transition
+        bondingPercentEl.classList.add('metric-value', 'updating');
+        requestAnimationFrame(() => {
+            if (isBondingComplete) {
+                bondingPercentEl.textContent = '100%';
+                bondingPercentEl.classList.remove('text-gray-300');
+                bondingPercentEl.classList.add('text-emerald-400', 'font-semibold');
+            } else {
+                bondingPercentEl.textContent = bondingDisplay;
+                bondingPercentEl.classList.remove('text-emerald-400', 'font-semibold');
+                bondingPercentEl.classList.add('text-gray-300');
+            }
+            requestAnimationFrame(() => {
+                bondingPercentEl.classList.remove('updating');
+            });
+        });
     }
 
     const bondingBar = getElement('metric-bonding-bar');
@@ -5961,6 +5968,9 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
     }
 }
 
+// Track previous activity entries for incremental updates
+let previousActivityEntries = new Map(); // Map of signature -> entry
+
 function renderTokenActivity(entries = [], { loading = false, isLive = false, solPrice = null } = {}) {
     const empty = getElement('token-activity-empty');
     const tableWrapper = getElement('token-activity-table');
@@ -5990,49 +6000,110 @@ function renderTokenActivity(entries = [], { loading = false, isLive = false, so
             </div>
         `;
         tableWrapper.classList.add('hidden');
+        previousActivityEntries.clear();
         return;
     }
 
     tableWrapper.classList.remove('hidden');
     empty.classList.add('hidden');
 
-    const rows = entries
-        .map((entry) => {
-            const age = entry.timestamp ? formatRelativeTime(entry.timestamp) : '—';
-            const walletLabel = entry.wallet ? truncateMiddle(entry.wallet) : '—';
-            const typeBadgeClass =
-                entry.type === 'buy'
-                    ? 'text-emerald-300'
-                    : entry.type === 'sell'
-                    ? 'text-rose-300'
-                    : 'text-gray-300';
-            
-            // Build amount label with SOL and USD
-            let amountLabel = '—';
-            if (entry.amountSol !== undefined && entry.amountSol !== null) {
-                const solAmount = entry.amountSol.toFixed(entry.amountSol >= 1 ? 3 : 6);
-                if (solPrice && solPrice > 0) {
-                    const usdAmount = entry.amountSol * solPrice;
-                    amountLabel = `${solAmount} SOL<br><span class="text-gray-400 text-xs">${formatUSD(usdAmount)}</span>`;
-                } else {
-                    amountLabel = `${solAmount} SOL`;
+    // Use requestAnimationFrame for smooth updates
+    requestAnimationFrame(() => {
+        // Create a map of current entries by signature for comparison
+        const currentEntriesMap = new Map();
+        entries.forEach(entry => {
+            const key = entry.signature || `${entry.wallet}-${entry.timestamp}-${entry.type}`;
+            currentEntriesMap.set(key, entry);
+        });
+
+        // Find new entries (not in previous map)
+        const newEntries = entries.filter(entry => {
+            const key = entry.signature || `${entry.wallet}-${entry.timestamp}-${entry.type}`;
+            return !previousActivityEntries.has(key);
+        });
+
+        // If we have new entries, add them incrementally for smooth animation
+        if (newEntries.length > 0 && previousActivityEntries.size > 0) {
+            // Add new rows at the top with fade-in animation
+            newEntries.forEach((entry, index) => {
+                const row = createActivityRow(entry, solPrice);
+                row.style.opacity = '0';
+                row.style.transform = 'translateY(-10px)';
+                tbody.insertBefore(row, tbody.firstChild);
+                
+                // Animate in
+                requestAnimationFrame(() => {
+                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateY(0)';
+                });
+            });
+
+            // Remove old entries that are no longer in the list (keep only top 20)
+            const existingRows = Array.from(tbody.children);
+            const maxRows = 20;
+            if (existingRows.length > maxRows) {
+                for (let i = maxRows; i < existingRows.length; i++) {
+                    existingRows[i].style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    existingRows[i].style.opacity = '0';
+                    existingRows[i].style.transform = 'translateX(-10px)';
+                    setTimeout(() => {
+                        if (existingRows[i].parentNode) {
+                            existingRows[i].remove();
+                        }
+                    }, 200);
                 }
-            } else if (entry.amountTokens !== undefined && entry.amountTokens !== null) {
-                amountLabel = `${entry.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`;
             }
+        } else {
+            // Full render for initial load or when structure changes significantly
+            const rows = entries
+                .slice(0, 20) // Limit to 20 rows for performance
+                .map((entry) => createActivityRow(entry, solPrice).outerHTML)
+                .join('');
+            
+            tbody.innerHTML = rows;
+        }
 
-            return `
-                <tr class="border-b border-neutral-800 last:border-b-0">
-                    <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
-                    <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
-                    <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
-                    <td class="py-2 text-sm text-right text-gray-200">${amountLabel.includes('<') ? amountLabel : escapeHtml(amountLabel)}</td>
-                </tr>
-            `;
-        })
-        .join('');
+        // Update previous entries map
+        previousActivityEntries = currentEntriesMap;
+    });
+}
 
-    tbody.innerHTML = rows;
+function createActivityRow(entry, solPrice) {
+    const row = document.createElement('tr');
+    row.className = 'border-b border-neutral-800 last:border-b-0 activity-row';
+    
+    const age = entry.timestamp ? formatRelativeTime(entry.timestamp) : '—';
+    const walletLabel = entry.wallet ? truncateMiddle(entry.wallet) : '—';
+    const typeBadgeClass =
+        entry.type === 'buy'
+            ? 'text-emerald-300'
+            : entry.type === 'sell'
+            ? 'text-rose-300'
+            : 'text-gray-300';
+    
+    // Build amount label with SOL and USD
+    let amountLabel = '—';
+    if (entry.amountSol !== undefined && entry.amountSol !== null) {
+        const solAmount = entry.amountSol.toFixed(entry.amountSol >= 1 ? 3 : 6);
+        if (solPrice && solPrice > 0) {
+            const usdAmount = entry.amountSol * solPrice;
+            amountLabel = `${solAmount} SOL<br><span class="text-gray-400 text-xs">${formatUSD(usdAmount)}</span>`;
+        } else {
+            amountLabel = `${solAmount} SOL`;
+        }
+    } else if (entry.amountTokens !== undefined && entry.amountTokens !== null) {
+        amountLabel = `${entry.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 4 })} tokens`;
+    }
+
+    row.innerHTML = `
+        <td class="py-2 text-sm text-gray-400">${escapeHtml(age)}</td>
+        <td class="py-2 text-sm text-gray-300">${escapeHtml(walletLabel)}</td>
+        <td class="py-2 text-sm ${typeBadgeClass} font-medium text-uppercase">${escapeHtml((entry.type || '—').toUpperCase())}</td>
+        <td class="py-2 text-sm text-right text-gray-200">${amountLabel.includes('<') ? amountLabel : escapeHtml(amountLabel)}</td>
+    `;
+    
+    return row;
 }
 
 // PumpPortal WebSocket Manager

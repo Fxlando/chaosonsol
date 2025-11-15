@@ -6359,12 +6359,9 @@ function handlePumpPortalMessage(data) {
             const solPrice = tokenDetailViewState.solPrice || null;
             renderTokenActivity(updatedActivity, { isLive: true, solPrice });
             
-            // Also refresh token metrics if this is a significant trade
-            if (amountSol && amountSol > 0.1) {
-                // Trigger a light refresh of token details
-                if (tokenRegistry.current && tokenRegistry.current.mint === currentMint) {
-                    loadLiveTokenDetail(tokenRegistry.current).catch(console.error);
-                }
+            // Trigger metrics refresh when new trade is detected
+            if (tokenRegistry.current && tokenRegistry.current.mint === currentMint) {
+                refreshMetricsOnEvent(currentMint, 'new-trade');
             }
         }
     }
@@ -8354,6 +8351,12 @@ async function handleQuickBuy(walletId, walletAddress, tokenMint, solAmount) {
             throw new Error(response?.error || 'Buy operation failed');
         }
         notify(`Submitted buy for ${amount} SOL`, 'success');
+        
+        // Trigger immediate metrics refresh
+        const current = tokenRegistry.current;
+        if (current && current.mint === tokenMint) {
+            refreshMetricsOnEvent(tokenMint, 'user-action');
+        }
 
         if (tokenRegistry.current && tokenRegistry.current.mint === tokenMint) {
             setTimeout(() => loadLiveTokenDetail(tokenRegistry.current), 1500);

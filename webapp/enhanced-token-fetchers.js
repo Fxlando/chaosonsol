@@ -1467,7 +1467,17 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                     case 'moralis':
                         const moralisMetadata = await fetchMoralisMetadata(mintAddress);
                         if (moralisMetadata && (moralisMetadata.name || moralisMetadata.symbol)) {
-                            return { ...moralisMetadata, success: true };
+                            // Also try to get bonding curve data
+                            const bondingData = await fetchMoralisBondingCurve(mintAddress);
+                            if (bondingData) {
+                                return { 
+                                    ...moralisMetadata, 
+                                    ...bondingData,
+                                    success: true, 
+                                    source: 'moralis' 
+                                };
+                            }
+                            return { ...moralisMetadata, success: true, source: 'moralis' };
                         }
                         throw new Error('Moralis returned no metadata');
                         

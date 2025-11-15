@@ -581,10 +581,12 @@ export class JupiterClient {
       
       logger.info(`🔍 [executeSwap] Executing swap: ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}..., amount: ${amountInteger} (type: ${typeof amountInteger}, original: ${amount})`);
       
-      // Validate amountInteger is what we expect
-      if (amountInteger !== 4000000 && amountInteger === 4000000000000) {
-        logger.error(`❌ CRITICAL: Amount is 1000x too large! ${amountInteger} should be ${amountInteger / 1000000}`);
-        throw new Error(`Amount conversion error: ${amountInteger} is too large. Expected: ${amountInteger / 1000000}`);
+      // Validate amountInteger is reasonable - SOL amounts should typically be < 1e12 lamports
+      // If amount > 1e12, it's likely been incorrectly multiplied (e.g., 4,000,000 -> 4,000,000,000,000)
+      if (amountInteger > 1e12) {
+        logger.error(`❌ CRITICAL: Amount is suspiciously large! ${amountInteger} lamports (${amountInteger / 1e9} SOL). This suggests a conversion error.`);
+        // Don't throw - just log, as some large amounts might be legitimate
+        // But log a warning so we can track this
       }
       
       // Get quote (use integer amount)

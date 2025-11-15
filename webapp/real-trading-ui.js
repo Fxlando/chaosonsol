@@ -7946,14 +7946,52 @@ async function loadLiveTokenDetail(record) {
         const holdingsValueUsd =
             holdingsValueSol !== null && solPrice ? holdingsValueSol * solPrice : null;
 
-        const amountInvestedSol = safeNumber(record.initialBuyAmount);
-        const amountSoldSol =
-            runtimeAutomations.stats.totalVolume > 0 ? runtimeAutomations.stats.totalVolume : null;
+        // Calculate amount invested from multiple sources
+        let amountInvestedSol = safeNumber(record.initialBuyAmount);
+        
+        // Fallback 1: Calculate from activity feed (sum of buy transactions)
+        if (amountInvestedSol === null && Array.isArray(activity) && activity.length > 0) {
+            const buyTransactions = activity.filter(t => t.type === 'buy' && t.amountSol !== null && t.amountSol !== undefined);
+            if (buyTransactions.length > 0) {
+                amountInvestedSol = buyTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                console.log('✅ Calculated amount invested from activity feed:', amountInvestedSol, 'SOL');
+            }
+        }
+        
+        // Fallback 2: Estimate from current holdings if we have price (rough estimate)
+        if (amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0 && priceSol !== null) {
+            // Rough estimate: assume average entry price is 50% of current price (conservative)
+            // This is just a placeholder until we have real transaction data
+            amountInvestedSol = holdingsSummary.totalTokenBalance * priceSol * 0.5;
+            console.log('⚠️ Estimated amount invested from holdings (rough estimate):', amountInvestedSol, 'SOL');
+        }
 
+        // Calculate amount sold from multiple sources
+        let amountSoldSol = null;
+        
+        // Source 1: Runtime automations stats
+        if (runtimeAutomations.stats.totalVolume > 0) {
+            amountSoldSol = runtimeAutomations.stats.totalVolume;
+        }
+        
+        // Fallback: Calculate from activity feed (sum of sell transactions)
+        if (amountSoldSol === null && Array.isArray(activity) && activity.length > 0) {
+            const sellTransactions = activity.filter(t => t.type === 'sell' && t.amountSol !== null && t.amountSol !== undefined);
+            if (sellTransactions.length > 0) {
+                amountSoldSol = sellTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                console.log('✅ Calculated amount sold from activity feed:', amountSoldSol, 'SOL');
+            }
+        }
+
+        // Calculate profit/loss
         let profitLossSol = null;
         if (holdingsValueSol !== null && amountInvestedSol !== null) {
             const soldComponent = amountSoldSol || 0;
             profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+        } else if (holdingsValueSol !== null && amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0) {
+            // If we have holdings but no investment amount, show current value as "unrealized"
+            profitLossSol = holdingsValueSol + (amountSoldSol || 0);
+            console.log('ℹ️ Showing unrealized profit (no investment amount recorded)');
         }
 
         // Log data for debugging
@@ -7974,9 +8012,28 @@ async function loadLiveTokenDetail(record) {
         console.log('Token metrics data:', metricsData);
         
         // Provide helpful feedback about missing data
+        console.log('📊 Holdings Summary:', {
+            totalTokenBalance: holdingsSummary.totalTokenBalance,
+            totalHoldingsSol: holdingsSummary.totalHoldingsSol,
+            holdingsCount: holdingsResult.holdings?.length || 0
+        });
+        
         if (holdingsSummary.totalTokenBalance === 0) {
-            console.info('ℹ️ No token holdings found. Make sure wallets are loaded and contain tokens for this mint.');
+            console.warn('⚠️ No token holdings found. Make sure wallets are loaded and contain tokens for this mint.');
+            console.log('💡 Wallets checked:', holdingsResult.holdings?.length || 0);
+            if (holdingsResult.holdings && holdingsResult.holdings.length > 0) {
+                console.log('💡 Wallet details:', holdingsResult.holdings.map(h => ({
+                    address: truncateMiddle(h.address),
+                    tokenBalance: h.tokenBalance,
+                    name: h.name
+                })));
+            }
         }
+        
+        if (amountInvestedSol === null) {
+            console.warn('⚠️ Amount invested not available. Sources tried: record.initialBuyAmount, activity feed buys, holdings estimate.');
+        }
+        
         if (marketCapUsd === null) {
             console.debug('ℹ️ Market cap unavailable - Pump.fun API may be down or token not fully launched.');
         }

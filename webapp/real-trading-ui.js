@@ -6667,20 +6667,18 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                 let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
                 
                 if (holdingsData && holdingsData.totalTokenBalance > 0 && priceDetails.priceSol) {
-                    // Holdings were refreshed, recalculate profit/loss if we have investment data
+                    // Holdings were refreshed, recalculate profit/loss ONLY if we have investment data
+                    // If we don't have investment data, preserve existing profit/loss (it may be from realized trades)
                     const amountInvestedSol = profitLossState.amountInvestedSol ?? null;
                     const amountSoldSol = profitLossState.amountSoldSol ?? null;
                     
-                    if (holdingsValueSol !== null) {
-                        if (amountInvestedSol !== null) {
-                            profitLossSol = holdingsValueSol + (amountSoldSol || 0) - amountInvestedSol;
-                            isUnrealizedProfit = false;
-                        } else {
-                            // Unrealized profit
-                            profitLossSol = holdingsValueSol + (amountSoldSol || 0);
-                            isUnrealizedProfit = true;
-                        }
+                    if (holdingsValueSol !== null && amountInvestedSol !== null) {
+                        // Only recalculate if we have investment data - this gives us accurate profit/loss
+                        profitLossSol = holdingsValueSol + (amountSoldSol || 0) - amountInvestedSol;
+                        isUnrealizedProfit = false;
                     }
+                    // If amountInvestedSol is null, preserve existing profitLossSol from state
+                    // Don't set it to holdingsValueSol as that's not accurate profit/loss
                 }
                 
                 // Update metrics with fresh data (preserve holdings and profit/loss if not refreshing them)
@@ -6749,19 +6747,16 @@ function startMetricsRefresh(mint, solPrice = null) {
                     }
                 }
                 
-                // Preserve profit/loss calculation from state
+                // Preserve profit/loss calculation from state - DON'T recalculate during price-only updates
+                // Only recalculate when holdings actually change (not during price refreshes)
                 const profitLossState = tokenDetailViewState.currentProfitLoss || {};
                 let profitLossSol = profitLossState.profitLossSol ?? null;
                 let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
                 
-                // Recalculate profit/loss with new price if we have investment data
-                if (holdingsValueSol !== null && profitLossState.amountInvestedSol !== null) {
-                    profitLossSol = holdingsValueSol + (profitLossState.amountSoldSol || 0) - profitLossState.amountInvestedSol;
-                    isUnrealizedProfit = false;
-                } else if (holdingsValueSol !== null && profitLossState.amountInvestedSol === null) {
-                    profitLossSol = holdingsValueSol + (profitLossState.amountSoldSol || 0);
-                    isUnrealizedProfit = true;
-                }
+                // Only recalculate profit/loss if we have investment data AND holdings changed
+                // For price-only updates, preserve the existing profit/loss value
+                // This prevents showing holdingsValueSol as profit when it's just a price update
+                // (Holdings changes are handled in refreshMetricsOnEvent when reason === 'user-action' or 'fallback-polling')
                 
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,

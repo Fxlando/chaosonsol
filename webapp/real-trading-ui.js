@@ -7734,9 +7734,21 @@ async function loadLiveTokenDetail(record) {
         updateTokenLastRuntime(tokenDetailViewState.lastRuntime);
         
         console.log('✅ Token detail data loaded successfully');
+        console.log('📊 Data summary:', {
+            hasPrice: priceSol !== null || priceUsd !== null,
+            hasMarketCap: marketCapUsd !== null,
+            hasHoldings: holdingsSummary.totalTokenBalance > 0,
+            hasActivity: activity.length > 0,
+            hasAutomations: runtimeAutomations.tasks.length > 0
+        });
     } catch (error) {
-        console.error('Failed to load live token data:', error);
+        console.error('❌ Failed to load live token data:', error);
         console.error('Error stack:', error.stack);
+        console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            mint: record.mint
+        });
         notify(`Unable to load live token dashboard: ${error.message || error}`, 'error');
         resetHoldingsTable({ message: 'Live holdings unavailable. Try reloading or check RPC connection.' });
         

@@ -433,6 +433,67 @@ export class JupiterClient {
   }
 
   /**
+   * Validate if a trading route exists for a token pair
+   * This helps catch tokens with no liquidity before attempting to swap
+   */
+  async validateTokenRoutes(inputMint, outputMint, amount) {
+    try {
+      // Ensure amount is an integer string
+      const amountString = Math.floor(Number(amount)).toString();
+      
+      const testUrl = `${this.apiUrl}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountString}&slippageBps=100`;
+      
+      try {
+        const response = await axios.get(testUrl, {
+          timeout: 5000,
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (response.data && !response.data.error) {
+          const routeCount = response.data.routePlan?.length || 0;
+          logger.info(`✅ Route validation: Found ${routeCount} route(s) for ${inputMint.substring(0, 8)}... -> ${outputMint.substring(0, 8)}...`);
+          return {
+            valid: true,
+            routes: routeCount,
+            quote: response.data
+          };
+        } else {
+          logger.warn(`⚠️ Route validation: No routes found - ${response.data?.error || 'Unknown error'}`);
+          return {
+            valid: false,
+            error: response.data?.error || 'No routes available',
+            errorCode: response.data?.errorCode || 'COULD_NOT_FIND_ANY_ROUTE'
+          };
+        }
+      } catch (error) {
+        if (error.response?.status === 400) {
+          const errorData = error.response.data || {};
+          logger.warn(`⚠️ Route validation failed: ${errorData.error || error.message}`);
+          return {
+            valid: false,
+            error: errorData.error || 'No routes available',
+            errorCode: errorData.errorCode || 'COULD_NOT_FIND_ANY_ROUTE'
+          };
+        }
+        // Network error - don't fail validation, let the actual quote attempt handle it
+        logger.warn(`⚠️ Route validation network error: ${error.message}`);
+        return {
+          valid: true, // Allow attempt if it's just a network issue
+          routes: 0,
+          warning: error.message
+        };
+      }
+    } catch (error) {
+      logger.warn(`⚠️ Route validation error: ${error.message}`);
+      return {
+        valid: true, // Allow attempt if validation fails
+        routes: 0,
+        warning: error.message
+      };
+    }
+  }
+
+  /**
    * Get quote from Jupiter API
    */
   async getQuote(inputMint, outputMint, amount, options = {}) {
@@ -625,6 +686,22 @@ export class JupiterClient {
         // But log a warning so we can track this
       }
       
+      // Validate route exists before attempting swap (helps catch liquidity issues early)
+      if (options.validateRoute !== false) {
+        logger.info(`🔍 [executeSwap] Validating route availability...`);
+        const routeValidation = await this.validateTokenRoutes(inputMint, outputMint, amountInteger);
+        
+        if (!routeValidation.valid) {
+          const errorMsg = `Token has no available trading routes. ${routeValidation.error || 'No liquidity pools found on any DEX.'}`;
+          logger.error(`❌ ${errorMsg}`);
+          throw new Error(errorMsg);
+        }
+        
+        if (routeValidation.routes === 0 && !routeValidation.warning) {
+          logger.warn(`⚠️ Route validation found 0 routes but allowing attempt anyway`);
+        }
+      }
+      
       // Get quote (use integer amount)
       logger.info(`🔍 [executeSwap] Calling getQuote with amount: ${amountInteger} (type: ${typeof amountInteger})`);
       const quote = await this.getQuote(inputMint, outputMint, amountInteger, {
@@ -633,7 +710,12 @@ export class JupiterClient {
       });
 
       if (!quote.success) {
-        throw new Error(quote.error || 'Failed to get quote');
+        // Provide more helpful error messages
+        const errorMsg = quote.error || 'Failed to get quote';
+        if (errorMsg.includes('COULD_NOT_FIND_ANY_ROUTE') || errorMsg.includes('Could not find any route')) {
+          throw new Error(`Token has no available trading routes. This token may have insufficient liquidity or no DEX pairs available. Try checking the token on Raydium, Orca, or other DEX platforms.`);
+        }
+        throw new Error(errorMsg);
       }
 
       logger.debug(`Quote received: ${quote.inputAmount} -> ${quote.outputAmount} (${quote.priceImpactPct}% impact)`);

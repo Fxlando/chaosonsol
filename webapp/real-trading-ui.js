@@ -6372,10 +6372,14 @@ function startMetricsRefresh(mint, solPrice = null) {
                 const hasData = priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null;
                 
                 if (hasData) {
+                    // Use cached bonding curve value (don't recalculate every 3 seconds)
+                    const cachedBonding = tokenDetailViewState.bondingCurveCache;
                     updateTokenMetrics({
                         priceSol: priceDetails.priceSol,
                         priceUsd: priceDetails.priceUsd,
                         marketCapUsd: priceDetails.marketCapUsd,
+                        bondingPercent: cachedBonding.percent,
+                        isBondingComplete: cachedBonding.isComplete || false,
                         solPrice: currentSolPrice,
                         source: priceDetails.source || ''
                         // Don't update other fields - keep existing values

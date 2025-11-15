@@ -101,11 +101,24 @@ class PumpFunTrading {
       console.log('🔍 DEBUG: secretKey length:', keypair.secretKey.length, 'bytes');
       console.log('🔍 DEBUG: privateKey base58 length:', privateKeyBase58.length, 'chars');
       
-      // Convert slippage from bps to decimal (e.g., 100 bps -> 0.01)
-      const slippageDecimal = (options.slippage || this.config.slippage) / 10000;
+      // Convert slippage: if in percentage (<= 100), convert to decimal; if in bps (> 100), convert to decimal
+      let slippageDecimal;
+      if (options.slippage) {
+        if (options.slippage <= 100) {
+          // Percentage format (e.g., 10 = 10%)
+          slippageDecimal = options.slippage / 100;
+        } else {
+          // Basis points format (e.g., 1000 = 10%)
+          slippageDecimal = options.slippage / 10000;
+        }
+      } else {
+        slippageDecimal = (this.config.slippage || 1000) / 10000; // Default 10%
+      }
       
       // Convert priority fee from lamports to SOL
-      const priorityFeeSol = (options.priorityFee || this.config.priorityFee) / 1e9;
+      const priorityFeeSol = options.priorityFee ? 
+        (options.priorityFee > 1e6 ? options.priorityFee / 1e9 : options.priorityFee) : 
+        (this.config.priorityFee || 500000) / 1e9;
       
       console.log(`💰 Amount: ${solAmount} SOL`);
       console.log(`⚙️ Slippage: ${(slippageDecimal * 100).toFixed(2)}%`);

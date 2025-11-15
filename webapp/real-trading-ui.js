@@ -7741,6 +7741,9 @@ async function loadLiveTokenDetail(record) {
             hasActivity: activity.length > 0,
             hasAutomations: runtimeAutomations.tasks.length > 0
         });
+        console.log('💰 Price data:', { priceSol, priceUsd, marketCapUsd, source: priceDetails.source });
+        console.log('📦 Holdings:', { totalTokenBalance: holdingsSummary.totalTokenBalance, holdingsValueSol, holdingsValueUsd });
+        console.log('📈 Activity:', { count: activity.length });
     } catch (error) {
         console.error('❌ Failed to load live token data:', error);
         console.error('Error stack:', error.stack);

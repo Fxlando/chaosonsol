@@ -8678,8 +8678,17 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
             
             addConsoleLog(`🟢 Executing buy of ${amount} SOL from ${walletAddress}`, 'info');
             
+            // Get trading settings from settings manager
+            const tradingSettings = window.settingsManager?.getSettings()?.trading || {};
+            const slippagePercent = tradingSettings.defaultSlippage || 10; // 10% default
+            const priorityFeeSol = tradingSettings.priorityFee || 0.0005; // 0.0005 SOL default
+            
             try {
-                const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { executor: 'jito' });
+                const response = await window.apiClient.buyToken(walletId, tokenMint, amount, { 
+                    executor: 'jito',
+                    slippage: slippagePercent, // Will be converted to bps in backend
+                    priorityFee: priorityFeeSol // Will be converted to lamports in backend
+                });
                 
                 if (!response?.success) {
                     // Provide more detailed error message
@@ -8759,8 +8768,17 @@ async function handleWalletTradeAction(action, walletId, walletAddress, tokenMin
                 'info'
             );
             
+            // Get trading settings from settings manager
+            const tradingSettings = window.settingsManager?.getSettings()?.trading || {};
+            const slippagePercent = tradingSettings.defaultSlippage || 10; // 10% default
+            const priorityFeeSol = tradingSettings.priorityFee || 0.0005; // 0.0005 SOL default
+            
             try {
-                const response = await window.apiClient.sellToken(walletId, tokenMint, tokenAmount, { executor: 'jito' });
+                const response = await window.apiClient.sellToken(walletId, tokenMint, tokenAmount, { 
+                    executor: 'jito',
+                    slippage: slippagePercent, // Will be converted to bps in backend
+                    priorityFee: priorityFeeSol // Will be converted to lamports in backend
+                });
                 
                 if (!response?.success) {
                     // Provide more detailed error message

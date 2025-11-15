@@ -10,8 +10,8 @@ class JupiterV6Integration {
   constructor(connection, config = {}) {
     this.connection = connection;
     this.config = {
-      slippage: config.slippage || 100, // 1% (minimal slippage)
-      priorityFee: config.priorityFee || 1000, // 1000 lamports (minimal fee)
+      slippage: config.slippage || 1000, // 10% default slippage
+      priorityFee: config.priorityFee || 500000, // 0.0005 SOL (500,000 lamports) default
       maxRetries: config.maxRetries || 3,
       ...config
     };
@@ -204,53 +204,39 @@ class JupiterV6Integration {
     let retries = 0;
     const maxRetries = options.maxRetries || this.config.maxRetries;
     
-    // Try different slippage configurations
-    const slippageConfigs = [
-      options.slippage || this.config.slippage,  // Original slippage
-      (options.slippage || this.config.slippage) * 2,  // 2x slippage
-      (options.slippage || this.config.slippage) * 5,  // 5x slippage (for volatile tokens)
-      500,  // 5% slippage
-      1000  // 10% slippage
-    ];
+    // Use configured slippage (default 10% = 1000 bps)
+    const slippage = options.slippage || this.config.slippage || 1000;
     
-    // Try different priority fees
-    const priorityFeeConfigs = [
-      options.priorityFee || this.config.priorityFee,
-      (options.priorityFee || this.config.priorityFee) * 2,
-      (options.priorityFee || this.config.priorityFee) * 5,
-      5000,  // 5000 lamports
-      10000  // 10000 lamports
-    ];
+    // Use configured priority fee (default 0.0005 SOL = 500,000 lamports)
+    const priorityFee = options.priorityFee || this.config.priorityFee || 500000;
 
     while (retries < maxRetries) {
-      for (const slippage of slippageConfigs) {
-        for (const priorityFee of priorityFeeConfigs) {
-          try {
-            console.log(`🔄 Attempt ${retries + 1}/${maxRetries} - Slippage: ${slippage}bps, Priority: ${priorityFee} lamports`);
-            
-            // Get quote with retry across multiple endpoints and aggregators
-            const quote = await this.getQuoteWithRetry(
-              inputMint, 
-              outputMint, 
-              amount, 
-              slippage
-            );
+      try {
+        console.log(`🔄 Attempt ${retries + 1}/${maxRetries} - Slippage: ${slippage}bps (${slippage/100}%), Priority: ${priorityFee} lamports (${priorityFee/1e9} SOL)`);
+        
+        // Get quote with retry across multiple endpoints and aggregators
+        const quote = await this.getQuoteWithRetry(
+          inputMint, 
+          outputMint, 
+          amount, 
+          slippage
+        );
 
-            const quoteSource = quote.source || 'jupiter';
-            console.log(`💱 Swap Quote (${quoteSource}): ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
+        const quoteSource = quote.source || 'jupiter';
+        console.log(`💱 Swap Quote (${quoteSource}): ${quote.inAmount} → ${quote.outAmount} (${quote.priceImpactPct}% impact)`);
 
-            // Handle Orca quotes - use Jupiter for execution since Orca doesn't have simple swap API
-            // The quote gives us price info, but we execute via Jupiter
-            // Note: This means we might not get the exact Orca route, but Jupiter should find similar route
-            
-            // Get swap transaction with retry across multiple endpoints
-            // Works for both Jupiter and Orca quotes (Orca quotes fall back to Jupiter execution)
-            const swapTransactionBase64 = await this.getSwapTransactionWithRetry(
-              wallet, 
-              quote, 
-              priorityFee,
-              quoteSource
-            );
+        // Handle Orca quotes - use Jupiter for execution since Orca doesn't have simple swap API
+        // The quote gives us price info, but we execute via Jupiter
+        // Note: This means we might not get the exact Orca route, but Jupiter should find similar route
+        
+        // Get swap transaction with retry across multiple endpoints
+        // Works for both Jupiter and Orca quotes (Orca quotes fall back to Jupiter execution)
+        const swapTransactionBase64 = await this.getSwapTransactionWithRetry(
+          wallet, 
+          quote, 
+          priorityFee,
+          quoteSource
+        );
 
         // Deserialize and sign transaction (handle both legacy and versioned transactions)
         const transactionBuffer = Buffer.from(swapTransactionBase64, 'base64');

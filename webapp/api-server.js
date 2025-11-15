@@ -774,7 +774,7 @@ register('get', '/tokens', async () => {
 
 register('post', '/trading/buy', async (req, res) => {
   const backend = await loadBackend();
-  const { walletId, tokenMint, solAmount, options } = req.body || {};
+  const { walletId, tokenMint, solAmount, options = {} } = req.body || {};
 
   if (!walletId || !tokenMint || !solAmount) {
     res.status(400);
@@ -784,12 +784,33 @@ register('post', '/trading/buy', async (req, res) => {
     };
   }
 
-  return backend.buyToken(walletId, tokenMint, Number(solAmount), options || {});
+  // Default trading settings: 10% slippage (1000 bps) and 0.0005 SOL (500000 lamports) priority fee
+  // Frontend should pass these in options if user changed them in settings
+  const defaultSlippage = 1000; // 10% = 1000 bps
+  const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
+  
+  // Convert slippage: if already in bps (> 100), use it; otherwise convert percentage to bps
+  const slippageBps = options.slippage ? 
+    (options.slippage > 100 ? options.slippage : Math.floor(options.slippage * 100)) : 
+    defaultSlippage;
+  
+  // Convert priority fee: if already in lamports (> 1e6), use it; otherwise convert SOL to lamports
+  const priorityFeeLamports = options.priorityFee ? 
+    (options.priorityFee > 1e6 ? options.priorityFee : Math.floor(options.priorityFee * 1e9)) : 
+    defaultPriorityFee;
+
+  const mergedOptions = {
+    ...options,
+    slippage: slippageBps,
+    priorityFee: priorityFeeLamports
+  };
+
+  return backend.buyToken(walletId, tokenMint, Number(solAmount), mergedOptions);
 });
 
 register('post', '/trading/sell', async (req, res) => {
   const backend = await loadBackend();
-  const { walletId, tokenMint, tokenAmount, options } = req.body || {};
+  const { walletId, tokenMint, tokenAmount, options = {} } = req.body || {};
 
   if (!walletId || !tokenMint || !tokenAmount) {
     res.status(400);
@@ -799,7 +820,28 @@ register('post', '/trading/sell', async (req, res) => {
     };
   }
 
-  return backend.sellToken(walletId, tokenMint, Number(tokenAmount), options || {});
+  // Default trading settings: 10% slippage (1000 bps) and 0.0005 SOL (500000 lamports) priority fee
+  // Frontend should pass these in options if user changed them in settings
+  const defaultSlippage = 1000; // 10% = 1000 bps
+  const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
+  
+  // Convert slippage: if already in bps (> 100), use it; otherwise convert percentage to bps
+  const slippageBps = options.slippage ? 
+    (options.slippage > 100 ? options.slippage : Math.floor(options.slippage * 100)) : 
+    defaultSlippage;
+  
+  // Convert priority fee: if already in lamports (> 1e6), use it; otherwise convert SOL to lamports
+  const priorityFeeLamports = options.priorityFee ? 
+    (options.priorityFee > 1e6 ? options.priorityFee : Math.floor(options.priorityFee * 1e9)) : 
+    defaultPriorityFee;
+
+  const mergedOptions = {
+    ...options,
+    slippage: slippageBps,
+    priorityFee: priorityFeeLamports
+  };
+
+  return backend.sellToken(walletId, tokenMint, Number(tokenAmount), mergedOptions);
 });
 
 register('post', '/trading/swap', async (req, res) => {

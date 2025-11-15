@@ -11,6 +11,11 @@
         priorityFee: 'solana-priority-fee'
     };
 
+    const TRADING_FIELDS = {
+        defaultSlippage: 'trading-default-slippage',
+        priorityFee: 'trading-priority-fee'
+    };
+
     const QUICK_BUY_IDS = ['quick-buy-option-1', 'quick-buy-option-2', 'quick-buy-option-3'];
     const QUICK_SELL_IDS = ['quick-sell-option-1', 'quick-sell-option-2', 'quick-sell-option-3'];
 
@@ -74,10 +79,15 @@
     function populateSettingsForm(settings) {
         if (!settings) return;
 
-        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {}, birdeye = {}, moralis = {} } = settings;
+        const { solana = {}, customization = {}, pumpportal = {}, shyft = {}, helius = {}, birdeye = {}, moralis = {}, trading = {} } = settings;
 
         Object.entries(SOLANA_FIELDS).forEach(([key, id]) => {
             setInputValue(id, solana[key]);
+        });
+
+        // Populate Trading settings
+        Object.entries(TRADING_FIELDS).forEach(([key, id]) => {
+            setInputValue(id, trading[key]);
         });
 
         // Populate PumpPortal settings
@@ -181,6 +191,11 @@
             apiKey: get(MORALIS_FIELDS.apiKey)?.value.trim() || ''
         };
 
+        const trading = {
+            defaultSlippage: parseNumber(get(TRADING_FIELDS.defaultSlippage)?.value, 10),
+            priorityFee: parseNumber(get(TRADING_FIELDS.priorityFee)?.value, 0.0005)
+        };
+
         return {
             solana,
             customization,
@@ -188,7 +203,8 @@
             shyft,
             helius,
             birdeye,
-            moralis
+            moralis,
+            trading
         };
     }
 
@@ -200,7 +216,7 @@
         }
 
         const settingsPatch = collectSettingsFromForm();
-        const { solana, customization, shyft, helius, birdeye, moralis } = settingsPatch;
+        const { solana, customization, shyft, helius, birdeye, moralis, trading } = settingsPatch;
 
         const rpcResult = await window.settingsManager.updateSolana(solana);
         if (!rpcResult.success) {
@@ -219,6 +235,11 @@
         });
 
         window.settingsManager.updateCustomization(customization);
+        
+        // Save trading settings
+        if (trading) {
+            window.settingsManager.updateTrading(trading);
+        }
         
         // Save Shyft settings - ensure it's saved properly
         if (window.settingsManager.updateShyft) {
@@ -275,6 +296,20 @@
             window.settingsManager.settings = currentSettings;
             window.settingsManager.saveSettings();
         }
+
+        // Save Trading settings
+        if (window.settingsManager.updateTrading) {
+            window.settingsManager.updateTrading(trading);
+        } else {
+            // Fallback: manually update and save
+            const currentSettings = window.settingsManager.getSettings();
+            currentSettings.trading = {
+                ...(currentSettings.trading || {}),
+                ...trading
+            };
+            window.settingsManager.settings = currentSettings;
+            window.settingsManager.saveSettings();
+        }
         
         // Force a re-read to verify it was saved
         const verifySettings = window.settingsManager.getSettings();
@@ -282,6 +317,7 @@
         console.log('✅ Helius settings saved:', verifySettings?.helius);
         console.log('✅ Birdeye settings saved:', verifySettings?.birdeye);
         console.log('✅ Moralis settings saved:', verifySettings?.moralis);
+        console.log('✅ Trading settings saved:', verifySettings?.trading);
 
         showToast('Settings saved successfully!', 'success');
         addConsoleLog?.('✅ Settings saved successfully', 'success');

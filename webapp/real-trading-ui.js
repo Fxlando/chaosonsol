@@ -8872,6 +8872,17 @@ function populateTokenDetailView(record) {
     if (addressEl) {
         addressEl.textContent = isDraft ? 'Not launched yet' : record.mint;
     }
+    
+    // Update GMGN price chart iframe
+    const gmgnChartEl = document.getElementById('gmgn-price-chart');
+    if (gmgnChartEl && record.mint && !isDraft) {
+        // Format: https://www.gmgn.cc/kline/sol/{token CA}
+        const gmgnUrl = `https://www.gmgn.cc/kline/sol/${record.mint}`;
+        gmgnChartEl.src = gmgnUrl;
+    } else if (gmgnChartEl) {
+        // Hide chart for drafts or tokens without mint
+        gmgnChartEl.src = '';
+    }
 
     if (iconEl) {
         const pumpFunLogo = 'https://pump.fun/logo.png';

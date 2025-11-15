@@ -264,12 +264,37 @@ class JupiterV6Integration {
       return await this.pumpFunTrading.sellToken(wallet, tokenMint, tokenAmount, options);
     }
     
+    // Convert human-readable token amount to base units (Jupiter expects base units)
+    let amountInBaseUnits = tokenAmount;
+    
+    // Check if tokenAmount looks like human-readable format (has decimal places or is large)
+    // If amount is less than 1e12, it might be human-readable, convert it
+    if (tokenAmount < 1e12) {
+      try {
+        // Get token mint info to determine decimals
+        const { PublicKey } = require('@solana/web3.js');
+        const { getMint } = require('@solana/spl-token');
+        
+        const mintPublicKey = new PublicKey(tokenMint);
+        const mintInfo = await getMint(this.connection, mintPublicKey);
+        const decimals = mintInfo.decimals || 6; // Default to 6 if not found
+        
+        // Convert human-readable amount to base units
+        amountInBaseUnits = Math.floor(tokenAmount * Math.pow(10, decimals));
+        console.log(`💰 Converted token amount: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
+      } catch (error) {
+        console.warn(`⚠️ Could not get mint info for ${tokenMint}, assuming 6 decimals:`, error.message);
+        // Default to 6 decimals if we can't fetch mint info
+        amountInBaseUnits = Math.floor(tokenAmount * 1e6);
+      }
+    }
+    
     // Otherwise use Jupiter for DEX tokens
     const result = await this.executeSwap(
       wallet,
       tokenMint,
       this.solMint,
-      tokenAmount,
+      amountInBaseUnits,
       options
     );
 
@@ -291,7 +316,7 @@ class JupiterV6Integration {
         tradeTracker.recordSell({
           wallet: wallet.publicKey.toString(),
           tokenMint: tokenMint,
-          tokensSold: tokenAmount / 1e6, // Convert from lamports
+          tokensSold: tokenAmount, // Keep original human-readable amount for tracking
           solReceived: parseFloat(result.outAmount) / LAMPORTS_PER_SOL,
           txSignature: result.signature,
           source: options.source || 'manual',

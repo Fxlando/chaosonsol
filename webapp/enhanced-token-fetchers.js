@@ -97,32 +97,11 @@ function getSolanaConnection(purpose = null) {
  * Supports parallel requests for fastest response
  */
 async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnChain = false } = {}) {
-    // If preferOnChain is true, try on-chain first (fastest, no rate limits)
-    if (preferOnChain) {
-        try {
-            const connection = getSolanaConnection('price');
-            if (connection) {
-                const onChainData = await calculateOnChainPrice(mintAddress);
-                if (onChainData && onChainData.priceSol) {
-                    const priceSol = onChainData.priceSol;
-                    const priceUsd = solPrice ? priceSol * solPrice : null;
-                    return {
-                        priceSol,
-                        priceUsd,
-                        marketCapUsd: null,
-                        source: 'on-chain'
-                    };
-                }
-            }
-        } catch (error) {
-            console.debug('On-chain price calculation failed, trying external APIs:', error.message);
-        }
-    }
-    
     // Use API Pool Manager if available (intelligent rotation & parallel requests)
+    // This tries ALL APIs in parallel for fastest response
     if (window.apiPoolManager) {
         try {
-            return await window.apiPoolManager.executeWithFailover('price', async (api) => {
+            const result = await window.apiPoolManager.executeWithFailover('price', async (api) => {
                 switch (api.url) {
                     case 'jupiter':
                         const jupiterData = await fetchJupiterPrice(mintAddress);
@@ -202,9 +181,62 @@ async function fetchTokenPriceDetails(mintAddress, { solPrice = null, preferOnCh
                     default:
                         throw new Error(`Unknown price API: ${api.url}`);
                 }
-            }, { parallel: true }); // Try fastest APIs in parallel
+            }, { parallel: true }); // Try ALL APIs in parallel for fastest response
+            
+            // If we got a result but no market cap, try to get market cap from another source
+            if (result && result.priceUsd !== null && result.marketCapUsd === null) {
+                // Market cap is missing - try to get it from another API that provides it
+                try {
+                    // Try CoinGecko or Moralis for market cap (they usually have it)
+                    const marketCapSources = ['coingecko', 'moralis'];
+                    for (const source of marketCapSources) {
+                        try {
+                            let marketCapData = null;
+                            if (source === 'coingecko') {
+                                marketCapData = await fetchCoinGeckoPrice(mintAddress);
+                            } else if (source === 'moralis') {
+                                marketCapData = await fetchMoralisPrice(mintAddress);
+                            }
+                            
+                            if (marketCapData && marketCapData.marketCap) {
+                                result.marketCapUsd = marketCapData.marketCap;
+                                result.source = `${result.source}+${source}`;
+                                break; // Found market cap, stop trying
+                            }
+                        } catch (error) {
+                            // Silently continue to next source
+                        }
+                    }
+                } catch (error) {
+                    // Ignore market cap fetch errors - we already have price
+                }
+            }
+            
+            return result;
         } catch (error) {
             console.debug('API Pool Manager price fetch failed, using legacy fallback:', error.message);
+        }
+    }
+    
+    // Legacy fallback: If preferOnChain is true, try on-chain first (fastest, no rate limits)
+    if (preferOnChain) {
+        try {
+            const connection = getSolanaConnection('price');
+            if (connection) {
+                const onChainData = await calculateOnChainPrice(mintAddress);
+                if (onChainData && onChainData.priceSol) {
+                    const priceSol = onChainData.priceSol;
+                    const priceUsd = solPrice ? priceSol * solPrice : null;
+                    return {
+                        priceSol,
+                        priceUsd,
+                        marketCapUsd: null,
+                        source: 'on-chain'
+                    };
+                }
+            }
+        } catch (error) {
+            console.debug('On-chain price calculation failed, trying external APIs:', error.message);
         }
     }
     

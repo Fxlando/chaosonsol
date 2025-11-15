@@ -6325,8 +6325,10 @@ function startMetricsRefresh(mint, solPrice = null) {
             });
             
             if (priceDetails) {
-                // Update only price and market cap (preserve other metrics)
-                if (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null) {
+                // Always update if we have any data (price, market cap, or both)
+                const hasData = priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null;
+                
+                if (hasData) {
                     updateTokenMetrics({
                         priceSol: priceDetails.priceSol,
                         priceUsd: priceDetails.priceUsd,
@@ -6335,7 +6337,19 @@ function startMetricsRefresh(mint, solPrice = null) {
                         source: priceDetails.source || ''
                         // Don't update other fields - keep existing values
                     });
-                    console.debug(`✅ Market cap updated: $${priceDetails.marketCapUsd?.toFixed(2) || 'N/A'} (source: ${priceDetails.source || 'unknown'})`);
+                    
+                    // Log update with details
+                    const logParts = [];
+                    if (priceDetails.marketCapUsd !== null) {
+                        logParts.push(`MC: $${priceDetails.marketCapUsd.toFixed(2)}`);
+                    }
+                    if (priceDetails.priceUsd !== null) {
+                        logParts.push(`Price: $${priceDetails.priceUsd.toFixed(6)}`);
+                    }
+                    if (priceDetails.priceSol !== null) {
+                        logParts.push(`Price: ${priceDetails.priceSol.toFixed(8)} SOL`);
+                    }
+                    console.log(`✅ Metrics updated (${priceDetails.source || 'unknown'}): ${logParts.join(', ')}`);
                 } else {
                     console.debug('⚠️ Price details returned but all values are null');
                 }

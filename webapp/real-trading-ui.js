@@ -6550,41 +6550,6 @@ function startMetricsRefresh(mint, solPrice = null) {
         console.log('🔄 Fallback metrics refresh (30s interval)');
         await refreshMetricsOnEvent(mint, 'fallback-polling');
     }, 30000); // 30 seconds fallback polling
-                    const cachedBonding = tokenDetailViewState.bondingCurveCache;
-                    updateTokenMetrics({
-                        priceSol: priceDetails.priceSol,
-                        priceUsd: priceDetails.priceUsd,
-                        marketCapUsd: priceDetails.marketCapUsd,
-                        bondingPercent: cachedBonding.percent,
-                        isBondingComplete: cachedBonding.isComplete || false,
-                        solPrice: currentSolPrice,
-                        source: priceDetails.source || ''
-                        // Don't update other fields - keep existing values
-                    });
-                    
-                    // Log update with details
-                    const logParts = [];
-                    if (priceDetails.marketCapUsd !== null) {
-                        logParts.push(`MC: $${priceDetails.marketCapUsd.toFixed(2)}`);
-                    }
-                    if (priceDetails.priceUsd !== null) {
-                        logParts.push(`Price: $${priceDetails.priceUsd.toFixed(6)}`);
-                    }
-                    if (priceDetails.priceSol !== null) {
-                        logParts.push(`Price: ${priceDetails.priceSol.toFixed(8)} SOL`);
-                    }
-                    console.log(`✅ Metrics updated (${priceDetails.source || 'unknown'}): ${logParts.join(', ')}`);
-                } else {
-                    console.debug('⚠️ Price details returned but all values are null');
-                }
-            } else {
-                console.debug('⚠️ No price details returned from fetchTokenPriceDetails');
-            }
-        } catch (error) {
-            // Log errors for debugging
-            console.warn('Market cap refresh error:', error.message);
-        }
-    }, 3000); // Every 3 seconds for fast updates (like a live chart)
 }
 
 function stopMetricsRefresh() {

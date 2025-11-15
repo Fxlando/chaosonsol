@@ -6106,6 +6106,11 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                 actionMarkup = `
                     <div class="flex flex-wrap items-center justify-end gap-2">
                         <div class="flex items-center gap-1">${quickBuyButtons}</div>
+                        <button class="px-2 py-1 rounded-md text-xs border transition bg-neutral-900 text-gray-300 border-neutral-800 hover:bg-neutral-800 hover:text-white"
+                            onclick="handleCustomBuyAmount('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')"
+                            title="Enter custom buy amount">
+                            ✏️
+                        </button>
                         <button class="px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition border border-emerald-500/40"
                             onclick="handleWalletTradeAction('buy', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')">
                             Buy
@@ -6113,7 +6118,12 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                         ${sellButtons}
                         ${
                             holding.tokenBalance && holding.tokenBalance > 0
-                                ? `<button class="px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/70 text-rose-200 border border-rose-900 hover:bg-rose-800/80 transition"
+                                ? `<button class="px-2 py-1 rounded-md text-xs border transition bg-neutral-900 text-gray-300 border-neutral-800 hover:bg-neutral-800 hover:text-white"
+                                    onclick="handleCustomSellAmount('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', ${holding.tokenBalance})"
+                                    title="Enter custom sell amount or percentage">
+                                    ✏️
+                                </button>
+                                <button class="px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/70 text-rose-200 border border-rose-900 hover:bg-rose-800/80 transition"
                                     onclick="handleWalletTradeAction('sell', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')">
                                     Sell
                                 </button>`
@@ -8587,6 +8597,93 @@ function handleSellPercentageSelection(walletId, walletAddress, tokenMint, perce
         const tokenAmount = tokenBalance * (percentage / 100);
         addConsoleLog(`📌 Selected ${percentage}% sell (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`, 'info');
     }
+}
+
+// Handle custom buy amount input
+function handleCustomBuyAmount(walletId, walletAddress, tokenMint) {
+    const current = tokenRegistry.current;
+    const promptMessage = `Enter custom buy amount in SOL:\n\nCurrent token: ${current?.name || tokenMint.substring(0, 8) + '...'}\nWallet: ${walletAddress.substring(0, 8)}...`;
+    
+    const input = prompt(promptMessage);
+    if (input === null) return; // User cancelled
+    
+    const amount = parseFloat(input);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        notify('Invalid amount. Please enter a positive number.', 'warning');
+        return;
+    }
+    
+    if (amount < 0.001) {
+        notify('Amount too small. Minimum is 0.001 SOL.', 'warning');
+        return;
+    }
+    
+    // Store the custom amount
+    handleBuyAmountSelection(walletId, walletAddress, tokenMint, amount);
+    notify(`Custom buy amount set: ${amount} SOL`, 'success');
+}
+
+// Handle custom sell amount/percentage input
+function handleCustomSellAmount(walletId, walletAddress, tokenMint, tokenBalance) {
+    const current = tokenRegistry.current;
+    const promptMessage = `Enter custom sell amount:\n\nCurrent token: ${current?.name || tokenMint.substring(0, 8) + '...'}\nWallet: ${walletAddress.substring(0, 8)}...\nToken balance: ${tokenBalance.toFixed(6)}\n\nEnter either:\n- Percentage (e.g., 75 for 75%)\n- Token amount (e.g., 1000 for 1000 tokens)`;
+    
+    const input = prompt(promptMessage);
+    if (input === null) return; // User cancelled
+    
+    const value = parseFloat(input);
+    if (!Number.isFinite(value) || value <= 0) {
+        notify('Invalid amount. Please enter a positive number.', 'warning');
+        return;
+    }
+    
+    let percentage, tokenAmount;
+    
+    // Determine if input is percentage or token amount
+    // If value is <= 100 and tokenAmount would be reasonable, treat as percentage
+    // Otherwise treat as token amount
+    if (value <= 100 && (tokenBalance * (value / 100)) <= tokenBalance) {
+        // Likely a percentage
+        percentage = value;
+        tokenAmount = tokenBalance * (percentage / 100);
+        
+        if (tokenAmount > tokenBalance) {
+            notify('Percentage results in more tokens than available.', 'warning');
+            return;
+        }
+    } else {
+        // Likely a token amount
+        tokenAmount = value;
+        percentage = (tokenAmount / tokenBalance) * 100;
+        
+        if (tokenAmount > tokenBalance) {
+            notify(`Cannot sell more than available balance (${tokenBalance.toFixed(6)} tokens).`, 'warning');
+            return;
+        }
+        
+        if (percentage > 100) {
+            notify('Amount exceeds available balance.', 'warning');
+            return;
+        }
+    }
+    
+    // Store the custom selection
+    const key = `${walletId}_${tokenMint}`;
+    selectedSellPercentages.set(key, {
+        percentage: percentage,
+        tokenBalance: tokenBalance,
+        walletAddress: walletAddress
+    });
+    
+    // Update UI
+    updateSellPercentageButtons(walletId, tokenMint);
+    
+    // Show feedback
+    if (current && current.mint === tokenMint) {
+        addConsoleLog(`📌 Selected custom sell: ${percentage.toFixed(2)}% (${tokenAmount.toFixed(6)} tokens) from ${walletAddress}`, 'info');
+    }
+    
+    notify(`Custom sell amount set: ${percentage.toFixed(2)}% (${tokenAmount.toFixed(6)} tokens)`, 'success');
 }
 
 // Update buy amount button styles to show selected state

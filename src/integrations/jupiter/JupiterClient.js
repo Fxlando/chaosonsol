@@ -686,15 +686,45 @@ export class JupiterClient {
    */
   async getTokenPrice(tokenMint, baseAmount = LAMPORTS_PER_SOL) {
     try {
+      // Validate baseAmount to prevent division by zero
+      if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+        logger.warn(`Invalid baseAmount for token price: ${baseAmount}, using default`);
+        baseAmount = LAMPORTS_PER_SOL;
+      }
+      
       const solMint = 'So11111111111111111111111111111111111111112';
       
       const quote = await this.getQuote(solMint, tokenMint, baseAmount);
       
-      if (quote.success) {
+      if (quote.success && quote.outputAmount) {
+        const outputAmount = parseFloat(quote.outputAmount);
+        if (!Number.isFinite(outputAmount) || outputAmount <= 0) {
+          logger.warn(`Invalid outputAmount from quote: ${outputAmount}`);
+          return {
+            price: 0,
+            formatted: '0 tokens per SOL',
+            impact: quote.priceImpactPct || 0,
+            success: false,
+            error: 'Invalid quote output amount'
+          };
+        }
+        
+        const price = outputAmount / baseAmount;
+        if (!Number.isFinite(price) || price <= 0) {
+          logger.warn(`Calculated invalid price: ${price}`);
+          return {
+            price: 0,
+            formatted: '0 tokens per SOL',
+            impact: quote.priceImpactPct || 0,
+            success: false,
+            error: 'Invalid price calculation'
+          };
+        }
+        
         return {
-          price: parseFloat(quote.outputAmount) / baseAmount,
-          formatted: `${(parseFloat(quote.outputAmount) / baseAmount).toFixed(8)} tokens per SOL`,
-          impact: quote.priceImpactPct,
+          price: price,
+          formatted: `${price.toFixed(8)} tokens per SOL`,
+          impact: quote.priceImpactPct || 0,
           success: true
         };
       }

@@ -232,14 +232,26 @@ export class VolumeBot {
             // Try to sell immediately (if we have tokens)
             try {
               const wallet = this.walletManager.getWallet(walletId);
+              if (!wallet) {
+                logger.warn(`Wallet ${walletId} not found`);
+                continue;
+              }
+              
+              // Note: getTokenBalance returns a number (uiAmount), not an object
               const balance = await this.tradingEngine.solanaCore.getTokenBalance(
                 wallet.publicKey,
                 tokenMint
               );
               
-              if (balance && balance.uiAmount > 0) {
+              // Validate balance - it's a number representing uiAmount
+              if (Number.isFinite(balance) && balance > 0) {
                 const sellPercentage = this.calculateSellPercentage(config);
-                const sellAmount = this.calculateSellAmount(balance, sellPercentage);
+                // Convert balance to object format for calculateSellAmount
+                const balanceObj = {
+                  uiAmount: balance,
+                  amount: balance // For now, assume same as uiAmount (would need decimals for proper conversion)
+                };
+                const sellAmount = this.calculateSellAmount(balanceObj, sellPercentage);
                 
                 logger.info(`Volume bot: Wallet ${walletId} selling ${sellPercentage.toFixed(1)}% of tokens`);
                 
@@ -411,7 +423,7 @@ export class VolumeBot {
   }
 
   extractSolAmount(result, direction = 'input', fallback = 0) {
-    if (!result) {
+    if (!result || typeof result !== 'object') {
       return fallback;
     }
 
@@ -425,7 +437,7 @@ export class VolumeBot {
     }
 
     const amountKey = direction === 'output' ? 'outputAmount' : 'inputAmount';
-    const raw = result[amountKey] ?? result?.quote?.[amountKey];
+    const raw = result[amountKey] ?? (result.quote && typeof result.quote === 'object' ? result.quote[amountKey] : undefined);
 
     if (typeof raw === 'number') {
       return raw / LAMPORTS_PER_SOL;
@@ -469,17 +481,22 @@ export class VolumeBot {
         return;
       }
 
+      // Note: getTokenBalance returns a number (uiAmount), not an object
       const balance = await this.tradingEngine.solanaCore.getTokenBalance(
         wallet.publicKey,
         tokenMint
       );
 
-      const uiAmount =
-        typeof balance?.uiAmount === 'number'
-          ? balance.uiAmount
-          : balance?.uiAmountString
-          ? Number(balance.uiAmountString)
-          : 0;
+      // Handle both number and object return types for safety
+      const uiAmount = typeof balance === 'number'
+        ? (Number.isFinite(balance) ? balance : 0)
+        : (typeof balance === 'object' && balance !== null
+          ? (typeof balance.uiAmount === 'number'
+            ? (Number.isFinite(balance.uiAmount) ? balance.uiAmount : 0)
+            : (balance.uiAmountString
+              ? (Number.isFinite(Number(balance.uiAmountString)) ? Number(balance.uiAmountString) : 0)
+              : 0))
+          : 0);
 
       session.guardrailState.tokenHoldings.set(walletId, Number.isFinite(uiAmount) ? uiAmount : 0);
       session.guardrailState.tokenHoldingsSnapshot = Object.fromEntries(

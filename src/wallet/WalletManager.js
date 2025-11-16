@@ -381,10 +381,20 @@ export class WalletManager {
           if (!normalized) {
             return;
           }
-          const key = normalized.id || normalized.publicKey;
-          if (!key) {
+          // Prefer id, but ensure it's unique - if no id, generate one
+          let key = normalized.id;
+          if (!key || typeof key !== 'string' || key.trim().length === 0) {
+            // Generate a unique ID if missing
+            key = this.generateId();
+            normalized.id = key;
+          }
+          
+          // Ensure we don't overwrite existing wallet with same key
+          if (this.wallets.has(key)) {
+            logger.warn(`Wallet with key ${key} already exists, skipping duplicate`);
             return;
           }
+          
           this.wallets.set(key, normalized);
         });
         logger.info(`Loaded ${saved.length} wallets from storage`);

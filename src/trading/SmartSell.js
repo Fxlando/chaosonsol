@@ -188,7 +188,8 @@ export class SmartSell {
    */
   async shouldSell(position, currentPrice, profitLoss) {
     // Emergency loss (highest priority)
-    if (profitLoss <= -position.emergencyLoss) {
+    // Note: emergencyLoss is already negative (e.g., -25), so we compare directly
+    if (profitLoss <= position.emergencyLoss) {
       return {
         shouldSell: true,
         reason: `Emergency loss: ${profitLoss.toFixed(2)}%`,
@@ -197,7 +198,8 @@ export class SmartSell {
     }
 
     // Stop loss
-    if (profitLoss <= -position.stopLoss) {
+    // Note: stopLoss is already negative (e.g., -15), so we compare directly
+    if (profitLoss <= position.stopLoss) {
       return {
         shouldSell: true,
         reason: `Stop loss triggered: ${profitLoss.toFixed(2)}%`,
@@ -239,19 +241,33 @@ export class SmartSell {
       const keypair = this.walletManager.getWalletKeypair(position.walletId);
       
       // Get current token balance
+      // Note: getTokenBalance returns a number (uiAmount), not an object
       const balance = await this.tradingEngine.solanaCore.getTokenBalance(
         keypair.publicKey.toString(),
         position.tokenMint
       );
 
-      if (!balance || balance.uiAmount === 0) {
+      // Validate balance - it's a number representing uiAmount
+      if (!Number.isFinite(balance) || balance <= 0) {
         logger.warn(`No tokens to sell for ${position.tokenMint}`);
         this.removePosition(position.walletId, position.tokenMint);
         return { success: false, error: 'No tokens to sell' };
       }
 
-      // Calculate sell amount
-      const sellAmount = Math.floor(balance.amount * (position.sellPercentage || 100) / 100);
+      // Calculate sell amount based on percentage
+      // balance is already in UI units (human-readable), so we can use it directly
+      const sellPercentage = position.sellPercentage || 100;
+      if (!Number.isFinite(sellPercentage) || sellPercentage <= 0 || sellPercentage > 100) {
+        logger.error(`Invalid sell percentage: ${sellPercentage}`);
+        return { success: false, error: 'Invalid sell percentage' };
+      }
+      
+      const sellAmount = Math.floor(balance * sellPercentage / 100);
+      
+      if (!Number.isFinite(sellAmount) || sellAmount <= 0) {
+        logger.warn(`Calculated sell amount is invalid: ${sellAmount}`);
+        return { success: false, error: 'Invalid sell amount calculated' };
+      }
       
       logger.info(`Selling ${sellAmount} tokens of ${position.tokenMint} (${reason})`);
       

@@ -3,6 +3,7 @@
  * Orchestrates all trading operations with PumpFun, Jupiter, and other integrations
  */
 
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { loggerManager } from '../utils/logger.js';
 import { ErrorClassifier } from '../utils/errors.js';
 import PumpFunClient from '../integrations/pumpfun/PumpFunClient.js';
@@ -77,8 +78,11 @@ export class TradingEngine {
         
         if (result && result.success) {
           logger.info('✅ Pump.fun buy successful');
-          // Update wallet last used
-          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+          // Update wallet last used (safely check if wallet exists)
+          const wallet = this.walletManager.wallets.get(walletId);
+          if (wallet) {
+            wallet.lastUsed = new Date().toISOString();
+          }
           return result;
         }
         
@@ -106,8 +110,11 @@ export class TradingEngine {
       logger.info('🔄 Attempting Jupiter for DEX token...');
       const result = await this.jupiter.swapSOLToToken(keypair, tokenMint, solAmount, options);
       
-      // Update wallet last used
-      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+      // Update wallet last used (safely check if wallet exists)
+      const wallet = this.walletManager.wallets.get(walletId);
+      if (wallet) {
+        wallet.lastUsed = new Date().toISOString();
+      }
       
       return result;
     } catch (error) {
@@ -370,9 +377,25 @@ export class TradingEngine {
         // Use PumpFun calculations
         if (inputMint === 'So11111111111111111111111111111111111111112') {
           // Buying with SOL
-          return await this.pumpFun.calculateBuyAmount(amount / 1e9, outputMint);
+          // amount is in base units (lamports), convert to SOL for calculateBuyAmount
+          // Validate amount before conversion
+          if (!Number.isFinite(amount) || amount <= 0) {
+            return {
+              success: false,
+              error: `Invalid amount for quote: ${amount}`
+            };
+          }
+          const solAmount = amount / LAMPORTS_PER_SOL;
+          return await this.pumpFun.calculateBuyAmount(solAmount, outputMint);
         } else if (outputMint === 'So11111111111111111111111111111111111111112') {
           // Selling for SOL
+          // Validate amount before using
+          if (!Number.isFinite(amount) || amount <= 0) {
+            return {
+              success: false,
+              error: `Invalid amount for quote: ${amount}`
+            };
+          }
           return await this.pumpFun.calculateSellAmount(amount, inputMint);
         }
       }

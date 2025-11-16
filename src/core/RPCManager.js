@@ -242,7 +242,12 @@ export class RPCManager {
       if (stats.latencyHistory.length > 100) {
         stats.latencyHistory.shift();
       }
-      stats.averageLatency = stats.latencyHistory.reduce((a, b) => a + b, 0) / stats.latencyHistory.length;
+      // Calculate average latency safely to prevent division by zero
+      if (stats.latencyHistory.length > 0) {
+        stats.averageLatency = stats.latencyHistory.reduce((a, b) => a + b, 0) / stats.latencyHistory.length;
+      } else {
+        stats.averageLatency = latency; // Use current latency if history is empty
+      }
     } else {
       stats.failureCount++;
       
@@ -299,7 +304,12 @@ export class RPCManager {
           if (stats.latencyHistory.length > 100) {
             stats.latencyHistory.shift();
           }
-          stats.averageLatency = stats.latencyHistory.reduce((a, b) => a + b, 0) / stats.latencyHistory.length;
+          // Calculate average latency safely to prevent division by zero
+          if (stats.latencyHistory.length > 0) {
+            stats.averageLatency = stats.latencyHistory.reduce((a, b) => a + b, 0) / stats.latencyHistory.length;
+          } else {
+            stats.averageLatency = latency; // Use current latency if history is empty
+          }
         }
 
         logger.debug(`✅ ${connectionData.provider} healthy (latency: ${latency}ms)`);

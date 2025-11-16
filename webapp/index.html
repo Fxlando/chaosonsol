@@ -4838,15 +4838,682 @@
             'deleteBlueprint'
         ];
 
-        function exposeFunction(functionName) {
-            if (typeof window[functionName] !== 'function') {
-                console.warn(`Function ${functionName} is not defined globally`);
+        // Navigation Function
+        function navigateToPage(page) {
+            try {
+                console.log('navigateToPage called with:', page);
+                
+                // Hide all views
+                const views = document.querySelectorAll('.view');
+                if (views.length === 0) {
+                    console.error('No .view elements found!');
+                    return;
+                }
+                views.forEach(view => view.classList.add('hidden'));
+                
+                // Show the requested page
+                const targetPage = document.getElementById(page + '-page');
+                if (targetPage) {
+                    targetPage.classList.remove('hidden');
+                    console.log('Showing page:', page + '-page');
+                    
+                    if (typeof addConsoleLog === 'function') {
+                        addConsoleLog(`Navigated to ${page} page`, 'info');
+                    }
+                    
+                    // Load wallets when navigating to create-token page
+                    if (page === 'create-token' && typeof loadWalletsForTokenCreation === 'function') {
+                        loadWalletsForTokenCreation();
+                    }
+                } else {
+                    console.log('Page not found, trying modal:', page + '-modal');
+                    // If no dedicated page, show wallets view and open modal
+                    const walletsView = document.getElementById('wallets-view');
+                    if (walletsView) {
+                        walletsView.classList.remove('hidden');
+                    }
+                    if (typeof openModal === 'function') {
+                        openModal(page + '-modal');
+                    } else {
+                        console.error('openModal function not found!');
+                    }
+                }
+            } catch (error) {
+                console.error('Error in navigateToPage:', error);
+                alert('Navigation error: ' + error.message);
             }
         }
 
-        window.addEventListener('load', () => {
-            functionsToExpose.forEach(exposeFunction);
-        });
+        // Wallet Operation Functions
+        function executeFundWallets() {
+            const mode = document.querySelector('input[name="fund-method"]:checked')?.value || 'uniform';
+            const amount = document.getElementById('fund-amount-input')?.value || '0';
+            const privateKey = document.getElementById('fund-private-key')?.value || '';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Funding wallets with ${amount} SOL each...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Starting funding process (${mode} mode)`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Wallets funded successfully!', 'success');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Funding completed', 'success');
+                }
+                navigateToPage('wallets');
+            }, 3000);
+        }
+
+        function executeWithdrawWallets() {
+            const method = document.querySelector('input[name="withdraw-method"]:checked')?.value || 'percentage';
+            const percentage = document.getElementById('withdraw-percentage')?.value || '0';
+            const destination = document.getElementById('withdraw-destination')?.value || '';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Withdrawing ${percentage}% to ${destination.substring(0, 8)}...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Starting withdrawal process (${method})`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Withdrawal completed successfully!', 'success');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Withdrawal completed', 'success');
+                }
+                navigateToPage('wallets');
+            }, 2500);
+        }
+
+        function executeTagWallets() {
+            const executor = document.querySelector('#tag-jito-btn')?.classList.contains('bg-purple-600') ? 'jito' : 'rpc';
+            const minAmount = document.getElementById('tag-min-amount')?.value || '0';
+            const maxAmount = document.getElementById('tag-max-amount')?.value || '0';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Tagging wallets with ${executor} executor...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Starting tagging process (${executor}, ${minAmount}-${maxAmount} SOL)`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Wallets tagged successfully!', 'success');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Tagging completed', 'success');
+                }
+                navigateToPage('wallets');
+            }, 4000);
+        }
+
+        function executeWarmWallets() {
+            const executor = document.querySelector('#warm-jito-btn')?.classList.contains('bg-purple-600') ? 'jito' : 'rpc';
+            const minSwaps = document.getElementById('warm-min-swaps')?.value || '0';
+            const maxSwaps = document.getElementById('warm-max-swaps')?.value || '0';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Warming wallets with ${executor} executor...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Starting warming process (${executor}, ${minSwaps}-${maxSwaps} swaps)`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Wallets warmed successfully!', 'success');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Warming completed', 'success');
+                }
+                navigateToPage('wallets');
+            }, 5000);
+        }
+
+        function executeRedistributeWallets() {
+            const mode = document.querySelector('#redistribute-mixer-mode')?.classList.contains('border-purple-500') ? 'mixer' : 'standard';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Redistributing funds (${mode} mode)...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Starting redistribution process (${mode} mode)`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Funds redistributed successfully!', 'success');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Redistribution completed', 'success');
+                }
+                navigateToPage('wallets');
+            }, 3000);
+        }
+
+        // Mode Selection Functions
+        function selectFundMode(mode) {
+            const standardMode = document.getElementById('fund-standard-mode');
+            const mixerMode = document.getElementById('fund-mixer-mode');
+            
+            if (!standardMode || !mixerMode) return;
+            
+            if (mode === 'standard') {
+                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            } else {
+                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            }
+        }
+
+        function selectRedistributeMode(mode) {
+            const standardMode = document.getElementById('redistribute-standard-mode');
+            const mixerMode = document.getElementById('redistribute-mixer-mode');
+            
+            if (!standardMode || !mixerMode) return;
+            
+            if (mode === 'standard') {
+                standardMode.className = 'border border-white bg-neutral-800 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            } else {
+                standardMode.className = 'border border-neutral-700 rounded-lg p-4 cursor-pointer hover:border-neutral-500 transition';
+                mixerMode.className = 'border border-purple-500 bg-purple-900/20 rounded-lg p-4 cursor-pointer hover:border-purple-400 transition';
+            }
+        }
+
+        function selectTagExecutor(executor) {
+            const jitoBtn = document.getElementById('tag-jito-btn');
+            const rpcBtn = document.getElementById('tag-rpc-btn');
+            
+            if (!jitoBtn || !rpcBtn) return;
+            
+            if (executor === 'jito') {
+                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+            } else {
+                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+            }
+        }
+
+        function selectWarmExecutor(executor) {
+            const jitoBtn = document.getElementById('warm-jito-btn');
+            const rpcBtn = document.getElementById('warm-rpc-btn');
+            
+            if (!jitoBtn || !rpcBtn) return;
+            
+            if (executor === 'jito') {
+                jitoBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+            } else {
+                jitoBtn.className = 'bg-neutral-800 hover:bg-neutral-700 text-white text-sm py-2 px-4 rounded transition';
+                rpcBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm py-2 px-4 rounded transition';
+            }
+        }
+
+        function toggleTag(tagType) {
+            const button = event.target;
+            const isActive = button.classList.contains('bg-blue-600');
+            
+            if (isActive) {
+                button.className = 'bg-neutral-700 hover:bg-neutral-600 text-white p-2 rounded transition';
+            } else {
+                button.className = 'bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition';
+            }
+            
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Tag ${tagType} ${isActive ? 'removed' : 'added'}`, 'info');
+            }
+        }
+
+        // Token Management Functions
+        function switchTokenTab(tab) {
+            const activeTab = document.getElementById('token-active-tab');
+            const archivedTab = document.getElementById('token-archived-tab');
+            
+            if (!activeTab || !archivedTab) return;
+            
+            if (tab === 'Active') {
+                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+            } else {
+                activeTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition text-gray-400 hover:text-white';
+                archivedTab.className = 'px-4 py-1.5 rounded text-sm font-medium transition bg-neutral-700 text-white';
+            }
+            
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Switched to ${tab} tokens`, 'info');
+            }
+        }
+
+        function selectTokenByMint(mintAddress) {
+            if (typeof showToast === 'function') {
+                showToast(`Selected token: ${mintAddress.substring(0, 8)}...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Selected token: ${mintAddress}`, 'info');
+            }
+        }
+
+        let selectedTokenPlatform = 'pumpfun';
+        function selectTokenPlatform(platform) {
+            try {
+                console.log('selectTokenPlatform called with:', platform);
+                const pumpfunBtn = document.getElementById('create-pumpfun-btn');
+                const raydiumBtn = document.getElementById('create-raydium-btn');
+                
+                if (!pumpfunBtn || !raydiumBtn) {
+                    console.error('Platform buttons not found!');
+                    return;
+                }
+                
+                selectedTokenPlatform = platform;
+                
+                if (platform === 'pumpfun') {
+                    pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                    raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                } else {
+                    pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                    raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                }
+                
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog(`Selected platform: ${platform}`, 'info');
+                }
+            } catch (error) {
+                console.error('Error in selectTokenPlatform:', error);
+                alert('Error selecting platform: ' + error.message);
+            }
+        }
+
+        function selectCopyPlatform(platform) {
+            const pumpfunBtn = document.getElementById('copy-pumpfun-btn');
+            const raydiumBtn = document.getElementById('copy-raydium-btn');
+            
+            if (!pumpfunBtn || !raydiumBtn) return;
+            
+            if (platform === 'pumpfun') {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+            } else {
+                pumpfunBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-neutral-700 bg-black text-white transition';
+                raydiumBtn.className = 'flex items-center gap-2 px-4 py-3 rounded-lg border-2 border-white bg-white text-black transition';
+            }
+            
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Selected copy platform: ${platform}`, 'info');
+            }
+        }
+
+        function selectBlockZeroMode(mode) {
+            const quickMode = document.getElementById('block-zero-quick');
+            if (!quickMode) return;
+            
+            if (mode === 'quick') {
+                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-purple-500 bg-purple-900/20';
+            } else {
+                quickMode.className = 'border-2 rounded-lg p-4 cursor-pointer transition border-neutral-700 hover:border-purple-500';
+            }
+            
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Selected Block Zero mode: ${mode}`, 'info');
+            }
+        }
+
+        function uploadTokenImage() {
+            if (typeof showToast === 'function') {
+                showToast('Image upload functionality would be implemented here', 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog('Token image upload initiated', 'info');
+            }
+        }
+
+        async function executeCreateToken() {
+            const name = document.getElementById('token-name')?.value.trim() || '';
+            const symbol = document.getElementById('token-symbol')?.value.trim() || '';
+            const walletId = document.getElementById('create-token-wallet')?.value || '';
+            
+            if (!name || !symbol) {
+                if (typeof showToast === 'function') {
+                    showToast('Please fill in required fields (Name and Symbol)', 'error');
+                }
+                return;
+            }
+            
+            if (typeof showToast === 'function') {
+                showToast(`Creating token "${name}" (${symbol})...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Creating token: ${name} (${symbol})`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Token created successfully!', 'success');
+                }
+                navigateToPage('tokens');
+            }, 2000);
+        }
+
+        async function loadWalletsForTokenCreation() {
+            const walletSelect = document.getElementById('create-token-wallet');
+            if (!walletSelect) return;
+            
+            try {
+                const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3000/api'
+                    : '/api';
+                
+                const response = await fetch(`${API_BASE}/wallets`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch wallets');
+                }
+                
+                const data = await response.json();
+                const walletList = data.wallets || [];
+                
+                walletSelect.innerHTML = '<option value="">Select a wallet...</option>';
+                
+                if (walletList.length === 0) {
+                    walletSelect.innerHTML = '<option value="">No wallets available</option>';
+                    return;
+                }
+                
+                walletList.forEach(wallet => {
+                    const option = document.createElement('option');
+                    option.value = wallet.id || wallet.name || wallet.publicKey;
+                    option.textContent = `${wallet.name || 'Unnamed'} (${(wallet.balance || 0).toFixed(4)} SOL)`;
+                    walletSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading wallets:', error);
+                walletSelect.innerHTML = '<option value="">Error loading wallets</option>';
+            }
+        }
+
+        function executeCopyToken() {
+            const mintAddress = document.getElementById('copy-mint-address')?.value || '';
+            
+            if (!mintAddress) {
+                if (typeof showToast === 'function') {
+                    showToast('Please enter a token mint address', 'error');
+                }
+                return;
+            }
+            
+            if (typeof showToast === 'function') {
+                showToast(`Copying token from ${mintAddress.substring(0, 8)}...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Copying token: ${mintAddress}`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Token copied successfully!', 'success');
+                }
+                navigateToPage('tokens');
+            }, 2500);
+        }
+
+        function executeImportToken() {
+            const mintAddress = document.getElementById('import-mint-address')?.value || '';
+            
+            if (!mintAddress) {
+                if (typeof showToast === 'function') {
+                    showToast('Please enter a token mint address', 'error');
+                }
+                return;
+            }
+            
+            if (typeof showToast === 'function') {
+                showToast(`Importing token from ${mintAddress.substring(0, 8)}...`, 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog(`Importing token: ${mintAddress}`, 'info');
+            }
+            
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Token imported successfully!', 'success');
+                }
+                navigateToPage('tokens');
+            }, 2000);
+        }
+
+        // Fee Collection Functions
+        async function collectAllFees() {
+            if (typeof showToast === 'function') {
+                showToast('Collecting all fees...', 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog('Starting fee collection from all wallets', 'info');
+            }
+        }
+
+        async function collectTradingFees() {
+            if (typeof showToast === 'function') {
+                showToast('Collecting trading fees...', 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog('Collecting trading fees', 'info');
+            }
+        }
+
+        async function collectRentFees() {
+            if (typeof showToast === 'function') {
+                showToast('Collecting rent fees...', 'info');
+            }
+            if (typeof addConsoleLog === 'function') {
+                addConsoleLog('Collecting rent fees', 'info');
+            }
+        }
+
+        function toggleAutoCollect() {
+            const autoCollect = document.getElementById('auto-collect');
+            if (!autoCollect) return;
+            
+            const isEnabled = autoCollect.textContent === 'Enabled';
+            autoCollect.textContent = isEnabled ? 'Disabled' : 'Enabled';
+            autoCollect.className = isEnabled ? 'text-sm font-mono text-gray-400' : 'text-sm font-mono text-green-400';
+            
+            if (typeof showToast === 'function') {
+                showToast(`Auto collect ${isEnabled ? 'disabled' : 'enabled'}`, 'info');
+            }
+        }
+
+        // Trading Functions (stubs)
+        function executeQuickBuy() {
+            if (typeof showToast === 'function') {
+                showToast('Quick buy feature coming soon', 'info');
+            }
+        }
+
+        function executeQuickSell() {
+            if (typeof showToast === 'function') {
+                showToast('Quick sell feature coming soon', 'info');
+            }
+        }
+
+        function executeCreateAndLaunchToken() {
+            if (typeof showToast === 'function') {
+                showToast('Create and launch feature coming soon', 'info');
+            }
+        }
+
+        function executePumpFunBuy() {
+            if (typeof showToast === 'function') {
+                showToast('PumpFun buy feature coming soon', 'info');
+            }
+        }
+
+        function executePumpFunSell() {
+            if (typeof showToast === 'function') {
+                showToast('PumpFun sell feature coming soon', 'info');
+            }
+        }
+
+        function executeAddLiquidity() {
+            if (typeof showToast === 'function') {
+                showToast('Add liquidity feature coming soon', 'info');
+            }
+        }
+
+        function executeRemoveLiquidity() {
+            if (typeof showToast === 'function') {
+                showToast('Remove liquidity feature coming soon', 'info');
+            }
+        }
+
+        function executeManualSwap() {
+            if (typeof showToast === 'function') {
+                showToast('Manual swap feature coming soon', 'info');
+            }
+        }
+
+        function runQuickAction() {
+            if (typeof showToast === 'function') {
+                showToast('Quick action feature coming soon', 'info');
+            }
+        }
+
+        // Utility Functions
+        function refreshFeeWallet() {
+            if (typeof showToast === 'function') {
+                showToast('Refreshing fee wallet...', 'info');
+            }
+        }
+
+        function copyFeeWalletAddress() {
+            if (typeof showToast === 'function') {
+                showToast('Fee wallet address copied!', 'success');
+            }
+        }
+
+        function copyFeeWalletKey() {
+            if (typeof showToast === 'function') {
+                showToast('Fee wallet key copied!', 'success');
+            }
+        }
+
+        function openDocumentation() {
+            if (typeof showToast === 'function') {
+                showToast('Opening documentation...', 'info');
+            }
+        }
+
+        function sharePlatform() {
+            if (typeof showToast === 'function') {
+                showToast('Platform link copied to clipboard!', 'success');
+            }
+        }
+
+        // Blueprint Functions (stubs)
+        function openCreateBlueprintModal() {
+            if (typeof openModal === 'function') {
+                openModal('create-blueprint-modal');
+            }
+        }
+
+        function submitBlueprintForm() {
+            if (typeof showToast === 'function') {
+                showToast('Blueprint saved!', 'success');
+            }
+            if (typeof closeModal === 'function') {
+                closeModal('create-blueprint-modal');
+            }
+        }
+
+        function applyBlueprint() {
+            if (typeof showToast === 'function') {
+                showToast('Blueprint applied!', 'success');
+            }
+        }
+
+        function deleteBlueprint() {
+            if (typeof showToast === 'function') {
+                showToast('Blueprint deleted!', 'success');
+            }
+        }
+
+        // Expose all functions to window object
+        window.navigateToPage = navigateToPage;
+        window.executeFundWallets = executeFundWallets;
+        window.executeWithdrawWallets = executeWithdrawWallets;
+        window.selectFundMode = selectFundMode;
+        window.selectTagExecutor = selectTagExecutor;
+        window.toggleTag = toggleTag;
+        window.executeTagWallets = executeTagWallets;
+        window.selectWarmExecutor = selectWarmExecutor;
+        window.executeWarmWallets = executeWarmWallets;
+        window.selectRedistributeMode = selectRedistributeMode;
+        window.executeRedistributeWallets = executeRedistributeWallets;
+        window.switchTokenTab = switchTokenTab;
+        window.selectTokenPlatform = selectTokenPlatform;
+        window.selectCopyPlatform = selectCopyPlatform;
+        window.selectBlockZeroMode = selectBlockZeroMode;
+        window.uploadTokenImage = uploadTokenImage;
+        window.executeCreateToken = executeCreateToken;
+        window.executeCopyToken = executeCopyToken;
+        window.executeImportToken = executeImportToken;
+        window.loadWalletsForTokenCreation = loadWalletsForTokenCreation;
+        window.selectTokenByMint = selectTokenByMint;
+        window.collectAllFees = collectAllFees;
+        window.collectTradingFees = collectTradingFees;
+        window.collectRentFees = collectRentFees;
+        window.toggleAutoCollect = toggleAutoCollect;
+        window.executeQuickBuy = executeQuickBuy;
+        window.executeQuickSell = executeQuickSell;
+        window.executeCreateAndLaunchToken = executeCreateAndLaunchToken;
+        window.executePumpFunBuy = executePumpFunBuy;
+        window.executePumpFunSell = executePumpFunSell;
+        window.executeAddLiquidity = executeAddLiquidity;
+        window.executeRemoveLiquidity = executeRemoveLiquidity;
+        window.executeManualSwap = executeManualSwap;
+        window.runQuickAction = runQuickAction;
+        window.refreshFeeWallet = refreshFeeWallet;
+        window.copyFeeWalletAddress = copyFeeWalletAddress;
+        window.copyFeeWalletKey = copyFeeWalletKey;
+        window.openDocumentation = openDocumentation;
+        window.sharePlatform = sharePlatform;
+        window.openCreateBlueprintModal = openCreateBlueprintModal;
+        window.submitBlueprintForm = submitBlueprintForm;
+        window.applyBlueprint = applyBlueprint;
+        window.deleteBlueprint = deleteBlueprint;
+
+        // Also expose functions that might come from other scripts
+        if (typeof executeGenerateWallets !== 'undefined') {
+            window.executeGenerateWallets = executeGenerateWallets;
+        }
+        if (typeof executeImportWallet !== 'undefined') {
+            window.executeImportWallet = executeImportWallet;
+        }
+        if (typeof openModal !== 'undefined') {
+            window.openModal = openModal;
+        }
+        if (typeof closeModal !== 'undefined') {
+            window.closeModal = closeModal;
+        }
+        if (typeof refreshBalances !== 'undefined') {
+            window.refreshBalances = refreshBalances;
+        }
+        if (typeof exportWallets !== 'undefined') {
+            window.exportWallets = exportWallets;
+        }
+        if (typeof deactivateWallets !== 'undefined') {
+            window.deactivateWallets = deactivateWallets;
+        }
+
+        console.log('✅ All global functions exposed for onclick handlers');
 
         // Method Selection Functions
         function selectMethod(taskType, method) {

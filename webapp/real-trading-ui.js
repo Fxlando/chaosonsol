@@ -8482,17 +8482,35 @@ async function loadLiveTokenDetail(record) {
         // If profitLossSol is suspiciously close to holdingsValueSol or too large without investment data, don't store it
         let safeProfitLossSol = profitLossSol;
         if (profitLossSol !== null) {
-            // Check if it's suspiciously close to holdings value (within 0.5 SOL)
+            // Check if it's suspiciously close to holdings value
             if (holdingsValueSol !== null) {
                 const diff = Math.abs(profitLossSol - holdingsValueSol);
-                if (diff < 0.5) {
-                    console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL, diff: ${diff.toFixed(6)} SOL)`);
+                
+                // If we have investment data, check if the profit calculation makes sense
+                // Profit = holdings + sold - invested
+                // When investment is small and no sales, profit ≈ holdings - investment
+                // This is legitimate, so allow it if the difference matches the investment amount
+                if (finalAmountInvested !== null && finalAmountInvested > 0) {
+                    // If the difference is approximately equal to the investment amount, it's legitimate
+                    // Allow some tolerance (within 10% of investment or 0.01 SOL, whichever is larger)
+                    const tolerance = Math.max(finalAmountInvested * 0.1, 0.01);
+                    if (Math.abs(diff - finalAmountInvested) <= tolerance) {
+                        // This is a legitimate profit calculation - profit ≈ holdings - investment
+                        console.log(`✅ Profit calculation verified: profit (${profitLossSol.toFixed(6)} SOL) ≈ holdings (${holdingsValueSol.toFixed(6)} SOL) - investment (${finalAmountInvested.toFixed(6)} SOL)`);
+                    } else if (diff < 0.5) {
+                        // Still suspiciously close but doesn't match investment pattern
+                        console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol.toFixed(6)} SOL) too close to holdingsValueSol (${holdingsValueSol.toFixed(6)} SOL, diff: ${diff.toFixed(6)} SOL) and doesn't match investment pattern`);
+                        safeProfitLossSol = null;
+                    }
+                } else if (diff < 0.5) {
+                    // No investment data and suspiciously close - likely not profit
+                    console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol.toFixed(6)} SOL) too close to holdingsValueSol (${holdingsValueSol.toFixed(6)} SOL, diff: ${diff.toFixed(6)} SOL) without investment data`);
                     safeProfitLossSol = null;
                 }
             }
             // Check if it's a large value (>1 SOL) without investment data
             if (safeProfitLossSol !== null && profitLossSol > 1.0 && (finalAmountInvested === null || finalAmountInvested === 0)) {
-                console.warn(`🚫 NOT STORING: Large profitLossSol (${profitLossSol} SOL) without investment data - likely holdings value, not profit`);
+                console.warn(`🚫 NOT STORING: Large profitLossSol (${profitLossSol.toFixed(6)} SOL) without investment data - likely holdings value, not profit`);
                 safeProfitLossSol = null;
             }
         }

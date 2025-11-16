@@ -8559,15 +8559,33 @@ async function loadLiveTokenDetail(record) {
         // DO NOT calculate profit from holdingsValueSol alone - that's not profit, that's just holdings value
         let profitLossSol = null;
         let isUnrealizedProfit = false;
+        
+        // WARNING: If investment is suspiciously small compared to holdings, the calculation might be wrong
+        // This usually means we're not detecting all buy transactions
         if (holdingsValueSol !== null && amountInvestedSol !== null && amountInvestedSol > 0) {
             const soldComponent = amountSoldSol || 0;
-            profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+            
+            // Check if investment seems too small - if holdings are much larger than investment, 
+            // we might be missing buy transactions
+            const investmentRatio = amountInvestedSol / holdingsValueSol;
+            if (investmentRatio < 0.1 && holdingsValueSol > 1.0) {
+                console.warn(`⚠️ WARNING: Investment (${amountInvestedSol.toFixed(6)} SOL) seems too small compared to holdings (${holdingsValueSol.toFixed(6)} SOL).`);
+                console.warn(`   This suggests we may be missing buy transactions. Investment is only ${(investmentRatio * 100).toFixed(1)}% of holdings value.`);
+                console.warn(`   If this is incorrect, check that all wallets are being queried and Helius API is finding all transactions.`);
+                console.warn(`   ⚠️ NOT showing profit - calculation would be misleading (would show ~${holdingsValueSol.toFixed(2)} SOL as profit).`);
+                // Don't calculate profit if investment is clearly undercounted - it would be misleading
+                profitLossSol = null;
+            } else {
+                profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+            }
             isUnrealizedProfit = false;
             console.log('💰 Calculated profit/loss (with investment data):', {
-                holdingsValueSol,
-                amountSoldSol: soldComponent,
-                amountInvestedSol,
-                profitLossSol
+                holdingsValueSol: holdingsValueSol.toFixed(6),
+                amountSoldSol: soldComponent.toFixed(6),
+                amountInvestedSol: amountInvestedSol.toFixed(6),
+                profitLossSol: profitLossSol.toFixed(6),
+                investmentRatio: (investmentRatio * 100).toFixed(1) + '%',
+                warning: investmentRatio < 0.1 ? '⚠️ Investment may be undercounted' : '✅ Investment ratio looks reasonable'
             });
         } else if (amountSoldSol !== null && amountSoldSol > 0) {
             // If we have realized sales but no investment data, show only realized profit
@@ -8575,6 +8593,14 @@ async function loadLiveTokenDetail(record) {
             profitLossSol = amountSoldSol;
             isUnrealizedProfit = false;
             console.log('💰 Showing realized profit from sales:', profitLossSol, 'SOL');
+        } else if (amountInvestedSol === null || amountInvestedSol === 0) {
+            // No investment data found - can't calculate profit
+            console.warn('⚠️ Cannot calculate profit/loss: No investment data found from any wallet.');
+            console.warn('   This means either:');
+            console.warn('   1. No buy transactions were found in wallet transaction history');
+            console.warn('   2. Helius API queries failed or returned no data');
+            console.warn('   3. Transaction parsing failed to identify buys');
+            console.warn('   Holdings value:', holdingsValueSol, 'SOL is NOT profit - it\'s just current value.');
         }
         // If no investment data and no sales, profitLossSol remains null
         // Holdings value is NOT profit - don't show it as profit

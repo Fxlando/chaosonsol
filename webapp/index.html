@@ -2838,36 +2838,31 @@
                     </div>
                 </div>
                 
-                <!-- GMGN Price Chart - Below Tasks and Holdings sections -->
+                <!-- Price Chart - Below Tasks and Holdings sections -->
                 <div class="bg-neutral-950/70 border border-neutral-900/60 rounded-2xl overflow-hidden shadow-[0_0_55px_rgba(168,85,247,0.18)] mt-6">
                     <div class="px-5 py-4 border-b border-neutral-900/60 flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-white">Price Chart</h3>
-                        <span class="text-xs text-gray-500">Powered by GMGN</span>
-                    </div>
-                    <div class="w-full p-8 flex flex-col items-center justify-center" style="min-height: 400px;">
-                        <div class="text-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-purple-400">
-                                <path d="M3 3v18h18"></path>
-                                <path d="m19 9-5 5-4-4-3 3"></path>
-                            </svg>
-                            <h4 class="text-lg font-semibold text-white mb-2">View Price Chart on GMGN</h4>
-                            <p class="text-sm text-gray-400 mb-6 max-w-md">
-                                GMGN charts provide real-time price data and advanced trading analytics. Click below to open the full chart in a new tab.
-                            </p>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-500">Powered by DexScreener</span>
                             <a 
                                 id="gmgn-price-chart-link" 
                                 href="#" 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                class="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors duration-200">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                                    <polyline points="15 3 21 3 21 9"></polyline>
-                                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                                </svg>
-                                Open GMGN Chart
+                                class="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+                                View on GMGN →
                             </a>
                         </div>
+                    </div>
+                    <div class="w-full" style="height: 500px;">
+                        <iframe 
+                            id="dexscreener-price-chart" 
+                            src="" 
+                            frameborder="0" 
+                            style="width: 100%; height: 100%; border: none;"
+                            allow="clipboard-read; clipboard-write"
+                            loading="lazy">
+                        </iframe>
                     </div>
                 </div>
             </div>

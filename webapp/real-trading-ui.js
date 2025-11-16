@@ -9614,16 +9614,43 @@ function populateTokenDetailView(record) {
         addressEl.textContent = isDraft ? 'Not launched yet' : record.mint;
     }
     
-    // Update GMGN price chart link (GMGN blocks iframe embedding, so we use a link instead)
+    // Update DexScreener price chart iframe (DexScreener allows embedding)
+    const dexscreenerChartEl = document.getElementById('dexscreener-price-chart');
     const gmgnChartLink = document.getElementById('gmgn-price-chart-link');
-    if (gmgnChartLink) {
-        if (record.mint && !isDraft) {
-            // Format: https://www.gmgn.cc/kline/sol/{token CA}
+    
+    if (record.mint && !isDraft) {
+        // DexScreener embed URL format: https://dexscreener.com/solana/{token-address}?embed=1&theme=dark&trades=0&info=0
+        const dexscreenerUrl = `https://dexscreener.com/solana/${record.mint}?embed=1&theme=dark&trades=0&info=0`;
+        
+        // Update DexScreener chart iframe
+        if (dexscreenerChartEl) {
+            // Only update if URL is different to avoid unnecessary reloads
+            if (dexscreenerChartEl.src !== dexscreenerUrl) {
+                // Clear src first to properly destroy old chart
+                dexscreenerChartEl.src = '';
+                // Small delay to let cleanup complete, then load new chart
+                setTimeout(() => {
+                    if (dexscreenerChartEl && record.mint) {
+                        dexscreenerChartEl.src = dexscreenerUrl;
+                    }
+                }, 100);
+            }
+        }
+        
+        // Update GMGN link (for users who want to view on GMGN)
+        if (gmgnChartLink) {
             const gmgnUrl = `https://www.gmgn.cc/kline/sol/${record.mint}`;
             gmgnChartLink.href = gmgnUrl;
-            gmgnChartLink.style.display = 'inline-flex';
-        } else {
-            // Hide link for drafts or tokens without mint
+            gmgnChartLink.style.display = 'inline';
+        }
+    } else {
+        // Hide chart for drafts or tokens without mint
+        if (dexscreenerChartEl) {
+            if (dexscreenerChartEl.src) {
+                dexscreenerChartEl.src = '';
+            }
+        }
+        if (gmgnChartLink) {
             gmgnChartLink.href = '#';
             gmgnChartLink.style.display = 'none';
         }

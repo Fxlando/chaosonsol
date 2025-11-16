@@ -5744,19 +5744,33 @@ function updateTokenMetricsInternal({
     // CRITICAL SAFEGUARD: Reject profit/loss values that are suspiciously large or close to holdings
     // This prevents holdings value (like 4.955 SOL) from being displayed as profit
     if (profitLossSol !== null) {
+        let shouldBlock = false;
+        let blockReason = '';
+        
         // Check if it's suspiciously close to holdings value
         if (holdingsValueSol !== null) {
             const diff = Math.abs(profitLossSol - holdingsValueSol);
             if (diff < 0.5) {
-                console.warn(`🚫 BLOCKED: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL)`);
-                profitLossSol = null; // Block it
+                shouldBlock = true;
+                blockReason = `too close to holdingsValueSol (${holdingsValueSol} SOL, diff: ${diff.toFixed(6)} SOL)`;
             }
         }
         
         // Check if it's a large value without investment data
-        if (profitLossSol > 1.0 && (amountInvestedSol === null || amountInvestedSol === 0)) {
-            console.warn(`🚫 BLOCKED: Large profitLossSol (${profitLossSol} SOL) without investment data - likely holdings value`);
+        if (!shouldBlock && profitLossSol > 1.0 && (amountInvestedSol === null || amountInvestedSol === 0)) {
+            shouldBlock = true;
+            blockReason = `large value (${profitLossSol} SOL) without investment data`;
+        }
+        
+        if (shouldBlock) {
+            console.warn(`🚫 BLOCKED: profitLossSol (${profitLossSol} SOL) ${blockReason} - setting to null`);
             profitLossSol = null; // Block it
+            
+            // Also clear it from state so it doesn't get restored next time
+            if (tokenDetailViewState.currentProfitLoss) {
+                tokenDetailViewState.currentProfitLoss.profitLossSol = null;
+                console.log('🧹 Cleared suspicious profitLossSol from state');
+            }
         }
     }
     

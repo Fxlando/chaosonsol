@@ -5312,9 +5312,21 @@ class MetricsManager {
         // This prevents holdings value (like 4.955 SOL) from being shown as profit/loss
         if (newPnL !== null && holdingsValueSol !== null) {
             const diff = Math.abs(newPnL - holdingsValueSol);
-            // If profit/loss is within 0.1 SOL of holdings value, it's likely incorrect
-            if (diff < 0.1) {
-                console.warn(`🚫 Rejecting suspicious profit/loss value: ${newPnL} SOL (too close to holdings value: ${holdingsValueSol} SOL)`);
+            // If profit/loss is within 0.5 SOL of holdings value, it's likely incorrect
+            if (diff < 0.5) {
+                console.warn(`🚫 Rejecting suspicious profit/loss value: ${newPnL} SOL (too close to holdings value: ${holdingsValueSol} SOL, diff: ${diff.toFixed(4)} SOL)`);
+                // Use old value instead
+                newData.profitLossSol = oldPnL;
+                return false;
+            }
+        }
+        
+        // CRITICAL: Reject large profit/loss values when we don't have investment data
+        // Large profits (>1 SOL) without investment data are likely holdings value, not actual profit
+        if (newPnL !== null && newPnL > 1.0) {
+            const hasInvestmentData = newData.amountInvestedSol !== null && newData.amountInvestedSol > 0;
+            if (!hasInvestmentData) {
+                console.warn(`🚫 Rejecting large profit/loss value without investment data: ${newPnL} SOL (likely holdings value, not profit)`);
                 // Use old value instead
                 newData.profitLossSol = oldPnL;
                 return false;
@@ -5727,6 +5739,25 @@ function updateTokenMetricsInternal({
     if (profitLossSol === null && profitLossState.profitLossSol !== undefined) {
         profitLossSol = profitLossState.profitLossSol;
         isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
+    }
+    
+    // CRITICAL SAFEGUARD: Reject profit/loss values that are suspiciously large or close to holdings
+    // This prevents holdings value (like 4.955 SOL) from being displayed as profit
+    if (profitLossSol !== null) {
+        // Check if it's suspiciously close to holdings value
+        if (holdingsValueSol !== null) {
+            const diff = Math.abs(profitLossSol - holdingsValueSol);
+            if (diff < 0.5) {
+                console.warn(`🚫 BLOCKED: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL)`);
+                profitLossSol = null; // Block it
+            }
+        }
+        
+        // Check if it's a large value without investment data
+        if (profitLossSol > 1.0 && (amountInvestedSol === null || amountInvestedSol === 0)) {
+            console.warn(`🚫 BLOCKED: Large profitLossSol (${profitLossSol} SOL) without investment data - likely holdings value`);
+            profitLossSol = null; // Block it
+        }
     }
     
     // Preserve existing holdings values when not explicitly provided
@@ -8731,9 +8762,27 @@ async function loadLiveTokenDetail(record) {
             holdingsValueSol,
             holdingsValueUsd
         };
+        
+        // CRITICAL: Don't store suspicious profit/loss values in state
+        // If profitLossSol is suspiciously close to holdingsValueSol or too large without investment data, don't store it
+        let safeProfitLossSol = profitLossSol;
+        if (profitLossSol !== null) {
+            if (holdingsValueSol !== null) {
+                const diff = Math.abs(profitLossSol - holdingsValueSol);
+                if (diff < 0.5) {
+                    console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL) in state`);
+                    safeProfitLossSol = null;
+                }
+            }
+            if (profitLossSol > 1.0 && (finalAmountInvested === null || finalAmountInvested === 0)) {
+                console.warn(`🚫 NOT STORING: Large profitLossSol (${profitLossSol} SOL) without investment data in state`);
+                safeProfitLossSol = null;
+            }
+        }
+        
         tokenDetailViewState.currentProfitLoss = {
-            profitLossSol,
-            isUnrealizedProfit,
+            profitLossSol: safeProfitLossSol,
+            isUnrealizedProfit: safeProfitLossSol !== null ? isUnrealizedProfit : false,
             amountInvestedSol: finalAmountInvested,
             amountSoldSol: finalAmountSold
         };

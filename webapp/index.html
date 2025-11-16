@@ -5676,6 +5676,7 @@
         }
         
         // Expose all functions to window object
+        // Note: showToast and addConsoleLog are already exposed above
         window.navigateToPage = navigateToPage;
         window.loadTokens = loadTokens;
         window.renderTokens = renderTokens;
@@ -5857,6 +5858,10 @@
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
+            if (!container) {
+                console.log(`[${type.toUpperCase()}] ${message}`);
+                return;
+            }
             const toast = document.createElement('div');
             toast.className = `px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
                 type === 'success' ? 'bg-green-900 text-green-200 border border-green-700' :
@@ -5873,6 +5878,42 @@
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
+
+        function addConsoleLog(message, type = 'info') {
+            const consoleOutput = document.getElementById('console-output');
+            if (!consoleOutput) {
+                console.log(`[${type.toUpperCase()}] ${message}`);
+                return;
+            }
+            const logEntry = document.createElement('div');
+            logEntry.className = `text-xs font-mono py-1 px-2 ${
+                type === 'success' ? 'text-green-400' :
+                type === 'error' ? 'text-red-400' :
+                type === 'warning' ? 'text-yellow-400' :
+                'text-blue-400'
+            }`;
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            consoleOutput.appendChild(logEntry);
+            if (consoleOutput.children.length > 100) {
+                consoleOutput.removeChild(consoleOutput.firstChild);
+            }
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // Expose toast and console functions globally
+        window.showToast = showToast;
+        window.addConsoleLog = addConsoleLog;
+
+        // Initialize toast notifications on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Small delay to ensure all scripts are loaded
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Chaos Bot platform loaded successfully', 'success');
+                }
+            }, 500);
+        });
     </script>
     <div id="mobile-nav-backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
     <script src="real-trading-ui.js"></script>

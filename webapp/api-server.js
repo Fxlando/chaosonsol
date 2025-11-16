@@ -284,8 +284,8 @@ async function loadBackend() {
         network: NETWORK,
         metadataFallback: {
           async save(metadataJson) {
-            const saved = metadataStore.save(metadataJson);
-            if (!saved.uri) {
+            const saved = await Promise.resolve(metadataStore.save(metadataJson));
+            if (!saved || !saved.uri) {
               throw new Error('Metadata base URL is not configured (METADATA_BASE_URL)');
             }
             return saved;
@@ -913,15 +913,37 @@ register('post', '/trading/buy', async (req, res) => {
   const defaultSlippage = 1000; // 10% = 1000 bps
   const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
   
-  // Convert slippage: if already in bps (> 100), use it; otherwise convert percentage to bps
-  const slippageBps = options.slippage ? 
-    (options.slippage > 100 ? options.slippage : Math.floor(options.slippage * 100)) : 
-    defaultSlippage;
+  // Convert slippage: normalize to bps format
+  // If > 100, assume already in bps; if <= 100, assume percentage and convert to bps
+  let slippageBps = defaultSlippage;
+  if (options.slippage !== undefined && options.slippage !== null) {
+    const rawSlippage = Number(options.slippage);
+    if (Number.isFinite(rawSlippage) && rawSlippage > 0) {
+      if (rawSlippage > 100) {
+        // Already in bps
+        slippageBps = Math.floor(rawSlippage);
+      } else {
+        // Percentage, convert to bps
+        slippageBps = Math.floor(rawSlippage * 100);
+      }
+    }
+  }
   
-  // Convert priority fee: if already in lamports (> 1e6), use it; otherwise convert SOL to lamports
-  const priorityFeeLamports = options.priorityFee ? 
-    (options.priorityFee > 1e6 ? options.priorityFee : Math.floor(options.priorityFee * 1e9)) : 
-    defaultPriorityFee;
+  // Convert priority fee: normalize to lamports
+  // If > 1e6, assume already in lamports; otherwise assume SOL and convert to lamports
+  let priorityFeeLamports = defaultPriorityFee;
+  if (options.priorityFee !== undefined && options.priorityFee !== null) {
+    const rawPriorityFee = Number(options.priorityFee);
+    if (Number.isFinite(rawPriorityFee) && rawPriorityFee > 0) {
+      if (rawPriorityFee > 1e6) {
+        // Already in lamports
+        priorityFeeLamports = Math.floor(rawPriorityFee);
+      } else {
+        // SOL, convert to lamports
+        priorityFeeLamports = Math.floor(rawPriorityFee * 1e9);
+      }
+    }
+  }
 
   const mergedOptions = {
     ...options,
@@ -949,15 +971,37 @@ register('post', '/trading/sell', async (req, res) => {
   const defaultSlippage = 1000; // 10% = 1000 bps
   const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
   
-  // Convert slippage: if already in bps (> 100), use it; otherwise convert percentage to bps
-  const slippageBps = options.slippage ? 
-    (options.slippage > 100 ? options.slippage : Math.floor(options.slippage * 100)) : 
-    defaultSlippage;
+  // Convert slippage: normalize to bps format
+  // If > 100, assume already in bps; if <= 100, assume percentage and convert to bps
+  let slippageBps = defaultSlippage;
+  if (options.slippage !== undefined && options.slippage !== null) {
+    const rawSlippage = Number(options.slippage);
+    if (Number.isFinite(rawSlippage) && rawSlippage > 0) {
+      if (rawSlippage > 100) {
+        // Already in bps
+        slippageBps = Math.floor(rawSlippage);
+      } else {
+        // Percentage, convert to bps
+        slippageBps = Math.floor(rawSlippage * 100);
+      }
+    }
+  }
   
-  // Convert priority fee: if already in lamports (> 1e6), use it; otherwise convert SOL to lamports
-  const priorityFeeLamports = options.priorityFee ? 
-    (options.priorityFee > 1e6 ? options.priorityFee : Math.floor(options.priorityFee * 1e9)) : 
-    defaultPriorityFee;
+  // Convert priority fee: normalize to lamports
+  // If > 1e6, assume already in lamports; otherwise assume SOL and convert to lamports
+  let priorityFeeLamports = defaultPriorityFee;
+  if (options.priorityFee !== undefined && options.priorityFee !== null) {
+    const rawPriorityFee = Number(options.priorityFee);
+    if (Number.isFinite(rawPriorityFee) && rawPriorityFee > 0) {
+      if (rawPriorityFee > 1e6) {
+        // Already in lamports
+        priorityFeeLamports = Math.floor(rawPriorityFee);
+      } else {
+        // SOL, convert to lamports
+        priorityFeeLamports = Math.floor(rawPriorityFee * 1e9);
+      }
+    }
+  }
 
   const mergedOptions = {
     ...options,

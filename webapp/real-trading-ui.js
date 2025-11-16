@@ -5306,6 +5306,20 @@ class MetricsManager {
         // Check if profit/loss changed significantly (more than $0.01)
         const newPnL = newData.profitLossSol ?? null;
         const oldPnL = oldData.profitLossSol ?? null;
+        const holdingsValueSol = newData.holdingsValueSol ?? null;
+
+        // CRITICAL: Reject profit/loss values that are suspiciously close to holdingsValueSol
+        // This prevents holdings value (like 4.955 SOL) from being shown as profit/loss
+        if (newPnL !== null && holdingsValueSol !== null) {
+            const diff = Math.abs(newPnL - holdingsValueSol);
+            // If profit/loss is within 0.1 SOL of holdings value, it's likely incorrect
+            if (diff < 0.1) {
+                console.warn(`🚫 Rejecting suspicious profit/loss value: ${newPnL} SOL (too close to holdings value: ${holdingsValueSol} SOL)`);
+                // Use old value instead
+                newData.profitLossSol = oldPnL;
+                return false;
+            }
+        }
 
         if (newPnL !== null && oldPnL !== null) {
             const diff = Math.abs(newPnL - oldPnL);

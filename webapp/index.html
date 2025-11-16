@@ -4852,10 +4852,15 @@
                 views.forEach(view => view.classList.add('hidden'));
                 
                 // Show the requested page
-                const targetPage = document.getElementById(page + '-page');
+                // Try both -page and -view suffixes for compatibility
+                let targetPage = document.getElementById(page + '-page');
+                if (!targetPage) {
+                    targetPage = document.getElementById(page + '-view');
+                }
+                
                 if (targetPage) {
                     targetPage.classList.remove('hidden');
-                    console.log('Showing page:', page + '-page');
+                    console.log('Showing page:', targetPage.id);
                     
                     if (typeof addConsoleLog === 'function') {
                         addConsoleLog(`Navigated to ${page} page`, 'info');
@@ -4864,6 +4869,11 @@
                     // Load wallets when navigating to create-token page
                     if (page === 'create-token' && typeof loadWalletsForTokenCreation === 'function') {
                         loadWalletsForTokenCreation();
+                    }
+                    
+                    // Load tokens when navigating to tokens page
+                    if (page === 'tokens' && typeof loadTokens === 'function') {
+                        loadTokens();
                     }
                 } else {
                     console.log('Page not found, trying modal:', page + '-modal');
@@ -5445,8 +5455,188 @@
             }
         }
 
+        // Token loading functions
+        let tokens = [];
+        
+        // API base URL
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3000/api'
+            : '/api';
+        
+        // Load tokens from API (on-chain data)
+        async function loadTokens() {
+            try {
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog('Loading tokens from blockchain...', 'info');
+                }
+                // api-server.js handles both /api/tokens and /tokens routes
+                const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/tokens` : `${API_BASE}/tokens`;
+                console.log('Fetching tokens from:', endpoint);
+                
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    let errorText = '';
+                    try {
+                        errorText = await response.text();
+                        const errorData = JSON.parse(errorText);
+                        if (errorData.error) {
+                            throw new Error(errorData.error);
+                        }
+                    } catch (parseError) {
+                        // If parsing fails, use the raw text
+                    }
+                    console.error('API error response:', errorText);
+                    throw new Error(`API returned ${response.status}: ${errorText || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Tokens API response:', data);
+                
+                // Check for error in response
+                if (data.error || (data.success === false)) {
+                    throw new Error(data.error || 'Failed to load tokens');
+                }
+                
+                // Handle both response formats: { tokens: [...] } and { success: true, tokens: [...] }
+                tokens = data.tokens || [];
+                renderTokens();
+                
+                if (tokens.length === 0) {
+                    if (typeof addConsoleLog === 'function') {
+                        addConsoleLog(data.message || 'No tokens found in your wallets', 'info');
+                    }
+                } else {
+                    if (typeof addConsoleLog === 'function') {
+                        addConsoleLog(`Loaded ${tokens.length} token(s) from blockchain`, 'success');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading tokens:', error);
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog(`Error loading tokens: ${error.message}`, 'error');
+                }
+                tokens = [];
+                renderTokens();
+            }
+        }
+        
+        // Render tokens in the table
+        function renderTokens() {
+            const tbody = document.getElementById('tokens-table-body');
+            if (!tbody) {
+                console.error('tokens-table-body element not found');
+                return;
+            }
+            
+            if (tokens.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-gray-400">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="inbox" class="w-12 h-12"></i>
+                                <p>No tokens found</p>
+                                <p class="text-xs">Add wallets to see tokens from your holdings</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+                return;
+            }
+            
+            tbody.innerHTML = tokens.map(token => {
+                // Determine status based on token data
+                const status = token.status || 'ACTIVE';
+                const statusClass = status === 'LAUNCHED' ? 'bg-green-900 text-green-200' :
+                                   status === 'PRE-LAUNCH' ? 'bg-neutral-800 text-gray-300' :
+                                   status === 'IMPORTED' ? 'bg-blue-900 text-blue-200' :
+                                   'bg-neutral-800 text-gray-300';
+                const statusText = status === 'LAUNCHED' ? 'LAUNCHED' :
+                                  status === 'PRE-LAUNCH' ? 'PRE-LAUNCH' :
+                                  status === 'IMPORTED' ? 'IMPORTED' :
+                                  'ACTIVE';
+                
+                // Get first 4 chars of mint for display
+                const mintShort = token.mint ? (token.mint.substring(0, 4) + '...' + token.mint.substring(token.mint.length - 4)) : 'N/A';
+                
+                return `
+                    <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectTokenByMint('${token.mint}')">
+                        <td class="p-4">
+                            <input type="checkbox" class="rounded" onchange="event.stopPropagation()" />
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">💎</div>
+                                <div>
+                                    <div class="font-semibold">${token.symbol || mintShort}</div>
+                                    <div class="text-xs text-gray-500">${token.name || mintShort}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs text-gray-400">${token.mint || 'N/A'}</span>
+                                <i data-lucide="copy" class="w-4 h-4 text-gray-500 hover:text-gray-300" onclick="event.stopPropagation(); copyAddress('${token.mint}')"></i>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <span class="text-sm">${token.balance ? token.balance.toLocaleString() : '--'}</span>
+                        </td>
+                        <td class="p-4">
+                            <span class="text-sm">--</span>
+                        </td>
+                        <td class="p-4">
+                            <div class="flex items-center gap-2">
+                                <span>🚀</span>
+                                <span class="text-sm">Pump.fun</span>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <span class="text-xs px-3 py-1 rounded-full ${statusClass}">${statusText}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+        
+        // Select token by mint address
+        function selectTokenByMint(mintAddress) {
+            const token = tokens.find(t => t.mint === mintAddress);
+            if (token) {
+                navigateToPage('token-detail');
+                // You can set selected token details here if needed
+            }
+        }
+        
+        // Copy address to clipboard
+        function copyAddress(address) {
+            navigator.clipboard.writeText(address).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Address copied to clipboard!', 'success');
+                }
+            }).catch(err => {
+                console.error('Failed to copy address:', err);
+            });
+        }
+        
         // Expose all functions to window object
         window.navigateToPage = navigateToPage;
+        window.loadTokens = loadTokens;
+        window.renderTokens = renderTokens;
+        window.selectTokenByMint = selectTokenByMint;
+        window.copyAddress = copyAddress;
         window.executeFundWallets = executeFundWallets;
         window.executeWithdrawWallets = executeWithdrawWallets;
         window.selectFundMode = selectFundMode;

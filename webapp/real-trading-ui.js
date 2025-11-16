@@ -8666,17 +8666,33 @@ async function loadLiveTokenDetail(record) {
         let profitLossSol = null;
         let isUnrealizedProfit = false;
         
-        if (holdingsValueSol !== null && amountInvestedSol !== null) {
-            // We have investment data - calculate full profit/loss (realized + unrealized)
-            const soldComponent = amountSoldSol || 0;
-            profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
-            isUnrealizedProfit = false;
-            console.log('💰 Calculated profit/loss (with investment data):', {
-                holdingsValueSol,
-                amountSoldSol: soldComponent,
-                amountInvestedSol,
-                profitLossSol
-            });
+        if (holdingsValueSol !== null && amountInvestedSol !== null && amountInvestedSol > 0) {
+            // We have investment data - but check if the investment is significant enough
+            // If investment is very small (< 0.01 SOL), the calculation will be mostly holdings value
+            // In that case, only show profit if we have realized sells
+            if (amountInvestedSol < 0.01) {
+                // Investment is too small - only show realized profit from sells
+                if (amountSoldSol !== null && amountSoldSol > 0) {
+                    profitLossSol = amountSoldSol;
+                    isUnrealizedProfit = false;
+                    console.log('💰 Showing only realized profit from sells (investment too small):', profitLossSol, 'SOL');
+                } else {
+                    // No realized sells and investment is tiny - can't calculate meaningful profit
+                    profitLossSol = null;
+                    console.log('⚠️ Investment too small (', amountInvestedSol, 'SOL) and no sells - cannot calculate meaningful profit/loss');
+                }
+            } else {
+                // Investment is significant - calculate full profit/loss (realized + unrealized)
+                const soldComponent = amountSoldSol || 0;
+                profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+                isUnrealizedProfit = false;
+                console.log('💰 Calculated profit/loss (with investment data):', {
+                    holdingsValueSol,
+                    amountSoldSol: soldComponent,
+                    amountInvestedSol,
+                    profitLossSol
+                });
+            }
         } else if (amountSoldSol !== null && amountSoldSol > 0) {
             // We have realized profit from sells but no investment data
             // NOTE: amountSoldSol is revenue, not profit - we need cost basis to calculate actual profit

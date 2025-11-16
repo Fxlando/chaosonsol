@@ -4176,21 +4176,38 @@
                 // api-server.js handles both /api/tokens and /tokens routes
                 const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/tokens` : `${API_BASE}/tokens`;
                 console.log('Fetching tokens from:', endpoint);
-                const response = await fetch(endpoint);
+                
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
                 
                 if (!response.ok) {
-                    const errorText = await response.text();
+                    let errorText = '';
+                    try {
+                        errorText = await response.text();
+                        const errorData = JSON.parse(errorText);
+                        if (errorData.error) {
+                            throw new Error(errorData.error);
+                        }
+                    } catch (parseError) {
+                        // If parsing fails, use the raw text
+                    }
                     console.error('API error response:', errorText);
-                    throw new Error(`API returned ${response.status}: ${errorText}`);
+                    throw new Error(`API returned ${response.status}: ${errorText || response.statusText}`);
                 }
                 
                 const data = await response.json();
                 console.log('Tokens API response:', data);
                 
-                if (data.error) {
-                    throw new Error(data.error);
+                // Check for error in response
+                if (data.error || (data.success === false)) {
+                    throw new Error(data.error || 'Failed to load tokens');
                 }
                 
+                // Handle both response formats: { tokens: [...] } and { success: true, tokens: [...] }
                 tokens = data.tokens || [];
                 renderTokens();
                 

@@ -701,75 +701,132 @@ register('delete', '/wallets/:walletId', async (req, res) => {
 });
 
 register('get', '/tokens', async () => {
-  const backend = await loadBackend();
-  const connection = backend.solanaCore.getConnection();
-  const wallets = backend.walletManager.getAllWallets();
+  try {
+    const backend = await loadBackend();
+    
+    if (!backend) {
+      return {
+        success: false,
+        error: 'Backend not initialized',
+        tokens: [],
+        total: 0
+      };
+    }
 
-  if (!wallets.length) {
-    return {
-      success: true,
-      tokens: [],
-      total: 0,
-      message: 'No wallets configured'
-    };
-  }
+    const connection = backend.solanaCore?.getConnection();
+    if (!connection) {
+      return {
+        success: false,
+        error: 'Solana connection not available',
+        tokens: [],
+        total: 0
+      };
+    }
 
-  const tokenMap = new Map();
+    const wallets = backend.walletManager?.getAllWallets() || [];
 
-  for (const wallet of wallets) {
-    try {
-      const owner = new PublicKey(wallet.publicKey);
-      const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
-        programId: TOKEN_PROGRAM_ID
-      });
+    if (!wallets.length) {
+      return {
+        success: true,
+        tokens: [],
+        total: 0,
+        message: 'No wallets configured'
+      };
+    }
 
-      for (const account of accounts.value) {
-        const parsed = account.account.data.parsed.info;
-        const tokenMint = parsed.mint;
-        const amountInfo = parsed.tokenAmount;
-        const balance = Number(amountInfo.uiAmount || 0);
+    const tokenMap = new Map();
+    let errorCount = 0;
+    const errors = [];
 
-        if (!Number.isFinite(balance) || balance <= 0) {
+    for (const wallet of wallets) {
+      try {
+        if (!wallet.publicKey) {
+          console.warn(`Wallet ${wallet.id} has no public key`);
           continue;
         }
 
-        if (!tokenMap.has(tokenMint)) {
-          tokenMap.set(tokenMint, {
-            mint: tokenMint,
-            name: tokenMint.slice(0, 8),
-            symbol: tokenMint.slice(0, 4),
-            decimals: amountInfo.decimals,
-            totalBalance: 0,
-            holders: []
-          });
+        const owner = new PublicKey(wallet.publicKey);
+        const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
+          programId: TOKEN_PROGRAM_ID
+        });
+
+        if (!accounts || !accounts.value) {
+          continue;
         }
 
-        const token = tokenMap.get(tokenMint);
-        token.totalBalance += balance;
-        token.holders.push({
-          walletId: wallet.id,
-          publicKey: wallet.publicKey,
-          balance
-        });
+        for (const account of accounts.value) {
+          try {
+            const parsed = account.account.data.parsed.info;
+            const tokenMint = parsed.mint;
+            const amountInfo = parsed.tokenAmount;
+            const balance = Number(amountInfo.uiAmount || 0);
+
+            if (!Number.isFinite(balance) || balance <= 0) {
+              continue;
+            }
+
+            if (!tokenMap.has(tokenMint)) {
+              tokenMap.set(tokenMint, {
+                mint: tokenMint,
+                name: tokenMint.slice(0, 8),
+                symbol: tokenMint.slice(0, 4),
+                decimals: amountInfo.decimals,
+                totalBalance: 0,
+                holders: []
+              });
+            }
+
+            const token = tokenMap.get(tokenMint);
+            token.totalBalance += balance;
+            token.holders.push({
+              walletId: wallet.id,
+              publicKey: wallet.publicKey,
+              balance
+            });
+          } catch (accountError) {
+            console.error(`Error processing token account:`, accountError.message);
+            errorCount++;
+          }
+        }
+      } catch (error) {
+        const errorMsg = `Failed to load tokens for wallet ${wallet.publicKey}: ${error.message}`;
+        console.error(errorMsg);
+        errors.push(errorMsg);
+        errorCount++;
       }
-    } catch (error) {
-      console.error(`Failed to load tokens for wallet ${wallet.publicKey}:`, error.message);
     }
+
+    const tokens = Array.from(tokenMap.values()).map((token) => ({
+      mint: token.mint,
+      name: token.name,
+      symbol: token.symbol,
+      balance: token.totalBalance,
+      holders: token.holders.length
+    }));
+
+    const response = {
+      success: true,
+      tokens,
+      total: tokens.length
+    };
+
+    if (errorCount > 0) {
+      response.warnings = errors.slice(0, 5); // Limit warnings to first 5
+      if (errors.length > 5) {
+        response.warnings.push(`... and ${errors.length - 5} more errors`);
+      }
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error in /tokens endpoint:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to load tokens',
+      tokens: [],
+      total: 0
+    };
   }
-
-  const tokens = Array.from(tokenMap.values()).map((token) => ({
-    mint: token.mint,
-    name: token.name,
-    symbol: token.symbol,
-    balance: token.totalBalance,
-    holders: token.holders.length
-  }));
-
-  return {
-    success: true,
-    tokens,
-    total: tokens.length
-  };
 });
 
 register('post', '/trading/buy', async (req, res) => {

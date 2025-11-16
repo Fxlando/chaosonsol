@@ -182,18 +182,43 @@ export class RPCManager {
         connection = this.getConnection();
         const startTime = Date.now();
         
-        const result = await Promise.race([
-          requestFn(connection),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Request timeout')), this.config.requestTimeout)
-          )
-        ]);
+        // Create timeout promise with cleanup
+        let timeoutId = null;
+        let timeoutCleared = false;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => {
+            if (!timeoutCleared) {
+              timeoutCleared = true;
+              reject(new Error('Request timeout'));
+            }
+          }, this.config.requestTimeout);
+        });
+        
+        try {
+          const result = await Promise.race([
+            requestFn(connection),
+            timeoutPromise
+          ]);
 
-        // Update stats on success
-        const latency = Date.now() - startTime;
-        this.updateConnectionStats(connection, true, latency);
+          // Clear timeout if request completed (ensure it's only cleared once)
+          if (timeoutId && !timeoutCleared) {
+            clearTimeout(timeoutId);
+            timeoutCleared = true;
+          }
 
-        return result;
+          // Update stats on success
+          const latency = Date.now() - startTime;
+          this.updateConnectionStats(connection, true, latency);
+
+          return result;
+        } catch (raceError) {
+          // Clear timeout on error (ensure it's only cleared once)
+          if (timeoutId && !timeoutCleared) {
+            clearTimeout(timeoutId);
+            timeoutCleared = true;
+          }
+          throw raceError;
+        }
       } catch (error) {
         lastError = error;
         
@@ -337,8 +362,9 @@ export class RPCManager {
         successCount: connectionStats?.successCount || 0,
         failureCount: connectionStats?.failureCount || 0,
         averageLatency: connectionStats?.averageLatency || 0,
-        successRate: connectionStats ? 
-          connectionStats.successCount / (connectionStats.successCount + connectionStats.failureCount) : 0
+        successRate: connectionStats && (connectionStats.successCount + connectionStats.failureCount) > 0
+          ? connectionStats.successCount / (connectionStats.successCount + connectionStats.failureCount)
+          : 0
       });
     }
     return stats;

@@ -455,10 +455,13 @@ export class App {
         if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
           // Fallback: fetch balance in UI units and convert using decimals if provided
           const uiBalance = await this.solanaCore.getTokenBalance(wallet.publicKey, mint);
-          if (uiBalance && decimals !== undefined) {
-            tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
-          } else if (uiBalance) {
-            tokenAmount = Math.floor(Number(uiBalance));
+          // getTokenBalance returns a number, validate it before using
+          if (uiBalance && typeof uiBalance === 'number' && Number.isFinite(uiBalance) && uiBalance > 0) {
+            if (decimals !== undefined) {
+              tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
+            } else {
+              tokenAmount = Math.floor(Number(uiBalance));
+            }
           }
         }
 
@@ -825,10 +828,13 @@ export class App {
 
           if (!tokenAmount || Number.isNaN(tokenAmount) || tokenAmount <= 0) {
             const uiBalance = await this.solanaCore.getTokenBalance(wallet.publicKey, mint);
-            if (uiBalance && decimals !== undefined) {
-              tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
-            } else if (uiBalance) {
-              tokenAmount = Math.floor(Number(uiBalance));
+            // getTokenBalance returns a number, validate it before using
+            if (uiBalance && typeof uiBalance === 'number' && Number.isFinite(uiBalance) && uiBalance > 0) {
+              if (decimals !== undefined) {
+                tokenAmount = Math.floor(Number(uiBalance) * Math.pow(10, decimals));
+              } else {
+                tokenAmount = Math.floor(Number(uiBalance));
+              }
             }
           }
 
@@ -1020,8 +1026,9 @@ export class App {
             tokenMint
           );
 
-          if (balanceInfo && typeof balanceInfo.uiAmount === 'number') {
-            amount = balanceInfo.uiAmount;
+          // getTokenBalance returns a number (uiAmount), not an object
+          if (balanceInfo && typeof balanceInfo === 'number' && Number.isFinite(balanceInfo) && balanceInfo > 0) {
+            amount = balanceInfo;
           }
         }
 

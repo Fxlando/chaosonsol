@@ -16,12 +16,20 @@ const logger = loggerManager.getLogger('WalletManager');
 export class WalletManager {
   constructor(solanaCore, storage = null) {
     this.solanaCore = solanaCore;
-    this.connection = solanaCore.getConnection();
+    // Don't access connection in constructor - it may not be initialized yet
+    // Connection will be accessed via getConnection() method when needed
     this.storage = storage || this.defaultStorage();
     this.wallets = new Map();
     this.isInitialized = false;
     
     this.initialize();
+  }
+  
+  /**
+   * Get connection (lazy access)
+   */
+  getConnection() {
+    return this.solanaCore.getConnection();
   }
 
   /**

@@ -140,9 +140,13 @@ export class VolumeBot {
 
       this.sessions.set(sessionId, session);
       
-      // Start session execution
+      // Start session execution with proper error handling
       this.executeSession(session).catch(error => {
         logger.error(`Session ${sessionId} failed:`, error);
+        // Mark session as inactive on error
+        session.isActive = false;
+        session.error = error.message;
+        session.completedAt = new Date().toISOString();
       });
       
       logger.info(`Started volume session: ${sessionId} (${walletIds.length} wallets, ${tokenMint})`);
@@ -246,14 +250,39 @@ export class VolumeBot {
               // Validate balance - it's a number representing uiAmount
               if (Number.isFinite(balance) && balance > 0) {
                 const sellPercentage = this.calculateSellPercentage(config);
-                // Convert balance to object format for calculateSellAmount
+                
+                // Get token decimals to convert UI amount to base units
+                let decimals = 9; // Default for SOL
+                try {
+                  const { PublicKey } = await import('@solana/web3.js');
+                  const { getMint } = await import('@solana/spl-token');
+                  const mintPublicKey = new PublicKey(tokenMint);
+                  const mintInfo = await getMint(this.tradingEngine.solanaCore.getConnection(), mintPublicKey);
+                  decimals = mintInfo.decimals || 9;
+                } catch (error) {
+                  logger.warn(`Could not get mint info for ${tokenMint}, assuming 9 decimals:`, error.message);
+                  // Default to 9 decimals if we can't fetch mint info
+                }
+                
+                // Convert UI balance to base units for calculateSellAmount
+                // Use Math.round for better precision instead of Math.floor to avoid truncation
+                // Validate balance is large enough to avoid precision loss
+                if (balance < 1e-9) {
+                  logger.warn(`Balance too small for conversion: ${balance}, skipping sell`);
+                  continue;
+                }
+                const balanceInBaseUnits = Math.round(balance * Math.pow(10, decimals));
+                if (balanceInBaseUnits <= 0) {
+                  logger.warn(`Converted balance is zero or negative: ${balanceInBaseUnits}, skipping sell`);
+                  continue;
+                }
                 const balanceObj = {
                   uiAmount: balance,
-                  amount: balance // For now, assume same as uiAmount (would need decimals for proper conversion)
+                  amount: balanceInBaseUnits // Base units (integer)
                 };
                 const sellAmount = this.calculateSellAmount(balanceObj, sellPercentage);
                 
-                logger.info(`Volume bot: Wallet ${walletId} selling ${sellPercentage.toFixed(1)}% of tokens`);
+                logger.info(`Volume bot: Wallet ${walletId} selling ${sellPercentage.toFixed(1)}% of tokens (${(balance * sellPercentage / 100).toFixed(6)} UI units, ${sellAmount} base units)`);
                 
                 const sellResult = await this.tradingEngine.sellToken(
                   walletId,

@@ -709,6 +709,18 @@ export class JupiterClient {
           };
         }
         
+        // Validate baseAmount again before division (defensive check)
+        if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+          logger.warn(`Invalid baseAmount before division: ${baseAmount}`);
+          return {
+            price: 0,
+            formatted: '0 tokens per SOL',
+            impact: quote.priceImpactPct || 0,
+            success: false,
+            error: 'Invalid base amount for price calculation'
+          };
+        }
+        
         const price = outputAmount / baseAmount;
         if (!Number.isFinite(price) || price <= 0) {
           logger.warn(`Calculated invalid price: ${price}`);

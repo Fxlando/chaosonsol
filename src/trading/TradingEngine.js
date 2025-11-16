@@ -64,6 +64,21 @@ export class TradingEngine {
    */
   async buyToken(walletId, tokenMint, solAmount, options = {}) {
     try {
+      // Input validation
+      if (!walletId || !tokenMint || !solAmount) {
+        return {
+          success: false,
+          error: 'walletId, tokenMint, and solAmount are required'
+        };
+      }
+      
+      if (!Number.isFinite(solAmount) || solAmount <= 0) {
+        return {
+          success: false,
+          error: 'solAmount must be a positive number'
+        };
+      }
+
       logger.info(`Buying token: ${tokenMint} with ${solAmount} SOL`);
 
       // Get wallet keypair
@@ -79,9 +94,13 @@ export class TradingEngine {
         if (result && result.success) {
           logger.info('✅ Pump.fun buy successful');
           // Update wallet last used (safely check if wallet exists)
-          const wallet = this.walletManager.wallets.get(walletId);
-          if (wallet) {
-            wallet.lastUsed = new Date().toISOString();
+          try {
+            const wallet = this.walletManager.wallets.get(walletId);
+            if (wallet) {
+              wallet.lastUsed = new Date().toISOString();
+            }
+          } catch (error) {
+            logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
           }
           return result;
         }
@@ -98,12 +117,15 @@ export class TradingEngine {
         const isNotPumpFunError = pumpFunError.message?.includes('not found') || 
                                   pumpFunError.message?.includes('invalid') ||
                                   pumpFunError.message?.includes('Not a pump.fun token') ||
-                                  pumpFunError.message?.includes('not on pump.fun');
+                                  pumpFunError.message?.includes('not on pump.fun') ||
+                                  pumpFunError.message?.includes('does not exist');
         
         if (isNotPumpFunError) {
           logger.info('ℹ️ Token appears to not be on pump.fun, trying Jupiter...');
+        } else {
+          // If it's a real error (might still be pump.fun token), log but continue to Jupiter
+          logger.debug('Pump.fun error may be transient, trying Jupiter as fallback');
         }
-        // If it's a real error (might still be pump.fun token), log but continue to Jupiter
       }
       
       // Strategy 2: Try Jupiter for DEX tokens (if pump.fun failed or not available)
@@ -111,9 +133,13 @@ export class TradingEngine {
       const result = await this.jupiter.swapSOLToToken(keypair, tokenMint, solAmount, options);
       
       // Update wallet last used (safely check if wallet exists)
-      const wallet = this.walletManager.wallets.get(walletId);
-      if (wallet) {
-        wallet.lastUsed = new Date().toISOString();
+      try {
+        const wallet = this.walletManager.wallets.get(walletId);
+        if (wallet) {
+          wallet.lastUsed = new Date().toISOString();
+        }
+      } catch (error) {
+        logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
       }
       
       return result;
@@ -138,10 +164,32 @@ export class TradingEngine {
    */
   async sellToken(walletId, tokenMint, tokenAmount, options = {}) {
     try {
+      // Input validation
+      if (!walletId || !tokenMint || !tokenAmount) {
+        return {
+          success: false,
+          error: 'walletId, tokenMint, and tokenAmount are required'
+        };
+      }
+      
+      if (!Number.isFinite(tokenAmount) || tokenAmount <= 0) {
+        return {
+          success: false,
+          error: 'tokenAmount must be a positive number'
+        };
+      }
+
       logger.info(`Selling token: ${tokenMint}, amount: ${tokenAmount}`);
 
       // Get wallet keypair
       const keypair = this.walletManager.getWalletKeypair(walletId);
+
+      // Normalize slippage: convert from bps to bps (if > 100, assume bps; otherwise assume percentage and convert)
+      let slippageBps = options.slippage || 1000; // Default 10% = 1000 bps
+      if (slippageBps <= 100) {
+        // Assume percentage, convert to bps
+        slippageBps = Math.floor(slippageBps * 100);
+      }
 
       // Use Jupiter V6 integration which handles both pump.fun and Jupiter automatically
       // It tries pump.fun first (for bonding curve tokens), then Jupiter (for DEX tokens)
@@ -153,41 +201,67 @@ export class TradingEngine {
         const jupiterV6Module = await import('../../jupiter-v6-integration.js');
         const JupiterV6Integration = jupiterV6Module.JupiterV6Integration || jupiterV6Module.default;
         const jupiterV6 = new JupiterV6Integration(this.solanaCore.connection, {
-          slippage: options.slippage || 1000, // 10% default
+          slippage: slippageBps, // Pass in bps format
           priorityFee: options.priorityFee || 500000 // 0.0005 SOL default
         });
         
         const result = await jupiterV6.sellToken(keypair, tokenMint, tokenAmount, options);
         
-        // Update wallet last used
-        this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+        // Update wallet last used (safely check if wallet exists)
+        try {
+          const wallet = this.walletManager.wallets.get(walletId);
+          if (wallet) {
+            wallet.lastUsed = new Date().toISOString();
+          }
+        } catch (error) {
+          logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+        }
         
         return result;
       } catch (jupiterV6Error) {
         logger.warn('Jupiter V6 integration not available, falling back to legacy system:', jupiterV6Error.message);
         
         // Fallback to legacy system
-        // Check if token is PumpFun token
-        const tokenInfo = await this.pumpFun.getTokenInfo(tokenMint);
-        
-        if (tokenInfo.success && !tokenInfo.isComplete) {
-          // Use PumpFun for bonding curve tokens
-          logger.info('Using PumpFun for bonding curve token');
-          const result = await this.pumpFun.sellToken(keypair, tokenMint, tokenAmount, options);
+        try {
+          // Check if token is PumpFun token
+          const tokenInfo = await this.pumpFun.getTokenInfo(tokenMint);
           
-          // Update wallet last used
-          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-          
-          return result;
-        } else {
-          // Use Jupiter for DEX tokens
-          logger.info('Using Jupiter for DEX token');
-          const result = await this.jupiter.swapTokenToSOL(keypair, tokenMint, tokenAmount, options);
-          
-          // Update wallet last used
-          this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
-          
-          return result;
+          if (tokenInfo.success && !tokenInfo.isComplete) {
+            // Use PumpFun for bonding curve tokens
+            logger.info('Using PumpFun for bonding curve token');
+            const result = await this.pumpFun.sellToken(keypair, tokenMint, tokenAmount, options);
+            
+            // Update wallet last used (safely check if wallet exists)
+            try {
+              const wallet1 = this.walletManager.wallets.get(walletId);
+              if (wallet1) {
+                wallet1.lastUsed = new Date().toISOString();
+              }
+            } catch (error) {
+              logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+            }
+            
+            return result;
+          } else {
+            // Use Jupiter for DEX tokens
+            logger.info('Using Jupiter for DEX token');
+            const result = await this.jupiter.swapTokenToSOL(keypair, tokenMint, tokenAmount, options);
+            
+            // Update wallet last used (safely check if wallet exists)
+            try {
+              const wallet2 = this.walletManager.wallets.get(walletId);
+              if (wallet2) {
+                wallet2.lastUsed = new Date().toISOString();
+              }
+            } catch (error) {
+              logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+            }
+            
+            return result;
+          }
+        } catch (fallbackError) {
+          logger.error('Fallback sell methods also failed:', fallbackError);
+          throw fallbackError;
         }
       }
     } catch (error) {
@@ -256,8 +330,15 @@ export class TradingEngine {
       // Use PumpFun client to create token
       const result = await this.pumpFun.createToken(keypair, metadata, options);
 
-      // Update wallet last used
-      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+      // Update wallet last used (safely check if wallet exists)
+      try {
+        const wallet = this.walletManager.wallets.get(walletId);
+        if (wallet) {
+          wallet.lastUsed = new Date().toISOString();
+        }
+      } catch (error) {
+        logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+      }
 
       return result;
     } catch (error) {
@@ -280,8 +361,15 @@ export class TradingEngine {
       // Use PumpFun client to launch token
       const result = await this.pumpFun.launchToken(keypair, metadata, initialBuyAmount, options);
 
-      // Update wallet last used
-      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+      // Update wallet last used (safely check if wallet exists)
+      try {
+        const wallet = this.walletManager.wallets.get(walletId);
+        if (wallet) {
+          wallet.lastUsed = new Date().toISOString();
+        }
+      } catch (error) {
+        logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+      }
 
       return result;
     } catch (error) {
@@ -442,8 +530,15 @@ export class TradingEngine {
         options
       );
 
-      // Update wallet last used
-      this.walletManager.wallets.get(walletId).lastUsed = new Date().toISOString();
+      // Update wallet last used (safely check if wallet exists)
+      try {
+        const wallet = this.walletManager.wallets.get(walletId);
+        if (wallet) {
+          wallet.lastUsed = new Date().toISOString();
+        }
+      } catch (error) {
+        logger.warn(`Failed to update wallet lastUsed for ${walletId}:`, error.message);
+      }
 
       return result;
     } catch (error) {

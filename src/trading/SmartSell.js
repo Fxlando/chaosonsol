@@ -217,7 +217,7 @@ export class SmartSell {
     }
 
     // Trailing stop
-    if (position.highestPrice > position.entryPrice) {
+    if (position.highestPrice > position.entryPrice && position.highestPrice > 0) {
       const pullbackFromHigh = ((position.highestPrice - currentPrice) / position.highestPrice) * 100;
       
       if (pullbackFromHigh >= position.trailingStop) {
@@ -255,21 +255,46 @@ export class SmartSell {
       }
 
       // Calculate sell amount based on percentage
-      // balance is already in UI units (human-readable), so we can use it directly
+      // balance is in UI units (human-readable), but sellToken expects base units
       const sellPercentage = position.sellPercentage || 100;
       if (!Number.isFinite(sellPercentage) || sellPercentage <= 0 || sellPercentage > 100) {
         logger.error(`Invalid sell percentage: ${sellPercentage}`);
         return { success: false, error: 'Invalid sell percentage' };
       }
       
-      const sellAmount = Math.floor(balance * sellPercentage / 100);
+      // Calculate UI amount to sell
+      const uiAmountToSell = balance * sellPercentage / 100;
+      
+      // Get token decimals to convert UI amount to base units
+      let decimals = 9; // Default for SOL
+      try {
+        const { PublicKey } = await import('@solana/web3.js');
+        const { getMint } = await import('@solana/spl-token');
+        const mintPublicKey = new PublicKey(position.tokenMint);
+        const mintInfo = await getMint(this.tradingEngine.solanaCore.getConnection(), mintPublicKey);
+        decimals = mintInfo.decimals || 9;
+      } catch (error) {
+        logger.warn(`Could not get mint info for ${position.tokenMint}, assuming 9 decimals:`, error.message);
+        // Default to 9 decimals if we can't fetch mint info
+      }
+      
+      // Validate UI amount is large enough to avoid precision loss
+      if (uiAmountToSell < 1e-9) {
+        logger.warn(`UI amount too small for conversion: ${uiAmountToSell}, cannot sell`);
+        this.removePosition(position.walletId, position.tokenMint);
+        return { success: false, error: 'Amount too small to sell' };
+      }
+      
+      // Convert UI amount to base units (integer, no decimals)
+      // Use Math.round for better precision instead of Math.floor to avoid truncation
+      const sellAmount = Math.round(uiAmountToSell * Math.pow(10, decimals));
       
       if (!Number.isFinite(sellAmount) || sellAmount <= 0) {
         logger.warn(`Calculated sell amount is invalid: ${sellAmount}`);
         return { success: false, error: 'Invalid sell amount calculated' };
       }
       
-      logger.info(`Selling ${sellAmount} tokens of ${position.tokenMint} (${reason})`);
+      logger.info(`Selling ${uiAmountToSell.toFixed(6)} tokens (${sellAmount} base units) of ${position.tokenMint} (${reason})`);
       
       // Execute sell
       const result = await this.tradingEngine.sellToken(

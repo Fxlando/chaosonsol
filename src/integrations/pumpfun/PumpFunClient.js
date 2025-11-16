@@ -574,16 +574,56 @@ export class PumpFunClient {
       const { virtualSolReserves, virtualTokenReserves } = bondingCurve;
       const solAmountLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
       
+      // Validate reserves to prevent division by zero
+      if (!Number.isFinite(virtualSolReserves) || !Number.isFinite(virtualTokenReserves) || 
+          virtualSolReserves <= 0 || virtualTokenReserves <= 0) {
+        return {
+          tokenAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid bonding curve reserves'
+        };
+      }
+      
       // Constant product formula: x * y = k
       const k = virtualSolReserves * virtualTokenReserves;
+      if (!Number.isFinite(k) || k <= 0) {
+        return {
+          tokenAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid bonding curve constant'
+        };
+      }
+      
       const newSolReserves = virtualSolReserves + solAmountLamports;
+      if (!Number.isFinite(newSolReserves) || newSolReserves <= 0) {
+        return {
+          tokenAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid new SOL reserves'
+        };
+      }
+      
       const newTokenReserves = k / newSolReserves;
+      if (!Number.isFinite(newTokenReserves) || newTokenReserves <= 0) {
+        return {
+          tokenAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid new token reserves'
+        };
+      }
+      
       const tokenAmount = virtualTokenReserves - newTokenReserves;
       
-      // Calculate price impact
-      const priceBefore = virtualSolReserves / virtualTokenReserves;
-      const priceAfter = newSolReserves / newTokenReserves;
-      const priceImpact = ((priceAfter - priceBefore) / priceBefore) * 100;
+      // Calculate price impact (validate to prevent division by zero)
+      const priceBefore = virtualTokenReserves > 0 ? virtualSolReserves / virtualTokenReserves : 0;
+      const priceAfter = newTokenReserves > 0 ? newSolReserves / newTokenReserves : 0;
+      const priceImpact = priceBefore > 0 && Number.isFinite(priceBefore) && Number.isFinite(priceAfter)
+        ? ((priceAfter - priceBefore) / priceBefore) * 100
+        : 0;
 
       return {
         tokenAmount: Math.floor(tokenAmount),
@@ -619,16 +659,56 @@ export class PumpFunClient {
 
       const { virtualSolReserves, virtualTokenReserves } = bondingCurve;
       
+      // Validate reserves to prevent division by zero
+      if (!Number.isFinite(virtualSolReserves) || !Number.isFinite(virtualTokenReserves) || 
+          virtualSolReserves <= 0 || virtualTokenReserves <= 0) {
+        return {
+          solAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid bonding curve reserves'
+        };
+      }
+      
       // Constant product formula: x * y = k
       const k = virtualSolReserves * virtualTokenReserves;
+      if (!Number.isFinite(k) || k <= 0) {
+        return {
+          solAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid bonding curve constant'
+        };
+      }
+      
       const newTokenReserves = virtualTokenReserves + tokenAmount;
+      if (!Number.isFinite(newTokenReserves) || newTokenReserves <= 0) {
+        return {
+          solAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid new token reserves'
+        };
+      }
+      
       const newSolReserves = k / newTokenReserves;
+      if (!Number.isFinite(newSolReserves) || newSolReserves <= 0) {
+        return {
+          solAmount: 0,
+          priceImpact: 0,
+          success: false,
+          error: 'Invalid new SOL reserves'
+        };
+      }
+      
       const solAmount = virtualSolReserves - newSolReserves;
       
-      // Calculate price impact
-      const priceBefore = virtualSolReserves / virtualTokenReserves;
-      const priceAfter = newSolReserves / newTokenReserves;
-      const priceImpact = ((priceBefore - priceAfter) / priceBefore) * 100;
+      // Calculate price impact (validate to prevent division by zero)
+      const priceBefore = virtualTokenReserves > 0 ? virtualSolReserves / virtualTokenReserves : 0;
+      const priceAfter = newTokenReserves > 0 ? newSolReserves / newTokenReserves : 0;
+      const priceImpact = priceBefore > 0 && Number.isFinite(priceBefore) && Number.isFinite(priceAfter)
+        ? ((priceBefore - priceAfter) / priceBefore) * 100
+        : 0;
 
       return {
         solAmount: solAmount / LAMPORTS_PER_SOL,
@@ -670,7 +750,19 @@ export class PumpFunClient {
         const { pumpFunBuy, TransactionMode } = pumpfunSdk;
         
         const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
-        const slippageDecimal = (options.slippage || this.config.defaultSlippage) / 100;
+        
+        // Normalize slippage: pumpfun-sdk expects decimal (0.10 = 10%)
+        // options.slippage can be in bps (1000 = 10%) or percentage (10 = 10%)
+        let slippageDecimal;
+        const rawSlippage = options.slippage || this.config.defaultSlippage;
+        if (rawSlippage > 100) {
+          // Assume bps (basis points), convert to decimal: 1000 bps = 0.10 (10%)
+          slippageDecimal = rawSlippage / 10000;
+        } else {
+          // Assume percentage, convert to decimal: 10% = 0.10
+          slippageDecimal = rawSlippage / 100;
+        }
+        
         const priorityFeeSol = ((options.priorityFee || 5000) / 1e9);
         
         logger.info(`Slippage: ${(slippageDecimal * 100).toFixed(2)}%, Priority Fee: ${priorityFeeSol} SOL`);
@@ -739,7 +831,19 @@ export class PumpFunClient {
         const { pumpFunSell, TransactionMode } = pumpfunSdk;
         
         const privateKeyBase58 = bs58.encode(walletKeypair.secretKey);
-        const slippageDecimal = (options.slippage || this.config.defaultSlippage) / 100;
+        
+        // Normalize slippage: pumpfun-sdk expects decimal (0.10 = 10%)
+        // options.slippage can be in bps (1000 = 10%) or percentage (10 = 10%)
+        let slippageDecimal;
+        const rawSlippage = options.slippage || this.config.defaultSlippage;
+        if (rawSlippage > 100) {
+          // Assume bps (basis points), convert to decimal: 1000 bps = 0.10 (10%)
+          slippageDecimal = rawSlippage / 10000;
+        } else {
+          // Assume percentage, convert to decimal: 10% = 0.10
+          slippageDecimal = rawSlippage / 100;
+        }
+        
         const priorityFeeSol = ((options.priorityFee || 5000) / 1e9);
         
         logger.info(`Slippage: ${(slippageDecimal * 100).toFixed(2)}%, Priority Fee: ${priorityFeeSol} SOL`);

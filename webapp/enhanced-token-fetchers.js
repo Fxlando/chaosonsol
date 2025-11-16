@@ -1501,8 +1501,23 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                         
                         if (response.ok) {
                             const data = await response.json();
-                            if (data && data.name) {
-                                return { ...data, success: true, source: 'pumpfun' };
+                            
+                            // Extract name, symbol, and image from various possible field names
+                            const name = data.name || data.token_name || null;
+                            const symbol = data.symbol || data.token_symbol || null;
+                            const image = data.image_uri || data.imageUri || data.image || data.image_url || data.imageUrl || 
+                                         (data.metadata && data.metadata.image) || 
+                                         (data.metadata && data.metadata.image_uri) || null;
+                            
+                            if (data && (name || symbol)) {
+                                return { 
+                                    ...data,
+                                    name: name || data.name,
+                                    symbol: symbol || data.symbol,
+                                    image: image || data.image,
+                                    success: true, 
+                                    source: 'pumpfun' 
+                                };
                             }
                         }
                         // Handle 530 (Cloudflare service unavailable) gracefully - return null to allow fallback
@@ -1584,6 +1599,14 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             
             if (response.ok) {
                 const data = await response.json();
+                
+                // Extract name, symbol, and image from various possible field names
+                const name = data.name || data.token_name || null;
+                const symbol = data.symbol || data.token_symbol || null;
+                const image = data.image_uri || data.imageUri || data.image || data.image_url || data.imageUrl || 
+                             (data.metadata && data.metadata.image) || 
+                             (data.metadata && data.metadata.image_uri) || null;
+                
                 // Normalize bonding curve percentage from various possible field names
                 let bondingCurvePercent = null;
                 if (data.complete_percent !== undefined) {
@@ -1606,7 +1629,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
                                   data.raydium === true;
                 
                 return { 
-                    ...data, 
+                    ...data,
+                    name: name || data.name,
+                    symbol: symbol || data.symbol,
+                    image: image || data.image,
                     success: true, 
                     source: 'pumpfun',
                     bondingCurve: {

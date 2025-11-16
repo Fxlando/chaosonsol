@@ -1,22 +1,12 @@
 # Cursor AI Rules for Chaos Bot Project
 
-## CRITICAL: Always Deploy Changes
+## CRITICAL: Local Development Only
 
-**MANDATORY**: After making ANY changes to the codebase:
+**MANDATORY**: This project runs locally only:
 
-1. **ALWAYS commit and push to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Description of changes"
-   git push origin main
-   ```
-
-2. **ALWAYS verify Netlify deployment**:
-   - Changes auto-deploy to https://chaosbotonsol.xyz/
-   - Wait 2-3 minutes after push
-   - Verify deployment in Netlify dashboard
-
-3. **NEVER leave changes uncommitted** - Always push to GitHub immediately after making changes
+1. **ALWAYS use localhost** - API server runs on `http://localhost:3000`
+2. **NO deployment** - This is a local-only application
+3. **ALWAYS commit changes** - Keep code in version control
 
 ## On-Chain Requirements
 
@@ -29,17 +19,16 @@
 
 ## File Structure
 
-- `webapp/` - Frontend files (deployed to Netlify)
-- `netlify/functions/` - Serverless functions (deployed to Netlify)
+- `webapp/` - Frontend files (served locally)
 - `src/` - Core application code
 - `simple-bot.js` - Main bot entry point
+- `webapp/api-server.js` - Local API server
 
-## Deployment Checklist
+## Local Development Checklist
 
 Before considering any task complete:
 - [ ] Code changes committed
-- [ ] Changes pushed to GitHub
-- [ ] Netlify deployment verified
 - [ ] On-chain functionality tested
 - [ ] No mock/fake data in production code
+- [ ] API server runs on localhost:3000
 

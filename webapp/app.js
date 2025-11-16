@@ -480,17 +480,7 @@ function truncateAddress(address) {
 }
 
 function showToast(message, type = 'success') {
-    // Use global showToast if available (from index.html)
-    if (typeof window.showToast === 'function') {
-        return window.showToast(message, type);
-    }
-    
-    // Fallback local implementation
     const container = document.getElementById('toast-container');
-    if (!container) {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        return;
-    }
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
@@ -500,11 +490,6 @@ function showToast(message, type = 'success') {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
     }, 4000);
-}
-
-// Expose to global scope if not already exposed
-if (typeof window.showToast === 'undefined') {
-    window.showToast = showToast;
 }
 
 // Auto refresh

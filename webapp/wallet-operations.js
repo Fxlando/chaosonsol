@@ -1659,15 +1659,8 @@ function debounce(func, wait) {
 
 /**
  * Show toast notification
- * Uses global window.showToast if available, otherwise creates local implementation
  */
 function showToast(message, type = 'info') {
-  // Use global showToast if available (from index.html)
-  if (typeof window.showToast === 'function') {
-    return window.showToast(message, type);
-  }
-  
-  // Fallback local implementation
   const container = document.getElementById('toast-container');
   if (!container) {
     console.log(`[${type.toUpperCase()}] ${message}`);
@@ -1691,22 +1684,10 @@ function showToast(message, type = 'info') {
   }, 3000);
 }
 
-// Expose to global scope if not already exposed
-if (typeof window.showToast === 'undefined') {
-  window.showToast = showToast;
-}
-
 /**
  * Add console log
- * Uses global window.addConsoleLog if available, otherwise creates local implementation
  */
 function addConsoleLog(message, type = 'info') {
-  // Use global addConsoleLog if available (from index.html)
-  if (typeof window.addConsoleLog === 'function') {
-    return window.addConsoleLog(message, type);
-  }
-  
-  // Fallback local implementation
   const consoleOutput = document.getElementById('console-output');
   if (!consoleOutput) {
     console.log(`[${type.toUpperCase()}] ${message}`);
@@ -1733,11 +1714,6 @@ function addConsoleLog(message, type = 'info') {
   while (consoleOutput.children.length > 100) {
     consoleOutput.removeChild(consoleOutput.lastChild);
   }
-}
-
-// Expose to global scope if not already exposed
-if (typeof window.addConsoleLog === 'undefined') {
-  window.addConsoleLog = addConsoleLog;
 }
 
 // Make functions globally available

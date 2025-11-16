@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chaos Bot - ChaosOnSolana Complete Trading Platform</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="dist/output.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         .font-sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif; }
@@ -3924,19 +3924,11 @@
                 }
             views.forEach(view => view.classList.add('hidden'));
             
-            // Handle special page name mappings
-            let pageId = page + '-page';
-            if (page === 'tokens') {
-                pageId = 'tokens-view';
-            } else if (page === 'wallets') {
-                pageId = 'wallets-view';
-            }
-            
             // Show the requested page
-            const targetPage = document.getElementById(pageId);
+            const targetPage = document.getElementById(page + '-page');
             if (targetPage) {
                 targetPage.classList.remove('hidden');
-                    console.log('Showing page:', pageId);
+                    console.log('Showing page:', page + '-page');
                     
                     if (typeof addConsoleLog === 'function') {
                 addConsoleLog(`Navigated to ${page} page`, 'info');
@@ -3945,11 +3937,6 @@
                     // Load wallets when navigating to create-token page
                     if (page === 'create-token' && typeof loadWalletsForTokenCreation === 'function') {
                         loadWalletsForTokenCreation();
-                    }
-                    
-                    // Load tokens when navigating to tokens page
-                    if (page === 'tokens' && typeof loadTokens === 'function') {
-                        loadTokens();
                     }
             } else {
                     console.log('Page not found, trying modal:', page + '-modal');
@@ -4175,39 +4162,18 @@
                 addConsoleLog('Loading tokens from blockchain...', 'info');
                 // api-server.js handles both /api/tokens and /tokens routes
                 const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/api/tokens` : `${API_BASE}/tokens`;
-                console.log('Fetching tokens from:', endpoint);
-                
-                const response = await fetch(endpoint, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
+                const response = await fetch(endpoint);
                 
                 if (!response.ok) {
-                    let errorText = '';
-                    try {
-                        errorText = await response.text();
-                        const errorData = JSON.parse(errorText);
-                        if (errorData.error) {
-                            throw new Error(errorData.error);
-                        }
-                    } catch (parseError) {
-                        // If parsing fails, use the raw text
-                    }
-                    console.error('API error response:', errorText);
-                    throw new Error(`API returned ${response.status}: ${errorText || response.statusText}`);
+                    throw new Error(`API returned ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log('Tokens API response:', data);
                 
-                // Check for error in response
-                if (data.error || (data.success === false)) {
-                    throw new Error(data.error || 'Failed to load tokens');
+                if (data.error) {
+                    throw new Error(data.error);
                 }
                 
-                // Handle both response formats: { tokens: [...] } and { success: true, tokens: [...] }
                 tokens = data.tokens || [];
                 renderTokens();
                 
@@ -4222,6 +4188,14 @@
                 tokens = [];
                 renderTokens();
             }
+        }
+        
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
         // Render tokens in the table
@@ -4259,14 +4233,18 @@
                 // Get first 4 chars of mint for display
                 const mintShort = token.mint.substring(0, 4) + '...' + token.mint.substring(token.mint.length - 4);
                 
+                // Display token name and symbol properly
+                const displayName = token.name || token.symbol || 'Unknown Token';
+                const displaySymbol = token.symbol || mintShort;
+                
                 return `
                     <tr class="border-b border-neutral-800 hover:bg-neutral-900 cursor-pointer" onclick="selectTokenByMint('${token.mint}')">
                         <td class="p-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-xl">💎</div>
                                 <div>
-                                    <div class="font-semibold">${token.symbol || mintShort}</div>
-                                    <div class="text-xs text-gray-500">${token.name || mintShort}</div>
+                                    <div class="font-semibold">${escapeHtml(displayName)}</div>
+                                    <div class="text-xs text-gray-500">${escapeHtml(displaySymbol)}</div>
                                 </div>
                             </div>
                         </td>

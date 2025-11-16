@@ -2,7 +2,6 @@
 /**
  * Auto-Deploy Script
  * Automatically commits and pushes changes to GitHub
- * This ensures Netlify auto-deploys the latest changes
  * 
  * Note: This file uses CommonJS (require) even though package.json is ES module
  * This is because child_process.execSync works better with CommonJS
@@ -52,10 +51,8 @@ try {
   console.log('🚀 Pushing to GitHub...');
   execSync('git push origin main', { stdio: 'inherit' });
 
-  console.log('\n✅ Successfully deployed!');
-  console.log('⏳ Netlify will auto-deploy in 2-3 minutes...');
-  console.log('🌐 Check: https://chaosbotonsol.xyz/');
-  console.log('📊 Netlify Dashboard: https://app.netlify.com/');
+  console.log('\n✅ Successfully pushed to GitHub!');
+  console.log('📝 Changes are now in version control');
 
 } catch (error) {
   console.error('❌ Deployment failed:', error.message);

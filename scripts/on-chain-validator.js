@@ -50,7 +50,6 @@ async function validateOnChain() {
     'webapp/real-trading-ui.js',
     'webapp/app.js',
     'webapp/api-server.js',
-    'netlify/functions/api.js',
     'simple-bot.js'
   ];
 
@@ -89,7 +88,6 @@ async function validateOnChain() {
   // Check API endpoints use real data
   log('\n3. Validating API Endpoints...', 'blue');
   const apiFiles = [
-    'netlify/functions/api.js',
     'webapp/api-server.js'
   ];
 

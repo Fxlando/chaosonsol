@@ -146,5 +146,5 @@
 - Optional direct Raydium AMM features
 - Additional UI/UX refinement and analytics modules
 
-The backend is **100% functional** and ready. The frontend control panel is live on Netlify and connected to the backend; remaining work is focused on polish, automation, and extended features.
+The backend is **100% functional** and ready. The frontend control panel runs locally and connects to the backend; remaining work is focused on polish, automation, and extended features.
 

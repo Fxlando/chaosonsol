@@ -22,47 +22,30 @@ function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-async function checkWebsite() {
+async function checkLocalAPI() {
   return new Promise((resolve) => {
-    log('🌐 Checking website...', 'blue');
-    https.get('https://chaosbotonsol.xyz/', (res) => {
-      if (res.statusCode === 200) {
-        log('   ✅ Website is online', 'green');
-        resolve(true);
-      } else {
-        log(`   ⚠️  Website returned status ${res.statusCode}`, 'yellow');
-        resolve(false);
-      }
-    }).on('error', (error) => {
-      log(`   ❌ Website check failed: ${error.message}`, 'red');
-      resolve(false);
-    });
-  });
-}
-
-async function checkNetlifyFunction(endpoint) {
-  return new Promise((resolve) => {
-    log(`🔌 Checking Netlify function: ${endpoint}...`, 'blue');
-    https.get(`https://chaosbotonsol.xyz${endpoint}`, (res) => {
+    log('🔌 Checking local API server...', 'blue');
+    http.get('http://localhost:3000/health', (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         if (res.statusCode === 200) {
           try {
             const json = JSON.parse(data);
-            log(`   ✅ ${endpoint} is working`, 'green');
+            log(`   ✅ Local API server is working`, 'green');
             resolve(true);
           } catch (e) {
-            log(`   ⚠️  ${endpoint} returned non-JSON`, 'yellow');
+            log(`   ⚠️  API returned non-JSON`, 'yellow');
             resolve(false);
           }
         } else {
-          log(`   ⚠️  ${endpoint} returned status ${res.statusCode}`, 'yellow');
+          log(`   ⚠️  API returned status ${res.statusCode}`, 'yellow');
           resolve(false);
         }
       });
     }).on('error', (error) => {
-      log(`   ❌ ${endpoint} check failed: ${error.message}`, 'red');
+      log(`   ❌ API check failed: ${error.message}`, 'red');
+      log(`   💡 Make sure API server is running: npm run web`, 'yellow');
       resolve(false);
     });
   });
@@ -89,17 +72,13 @@ async function runHealthCheck() {
   log('\n🏥 Running Health Check...\n', 'blue');
 
   const results = {
-    website: await checkWebsite(),
-    rpc: await checkRPC(),
-    apiStats: await checkNetlifyFunction('/.netlify/functions/api/health'),
-    instantTrading: await checkNetlifyFunction('/.netlify/functions/api/instant-trading/status')
+    localAPI: await checkLocalAPI(),
+    rpc: await checkRPC()
   };
 
   log('\n📊 Health Check Summary:', 'blue');
-  log(`   Website: ${results.website ? '✅' : '❌'}`, results.website ? 'green' : 'red');
+  log(`   Local API: ${results.localAPI ? '✅' : '❌'}`, results.localAPI ? 'green' : 'red');
   log(`   RPC: ${results.rpc ? '✅' : '❌'}`, results.rpc ? 'green' : 'red');
-  log(`   API Stats: ${results.apiStats ? '✅' : '❌'}`, results.apiStats ? 'green' : 'red');
-  log(`   Instant Trading: ${results.instantTrading ? '✅' : '❌'}`, results.instantTrading ? 'green' : 'red');
 
   const allHealthy = Object.values(results).every(r => r === true);
   

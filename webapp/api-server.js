@@ -95,38 +95,6 @@ const metadataStore = new MetadataStore({
   baseUrl: METADATA_BASE_URL
 });
 
-// Imported tokens storage
-const IMPORTED_TOKENS_FILE = resolveProjectPath('.data', 'imported-tokens.json');
-
-function getImportedTokens() {
-  try {
-    if (fs.existsSync(IMPORTED_TOKENS_FILE)) {
-      const data = fs.readFileSync(IMPORTED_TOKENS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Error reading imported tokens:', error);
-  }
-  return {};
-}
-
-function saveImportedToken(mint, tokenData) {
-  try {
-    const imported = getImportedTokens();
-    imported[mint] = {
-      ...tokenData,
-      importedAt: new Date().toISOString(),
-      status: 'IMPORTED'
-    };
-    fs.mkdirSync(path.dirname(IMPORTED_TOKENS_FILE), { recursive: true });
-    fs.writeFileSync(IMPORTED_TOKENS_FILE, JSON.stringify(imported, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error('Error saving imported token:', error);
-    return false;
-  }
-}
-
 function buildPumpPortalConfig() {
   const cfg = {};
   const apiKey = process.env.PUMPPORTAL_API_KEY || process.env.PUMP_PORTAL_API_KEY;
@@ -284,8 +252,8 @@ async function loadBackend() {
         network: NETWORK,
         metadataFallback: {
           async save(metadataJson) {
-            const saved = await Promise.resolve(metadataStore.save(metadataJson));
-            if (!saved || !saved.uri) {
+            const saved = metadataStore.save(metadataJson);
+            if (!saved.uri) {
               throw new Error('Metadata base URL is not configured (METADATA_BASE_URL)');
             }
             return saved;
@@ -733,172 +701,118 @@ register('delete', '/wallets/:walletId', async (req, res) => {
 });
 
 register('get', '/tokens', async () => {
-  try {
-    const backend = await loadBackend();
-    
-    if (!backend) {
-      return {
-        success: false,
-        error: 'Backend not initialized',
-        tokens: [],
-        total: 0
-      };
-    }
+  const backend = await loadBackend();
+  const connection = backend.solanaCore.getConnection();
+  const wallets = backend.walletManager.getAllWallets();
 
-    const connection = backend.solanaCore?.getConnection();
-    if (!connection) {
-      return {
-        success: false,
-        error: 'Solana connection not available',
-        tokens: [],
-        total: 0
-      };
-    }
-
-    const wallets = backend.walletManager?.getAllWallets() || [];
-
-    if (!wallets.length) {
-      return {
-        success: true,
-        tokens: [],
-        total: 0,
-        message: 'No wallets configured'
-      };
-    }
-
-    const tokenMap = new Map();
-    let errorCount = 0;
-    const errors = [];
-
-    for (const wallet of wallets) {
-      try {
-        if (!wallet.publicKey) {
-          console.warn(`Wallet ${wallet.id} has no public key`);
-          continue;
-        }
-
-        const owner = new PublicKey(wallet.publicKey);
-        const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
-          programId: TOKEN_PROGRAM_ID
-        });
-
-        if (!accounts || !accounts.value) {
-          continue;
-        }
-
-        for (const account of accounts.value) {
-          try {
-            const parsed = account.account.data.parsed.info;
-            const tokenMint = parsed.mint;
-            const amountInfo = parsed.tokenAmount;
-            const balance = Number(amountInfo.uiAmount || 0);
-
-            if (!Number.isFinite(balance) || balance <= 0) {
-              continue;
-            }
-
-            if (!tokenMap.has(tokenMint)) {
-              tokenMap.set(tokenMint, {
-                mint: tokenMint,
-                name: tokenMint.slice(0, 8),
-                symbol: tokenMint.slice(0, 4),
-                decimals: amountInfo.decimals,
-                totalBalance: 0,
-                holders: []
-              });
-            }
-
-            const token = tokenMap.get(tokenMint);
-            token.totalBalance += balance;
-            token.holders.push({
-              walletId: wallet.id,
-              publicKey: wallet.publicKey,
-              balance
-            });
-          } catch (accountError) {
-            console.error(`Error processing token account:`, accountError.message);
-            errorCount++;
-          }
-        }
-      } catch (error) {
-        const errorMsg = `Failed to load tokens for wallet ${wallet.publicKey}: ${error.message}`;
-        console.error(errorMsg);
-        errors.push(errorMsg);
-        errorCount++;
-      }
-    }
-
-    const tokens = Array.from(tokenMap.values()).map((token) => ({
-      mint: token.mint,
-      name: token.name,
-      symbol: token.symbol,
-      balance: token.totalBalance,
-      holders: token.holders.length,
-      status: 'ACTIVE'
-    }));
-
-    // Add imported tokens that aren't already in the list
-    const importedTokens = getImportedTokens();
-    for (const [mint, importedData] of Object.entries(importedTokens)) {
-      // Only add if not already in tokens list (from wallet balances)
-      if (!tokenMap.has(mint)) {
-        tokens.push({
-          mint: importedData.mint || mint,
-          name: importedData.name || mint.slice(0, 8),
-          symbol: importedData.symbol || mint.slice(0, 4),
-          balance: 0, // Imported tokens may not have balance in wallets
-          holders: 0,
-          status: importedData.status || 'IMPORTED',
-          description: importedData.description,
-          image: importedData.image,
-          decimals: importedData.decimals,
-          price: importedData.price,
-          marketCap: importedData.marketCap,
-          totalSupply: importedData.totalSupply,
-          metadataUri: importedData.metadataUri,
-          platform: importedData.platform || 'pumpfun'
-        });
-      } else {
-        // Update existing token with imported data if available
-        const existingToken = tokens.find(t => t.mint === mint);
-        if (existingToken && importedData.status === 'IMPORTED') {
-          existingToken.status = 'IMPORTED';
-          if (importedData.name) existingToken.name = importedData.name;
-          if (importedData.symbol) existingToken.symbol = importedData.symbol;
-          if (importedData.description) existingToken.description = importedData.description;
-          if (importedData.image) existingToken.image = importedData.image;
-        }
-      }
-    }
-
-    const response = {
-      success: true,
-      tokens,
-      total: tokens.length
-    };
-
-    if (errorCount > 0) {
-      response.warnings = errors.slice(0, 5); // Limit warnings to first 5
-      if (errors.length > 5) {
-        response.warnings.push(`... and ${errors.length - 5} more errors`);
-      }
-    }
-
-    return response;
-  } catch (error) {
-    console.error('Error in /tokens endpoint:', error);
+  if (!wallets.length) {
     return {
-      success: false,
-      error: error.message || 'Failed to load tokens',
+      success: true,
       tokens: [],
-      total: 0
+      total: 0,
+      message: 'No wallets configured'
     };
   }
+
+  const tokenMap = new Map();
+
+  for (const wallet of wallets) {
+    try {
+      const owner = new PublicKey(wallet.publicKey);
+      const accounts = await connection.getParsedTokenAccountsByOwner(owner, {
+        programId: TOKEN_PROGRAM_ID
+      });
+
+      for (const account of accounts.value) {
+        const parsed = account.account.data.parsed.info;
+        const tokenMint = parsed.mint;
+        const amountInfo = parsed.tokenAmount;
+        const balance = Number(amountInfo.uiAmount || 0);
+
+        if (!Number.isFinite(balance) || balance <= 0) {
+          continue;
+        }
+
+        if (!tokenMap.has(tokenMint)) {
+          tokenMap.set(tokenMint, {
+            mint: tokenMint,
+            name: null, // Will be fetched from metadata
+            symbol: null, // Will be fetched from metadata
+            image: null, // Will be fetched from metadata
+            decimals: amountInfo.decimals,
+            totalBalance: 0,
+            holders: []
+          });
+        }
+
+        const token = tokenMap.get(tokenMint);
+        token.totalBalance += balance;
+        token.holders.push({
+          walletId: wallet.id,
+          publicKey: wallet.publicKey,
+          balance
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to load tokens for wallet ${wallet.publicKey}:`, error.message);
+    }
+  }
+
+  // Fetch metadata for all tokens in parallel (with timeout protection)
+  const tokenMints = Array.from(tokenMap.keys());
+  const metadataPromises = tokenMints.map(async (mint) => {
+    try {
+      // Try to fetch metadata from PumpFun client
+      if (backend.tradingEngine?.pumpFun?.fetchOnChainTokenInfo) {
+        const metadata = await Promise.race([
+          backend.tradingEngine.pumpFun.fetchOnChainTokenInfo(mint),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 5000)
+          )
+        ]).catch(() => null);
+
+        if (metadata) {
+          const token = tokenMap.get(mint);
+          if (token) {
+            token.name = metadata.name || null;
+            token.symbol = metadata.symbol || null;
+            token.image = metadata.image || null;
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - we'll use fallback values
+      console.debug(`Metadata fetch failed for ${mint.substring(0, 8)}...:`, error.message);
+    }
+  });
+
+  // Wait for all metadata fetches (with timeout)
+  await Promise.allSettled(metadataPromises);
+
+  // Build final token list with fallback values
+  const tokens = Array.from(tokenMap.values()).map((token) => {
+    const mintShort = token.mint.substring(0, 4) + '...' + token.mint.substring(token.mint.length - 4);
+    return {
+      mint: token.mint,
+      name: token.name || token.mint.substring(0, 8),
+      symbol: token.symbol || mintShort,
+      image: token.image || null,
+      balance: token.totalBalance,
+      holders: token.holders.length,
+      decimals: token.decimals
+    };
+  });
+
+  return {
+    success: true,
+    tokens,
+    total: tokens.length
+  };
 });
 
 register('post', '/trading/buy', async (req, res) => {
   const backend = await loadBackend();
-  const { walletId, tokenMint, solAmount, options = {} } = req.body || {};
+  const { walletId, tokenMint, solAmount, options } = req.body || {};
 
   if (!walletId || !tokenMint || !solAmount) {
     res.status(400);
@@ -908,55 +822,12 @@ register('post', '/trading/buy', async (req, res) => {
     };
   }
 
-  // Default trading settings: 10% slippage (1000 bps) and 0.0005 SOL (500000 lamports) priority fee
-  // Frontend should pass these in options if user changed them in settings
-  const defaultSlippage = 1000; // 10% = 1000 bps
-  const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
-  
-  // Convert slippage: normalize to bps format
-  // If > 100, assume already in bps; if <= 100, assume percentage and convert to bps
-  let slippageBps = defaultSlippage;
-  if (options.slippage !== undefined && options.slippage !== null) {
-    const rawSlippage = Number(options.slippage);
-    if (Number.isFinite(rawSlippage) && rawSlippage > 0) {
-      if (rawSlippage > 100) {
-        // Already in bps
-        slippageBps = Math.floor(rawSlippage);
-      } else {
-        // Percentage, convert to bps
-        slippageBps = Math.floor(rawSlippage * 100);
-      }
-    }
-  }
-  
-  // Convert priority fee: normalize to lamports
-  // If > 1e6, assume already in lamports; otherwise assume SOL and convert to lamports
-  let priorityFeeLamports = defaultPriorityFee;
-  if (options.priorityFee !== undefined && options.priorityFee !== null) {
-    const rawPriorityFee = Number(options.priorityFee);
-    if (Number.isFinite(rawPriorityFee) && rawPriorityFee > 0) {
-      if (rawPriorityFee > 1e6) {
-        // Already in lamports
-        priorityFeeLamports = Math.floor(rawPriorityFee);
-      } else {
-        // SOL, convert to lamports
-        priorityFeeLamports = Math.floor(rawPriorityFee * 1e9);
-      }
-    }
-  }
-
-  const mergedOptions = {
-    ...options,
-    slippage: slippageBps,
-    priorityFee: priorityFeeLamports
-  };
-
-  return backend.buyToken(walletId, tokenMint, Number(solAmount), mergedOptions);
+  return backend.buyToken(walletId, tokenMint, Number(solAmount), options || {});
 });
 
 register('post', '/trading/sell', async (req, res) => {
   const backend = await loadBackend();
-  const { walletId, tokenMint, tokenAmount, options = {} } = req.body || {};
+  const { walletId, tokenMint, tokenAmount, options } = req.body || {};
 
   if (!walletId || !tokenMint || !tokenAmount) {
     res.status(400);
@@ -966,50 +837,7 @@ register('post', '/trading/sell', async (req, res) => {
     };
   }
 
-  // Default trading settings: 10% slippage (1000 bps) and 0.0005 SOL (500000 lamports) priority fee
-  // Frontend should pass these in options if user changed them in settings
-  const defaultSlippage = 1000; // 10% = 1000 bps
-  const defaultPriorityFee = 500000; // 0.0005 SOL = 500000 lamports
-  
-  // Convert slippage: normalize to bps format
-  // If > 100, assume already in bps; if <= 100, assume percentage and convert to bps
-  let slippageBps = defaultSlippage;
-  if (options.slippage !== undefined && options.slippage !== null) {
-    const rawSlippage = Number(options.slippage);
-    if (Number.isFinite(rawSlippage) && rawSlippage > 0) {
-      if (rawSlippage > 100) {
-        // Already in bps
-        slippageBps = Math.floor(rawSlippage);
-      } else {
-        // Percentage, convert to bps
-        slippageBps = Math.floor(rawSlippage * 100);
-      }
-    }
-  }
-  
-  // Convert priority fee: normalize to lamports
-  // If > 1e6, assume already in lamports; otherwise assume SOL and convert to lamports
-  let priorityFeeLamports = defaultPriorityFee;
-  if (options.priorityFee !== undefined && options.priorityFee !== null) {
-    const rawPriorityFee = Number(options.priorityFee);
-    if (Number.isFinite(rawPriorityFee) && rawPriorityFee > 0) {
-      if (rawPriorityFee > 1e6) {
-        // Already in lamports
-        priorityFeeLamports = Math.floor(rawPriorityFee);
-      } else {
-        // SOL, convert to lamports
-        priorityFeeLamports = Math.floor(rawPriorityFee * 1e9);
-      }
-    }
-  }
-
-  const mergedOptions = {
-    ...options,
-    slippage: slippageBps,
-    priorityFee: priorityFeeLamports
-  };
-
-  return backend.sellToken(walletId, tokenMint, Number(tokenAmount), mergedOptions);
+  return backend.sellToken(walletId, tokenMint, Number(tokenAmount), options || {});
 });
 
 register('post', '/trading/swap', async (req, res) => {
@@ -1120,26 +948,7 @@ register('post', '/tokens/import', async (req, res) => {
     };
   }
 
-  const result = await backend.importToken(tokenMint, options || {});
-  
-  // Save imported token if import was successful
-  if (result.success && result.token) {
-    saveImportedToken(tokenMint, {
-      mint: result.token.mint,
-      name: result.token.name,
-      symbol: result.token.symbol,
-      description: result.token.description,
-      image: result.token.image,
-      decimals: result.token.decimals,
-      price: result.token.price,
-      marketCap: result.token.marketCap,
-      totalSupply: result.token.totalSupply,
-      metadataUri: result.token.metadataUri,
-      platform: result.platform || 'pumpfun'
-    });
-  }
-
-  return result;
+  return backend.importToken(tokenMint, options || {});
 });
 
 register('get', '/blueprints', async () => ({
@@ -1494,17 +1303,17 @@ register('get', '/config', async () => {
         pool: pumpPortalConfig.pool || 'pump'
       },
       shyft: {
-        apiKey: process.env.SHYFT_API_KEY || '',
-        enabled: Boolean(process.env.SHYFT_API_KEY)
+        apiKey: '6AC3vTBB5lObDYTm', // Hard-coded default
+        enabled: false
       },
       helius: {
         apiKey: heliusApiKey
       },
       birdeye: {
-        apiKey: process.env.BIRDEYE_API_KEY || ''
+        apiKey: process.env.BIRDEYE_API_KEY || '9ddbf4282f714067a229ad9caedd1b41'
       },
       moralis: {
-        apiKey: process.env.MORALIS_API_KEY || ''
+        apiKey: process.env.MORALIS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjY3MWQyMmQ5LTllZTQtNDJmNi1iMzE1LTRkN2M5MTQxMjE1MSIsIm9yZ0lkIjoiNDgxNDM3IiwidXNlcklkIjoiNDk1MzA0IiwidHlwZUlkIjoiODdkMjNkYjctZTBkMC00NjY4LTkzYzYtMTUzYzRkMjQxZWEzIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NjMxNjU5NDEsImV4cCI6NDkxODkyNTk0MX0.9ZJGROi8myhSMDhZi1icj5YBava7ecojyZG6Ruf5PU4'
       }
     }
   };

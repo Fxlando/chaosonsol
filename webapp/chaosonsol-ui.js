@@ -500,17 +500,7 @@ function initializeConsole() {
 }
 
 function addConsoleLog(message, type = 'info') {
-    // Use global addConsoleLog if available (from index.html)
-    if (typeof window.addConsoleLog === 'function') {
-        return window.addConsoleLog(message, type);
-    }
-    
-    // Fallback local implementation
     const consoleOutput = document.getElementById('console-output');
-    if (!consoleOutput) {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        return;
-    }
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     
     const line = document.createElement('div');
@@ -533,24 +523,9 @@ function addConsoleLog(message, type = 'info') {
     }
 }
 
-// Expose to global scope if not already exposed
-if (typeof window.addConsoleLog === 'undefined') {
-    window.addConsoleLog = addConsoleLog;
-}
-
 // Utilities
 function showToast(message, type = 'info') {
-    // Use global showToast if available (from index.html)
-    if (typeof window.showToast === 'function') {
-        return window.showToast(message, type);
-    }
-    
-    // Fallback local implementation
     const container = document.getElementById('toast-container');
-    if (!container) {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        return;
-    }
     
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -562,11 +537,6 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => toast.remove(), 300);
     }, 4000);
-}
-
-// Expose to global scope if not already exposed
-if (typeof window.showToast === 'undefined') {
-    window.showToast = showToast;
 }
 
 // Auto refresh

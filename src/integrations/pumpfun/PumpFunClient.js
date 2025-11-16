@@ -50,7 +50,11 @@ export class PumpFunClient {
     this.isInitialized = false;
     this.metadataProgramId = new PublicKey(PROGRAM_IDS.METAPLEX_METADATA_PROGRAM);
     
-    this.initialize();
+    // Initialize asynchronously, but don't crash if it fails
+    this.initialize().catch((error) => {
+      logger.error('PumpFun Client initialization failed (non-fatal):', error.message);
+      // Don't throw - allow the app to continue without PumpFun functionality
+    });
   }
 
   /**
@@ -66,16 +70,18 @@ export class PumpFunClient {
       const programId = new PublicKey(this.config.pumpFunProgramId);
       const programInfo = await this.connection.getAccountInfo(programId);
       if (!programInfo) {
-        throw new Error('PumpFun program not found');
+        logger.warn('PumpFun program not found - PumpFun features will be unavailable');
+        return; // Don't mark as initialized, but don't crash
       }
       logger.info('✅ PumpFun program verified');
-    } catch (error) {
-      logger.error('Failed to verify PumpFun program:', error);
-      throw error;
-    }
-
     this.isInitialized = true;
     logger.info('✅ PumpFun Client initialized');
+    } catch (error) {
+      logger.error('Failed to verify PumpFun program:', error.message);
+      logger.warn('PumpFun Client will continue in degraded mode - some features may be unavailable');
+      // Don't throw - allow the app to continue without PumpFun functionality
+      // The client will remain uninitialized but won't crash the server
+    }
   }
 
   /**

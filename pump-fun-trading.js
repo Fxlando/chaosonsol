@@ -101,24 +101,11 @@ class PumpFunTrading {
       console.log('🔍 DEBUG: secretKey length:', keypair.secretKey.length, 'bytes');
       console.log('🔍 DEBUG: privateKey base58 length:', privateKeyBase58.length, 'chars');
       
-      // Convert slippage: if in percentage (<= 100), convert to decimal; if in bps (> 100), convert to decimal
-      let slippageDecimal;
-      if (options.slippage) {
-        if (options.slippage <= 100) {
-          // Percentage format (e.g., 10 = 10%)
-          slippageDecimal = options.slippage / 100;
-        } else {
-          // Basis points format (e.g., 1000 = 10%)
-          slippageDecimal = options.slippage / 10000;
-        }
-      } else {
-        slippageDecimal = (this.config.slippage || 1000) / 10000; // Default 10%
-      }
+      // Convert slippage from bps to decimal (e.g., 100 bps -> 0.01)
+      const slippageDecimal = (options.slippage || this.config.slippage) / 10000;
       
       // Convert priority fee from lamports to SOL
-      const priorityFeeSol = options.priorityFee ? 
-        (options.priorityFee > 1e6 ? options.priorityFee / 1e9 : options.priorityFee) : 
-        (this.config.priorityFee || 500000) / 1e9;
+      const priorityFeeSol = (options.priorityFee || this.config.priorityFee) / 1e9;
       
       console.log(`💰 Amount: ${solAmount} SOL`);
       console.log(`⚙️ Slippage: ${(slippageDecimal * 100).toFixed(2)}%`);
@@ -179,61 +166,22 @@ class PumpFunTrading {
         throw new Error('Invalid wallet format');
       }
       
-      // Convert token amount if it's in human-readable format
-      // Pump.fun SDK expects the amount in base units (with decimals)
-      let amountInBaseUnits = tokenAmount;
-      
-      // If amount is less than 1e12, it's likely human-readable format, convert it
-      if (tokenAmount < 1e12) {
-        try {
-          const { PublicKey } = require('@solana/web3.js');
-          const { getMint } = require('@solana/spl-token');
-          
-          const mintPublicKey = new PublicKey(tokenMint);
-          const mintInfo = await getMint(this.connection, mintPublicKey);
-          const decimals = mintInfo.decimals || 6; // Default to 6 decimals
-          
-          // Convert human-readable amount to base units
-          amountInBaseUnits = Math.floor(tokenAmount * Math.pow(10, decimals));
-          console.log(`💰 Converted token amount for pump.fun: ${tokenAmount} → ${amountInBaseUnits} (${decimals} decimals)`);
-        } catch (error) {
-          console.warn(`⚠️ Could not get mint info for pump.fun sell, assuming 6 decimals:`, error.message);
-          // Default to 6 decimals if we can't fetch mint info
-          amountInBaseUnits = Math.floor(tokenAmount * 1e6);
-        }
-      }
-      
       // Encode the full 64-byte secret key to base58
       // pumpfun-sdk expects the full secret key in base58 format
       const privateKeyBase58 = bs58.encode(keypair.secretKey);
       
-      // Convert slippage: if in percentage (<= 100), convert to decimal; if in bps (> 100), convert to decimal
-      let slippageDecimal;
-      if (options.slippage) {
-        if (options.slippage <= 100) {
-          // Percentage format (e.g., 10 = 10%)
-          slippageDecimal = options.slippage / 100;
-        } else {
-          // Basis points format (e.g., 1000 = 10%)
-          slippageDecimal = options.slippage / 10000;
-        }
-      } else {
-        slippageDecimal = (this.config.slippage || 1000) / 10000; // Default 10%
-      }
+      // Convert slippage from bps to decimal
+      const slippageDecimal = (options.slippage || this.config.slippage) / 10000;
       
       // Convert priority fee from lamports to SOL
-      const priorityFeeSol = options.priorityFee ? 
-        (options.priorityFee > 1e6 ? options.priorityFee / 1e9 : options.priorityFee) : 
-        (this.config.priorityFee || 500000) / 1e9;
-      
-      console.log(`⚙️ Pump.fun sell params: amount=${amountInBaseUnits}, slippage=${slippageDecimal * 100}%, priorityFee=${priorityFeeSol} SOL`);
+      const priorityFeeSol = (options.priorityFee || this.config.priorityFee) / 1e9;
       
       // Execute sell using SDK (TransactionMode.Execution is required as first param)
       const result = await pumpFunSell(
         TransactionMode.Execution,
         privateKeyBase58,
         tokenMint.toString(),
-        amountInBaseUnits,
+        tokenAmount,
         priorityFeeSol,
         slippageDecimal,
         {
@@ -256,15 +204,10 @@ class PumpFunTrading {
       };
       
     } catch (error) {
-      console.error(`❌ Pump.Fun sell failed:`, error);
-      // Include full error details for debugging
-      const errorMessage = error.message || error.toString();
-      const errorDetails = error.stack || error.response?.data || error;
-      console.error(`❌ Pump.Fun sell error details:`, errorDetails);
+      console.error(`❌ Pump.Fun sell failed:`, error.message);
       return {
         success: false,
-        error: errorMessage,
-        errorDetails: errorDetails
+        error: error.message
       };
     }
   }

@@ -139,8 +139,8 @@ class SettingsManager {
 
             // Trading Settings (legacy compatibility)
             trading: {
-                defaultSlippage: 10, // 10% default slippage
-                priorityFee: 0.0005, // 0.0005 SOL default priority fee
+                defaultSlippage: 1,
+                priorityFee: 0.0001,
                 maxRetries: 3,
                 confirmTimeout: 30000
             },

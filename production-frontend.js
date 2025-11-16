@@ -5,9 +5,8 @@
 
 console.log('🚀 Production Frontend Loading...');
 
-// Configuration
-const IS_NETLIFY = window.location.hostname !== 'localhost';
-const API_BASE = IS_NETLIFY ? '/.netlify/functions' : 'http://localhost:3000/api';
+// Configuration - local development only
+const API_BASE = 'http://localhost:3000/api';
 
 // Global State
 const state = {

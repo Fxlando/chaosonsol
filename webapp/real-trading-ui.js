@@ -7546,6 +7546,76 @@ async function fetchPumpFunTokenDetails(mint) {
     }
 }
 
+/**
+ * Check if token metadata is missing and fetch it from pump.fun API
+ * Updates the token record in the registry if metadata is found
+ */
+async function ensureTokenMetadata(record) {
+    if (!record || !record.mint) {
+        return record;
+    }
+    
+    // Skip drafts (they don't have mint addresses yet)
+    if (record.type === 'draft') {
+        return record;
+    }
+    
+    // Check if metadata is missing (name is generic like "Token" or starts with mint address)
+    const hasValidName = record.name && 
+                         record.name.trim() !== '' && 
+                         record.name !== 'Token' && 
+                         record.name !== 'Unnamed' &&
+                         !record.name.startsWith('Token ') &&
+                         record.name !== record.mint.substring(0, 8);
+    
+    const hasValidSymbol = record.symbol && 
+                          record.symbol.trim() !== '' &&
+                          record.symbol !== record.mint.substring(0, 4).toUpperCase();
+    
+    const hasValidImage = record.image && 
+                         typeof record.image === 'string' && 
+                         record.image.trim().length > 0 &&
+                         !record.image.includes('pump.fun/logo.png');
+    
+    // If we have all valid metadata, no need to fetch
+    if (hasValidName && hasValidSymbol && hasValidImage) {
+        return record;
+    }
+    
+    // Fetch metadata from pump.fun API
+    try {
+        const metadata = await fetchPumpFunTokenDetails(record.mint);
+        if (metadata && (metadata.name || metadata.symbol || metadata.image)) {
+            // Update the record with fetched metadata (only if current values are missing/invalid)
+            const updatedRecord = {
+                ...record,
+                name: hasValidName ? record.name : (metadata.name || record.name),
+                symbol: hasValidSymbol ? record.symbol : (metadata.symbol || record.symbol),
+                image: hasValidImage ? record.image : (metadata.image || metadata.logoURI || record.image),
+                description: record.description || metadata.description || '',
+                website: record.website || metadata.website || null,
+                twitter: record.twitter || metadata.twitter || null,
+                telegram: record.telegram || metadata.telegram || null,
+                updatedAt: Date.now()
+            };
+            
+            // Update the registry
+            if (record.type === 'draft') {
+                tokenRegistry.drafts.set(record.id, updatedRecord);
+                persistTokenDrafts();
+            } else {
+                registerImportedToken(updatedRecord);
+            }
+            
+            return updatedRecord;
+        }
+    } catch (error) {
+        console.debug(`Failed to fetch metadata for ${record.mint}:`, error.message);
+    }
+    
+    return record;
+}
+
 async function fetchTokenPriceDetails(mint, { solPrice = null } = {}) {
     // Use enhanced fetcher if available (has multiple fallbacks)
     if (window.enhancedTokenFetchers?.fetchTokenPriceDetails) {
@@ -8265,15 +8335,12 @@ async function loadLiveTokenDetail(record) {
         }
 
         // Calculate amount sold from multiple sources
+        // NOTE: Do NOT use volume bot totalVolume - it includes buy amounts and is gross volume, not profit
         let amountSoldSol = null;
         
-        // Source 1: Runtime automations stats
-        if (runtimeAutomations.stats.totalVolume > 0) {
-            amountSoldSol = runtimeAutomations.stats.totalVolume;
-        }
-        
-        // Fallback: Calculate from activity feed (sum of sell transactions from YOUR wallets only)
-        if (amountSoldSol === null && Array.isArray(activity) && activity.length > 0) {
+        // Source 1: Calculate from activity feed (sum of sell transactions from YOUR wallets only)
+        // This gives actual SOL received from sales, not gross trading volume
+        if (Array.isArray(activity) && activity.length > 0) {
             // Get list of your wallet addresses
             const yourWallets = getKnownWallets();
             const yourWalletAddresses = new Set(
@@ -8298,21 +8365,27 @@ async function loadLiveTokenDetail(record) {
         }
 
         // Calculate profit/loss
+        // Formula: (Current Holdings Value) + (Realized Profit from Sales) - (Amount Invested)
+        // Where Realized Profit = SOL received from actual sales (not volume bot wash trades)
         let profitLossSol = null;
         let isUnrealizedProfit = false;
         if (holdingsValueSol !== null && amountInvestedSol !== null) {
-            const soldComponent = amountSoldSol || 0;
-            profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+            // amountSoldSol represents SOL received from actual sales (from activity feed)
+            // Volume bot totalVolume is NOT used here as it includes buy amounts and is gross volume
+            const realizedFromSales = amountSoldSol || 0;
+            profitLossSol = holdingsValueSol + realizedFromSales - amountInvestedSol;
             console.log('💰 Calculated profit/loss:', {
                 holdingsValueSol,
-                amountSoldSol: soldComponent,
+                amountSoldSol: realizedFromSales,
                 amountInvestedSol,
-                profitLossSol
+                profitLossSol,
+                note: 'amountSoldSol is SOL received from actual sales (activity feed), not volume bot gross volume'
             });
         } else if (holdingsValueSol !== null && amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0) {
             // If we have holdings but no investment amount, calculate unrealized profit
-            // This is the current value of holdings + any sales, representing unrealized gains
-            profitLossSol = holdingsValueSol + (amountSoldSol || 0);
+            // This is the current value of holdings + any actual sales proceeds
+            const realizedFromSales = amountSoldSol || 0;
+            profitLossSol = holdingsValueSol + realizedFromSales;
             isUnrealizedProfit = true;
             console.log('ℹ️ Showing unrealized profit (no investment amount recorded):', profitLossSol, 'SOL');
         }
@@ -8870,6 +8943,44 @@ function renderTokensTable() {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
     }
+    
+    // Asynchronously fetch and update metadata for tokens that need it
+    // This runs in the background and updates the table when metadata is available
+    filteredRecords.forEach(async (record) => {
+        if (record.type === 'draft' || !record.mint) {
+            return; // Skip drafts and tokens without mint
+        }
+        
+        // Check if metadata is missing
+        const hasValidName = record.name && 
+                             record.name.trim() !== '' && 
+                             record.name !== 'Token' && 
+                             record.name !== 'Unnamed' &&
+                             !record.name.startsWith('Token ') &&
+                             record.name !== record.mint.substring(0, 8);
+        
+        const hasValidSymbol = record.symbol && 
+                              record.symbol.trim() !== '' &&
+                              record.symbol !== record.mint.substring(0, 4).toUpperCase();
+        
+        const hasValidImage = record.image && 
+                             typeof record.image === 'string' && 
+                             record.image.trim().length > 0 &&
+                             !record.image.includes('pump.fun/logo.png');
+        
+        // If metadata is missing, fetch it
+        if (!hasValidName || !hasValidSymbol || !hasValidImage) {
+            try {
+                const updatedRecord = await ensureTokenMetadata(record);
+                // Re-render the table row if metadata was updated
+                if (updatedRecord && (updatedRecord.name !== record.name || updatedRecord.symbol !== record.symbol || updatedRecord.image !== record.image)) {
+                    renderTokensTable(); // Re-render to show updated metadata
+                }
+            } catch (error) {
+                console.debug(`Failed to fetch metadata for ${record.mint}:`, error.message);
+            }
+        }
+    });
 }
 
 function buildTokenRow(record) {
@@ -9575,15 +9686,20 @@ function handleTokenArchive() {
     }
 }
 
-function populateTokenDetailView(record) {
+async function populateTokenDetailView(record) {
     if (!record) return;
+    
+    // Ensure token metadata is available before displaying
+    const recordWithMetadata = await ensureTokenMetadata(record);
+    const displayRecord = recordWithMetadata || record;
+    
     // Reset first update flag when switching to a new token
     isFirstMetricsUpdate = true;
     stopTokenActivityStream();
     stopMetricsRefresh();
-    tokenRegistry.current = record;
-    tokenRegistry.currentSource = record.type === 'draft' ? 'draft' : 'imported';
-    tokenDetailViewState.currentKey = record.mint || record.id || null;
+    tokenRegistry.current = displayRecord;
+    tokenRegistry.currentSource = displayRecord.type === 'draft' ? 'draft' : 'imported';
+    tokenDetailViewState.currentKey = displayRecord.mint || displayRecord.id || null;
     tokenDetailViewState.lastRuntime = null;
     updateTokenLastRuntime(null);
 
@@ -9597,30 +9713,30 @@ function populateTokenDetailView(record) {
     const prepareButton = document.getElementById('prepare-launch-btn');
     const platformEl = document.getElementById('selected-token-platform');
 
-    const isDraft = record.type === 'draft';
+    const isDraft = displayRecord.type === 'draft';
 
     if (nameEl) {
-        nameEl.textContent = record.name || 'Token';
+        nameEl.textContent = displayRecord.name || 'Token';
     }
 
     if (titleEl) {
-        titleEl.textContent = record.name || 'Token';
+        titleEl.textContent = displayRecord.name || 'Token';
         if (subtitleEl) {
-            subtitleEl.textContent = record.symbol ? `(${record.symbol})` : '';
+            subtitleEl.textContent = displayRecord.symbol ? `(${displayRecord.symbol})` : '';
         }
     }
 
     if (addressEl) {
-        addressEl.textContent = isDraft ? 'Not launched yet' : record.mint;
+        addressEl.textContent = isDraft ? 'Not launched yet' : displayRecord.mint;
     }
     
     // Update DexScreener price chart iframe (DexScreener allows embedding)
     const dexscreenerChartEl = document.getElementById('dexscreener-price-chart');
     const gmgnChartLink = document.getElementById('gmgn-price-chart-link');
     
-    if (record.mint && !isDraft) {
+    if (displayRecord.mint && !isDraft) {
         // DexScreener embed URL format: https://dexscreener.com/solana/{token-address}?embed=1&theme=dark&trades=0&info=0
-        const dexscreenerUrl = `https://dexscreener.com/solana/${record.mint}?embed=1&theme=dark&trades=0&info=0`;
+        const dexscreenerUrl = `https://dexscreener.com/solana/${displayRecord.mint}?embed=1&theme=dark&trades=0&info=0`;
         
         // Update DexScreener chart iframe
         if (dexscreenerChartEl) {
@@ -9630,7 +9746,7 @@ function populateTokenDetailView(record) {
                 dexscreenerChartEl.src = '';
                 // Small delay to let cleanup complete, then load new chart
                 setTimeout(() => {
-                    if (dexscreenerChartEl && record.mint) {
+                    if (dexscreenerChartEl && displayRecord.mint) {
                         dexscreenerChartEl.src = dexscreenerUrl;
                     }
                 }, 100);
@@ -9639,7 +9755,7 @@ function populateTokenDetailView(record) {
         
         // Update GMGN link (for users who want to view on GMGN)
         if (gmgnChartLink) {
-            const gmgnUrl = `https://www.gmgn.cc/kline/sol/${record.mint}`;
+            const gmgnUrl = `https://www.gmgn.cc/kline/sol/${displayRecord.mint}`;
             gmgnChartLink.href = gmgnUrl;
             gmgnChartLink.style.display = 'inline';
         }
@@ -9658,15 +9774,15 @@ function populateTokenDetailView(record) {
 
     if (iconEl) {
         const pumpFunLogo = 'https://pump.fun/logo.png';
-        const hasImage = record?.image && typeof record.image === 'string' && record.image.trim().length > 0;
-        const imageUrl = hasImage ? (resolveImageUrl(record.image) || record.image) : pumpFunLogo;
+        const hasImage = displayRecord?.image && typeof displayRecord.image === 'string' && displayRecord.image.trim().length > 0;
+        const imageUrl = hasImage ? (resolveImageUrl(displayRecord.image) || displayRecord.image) : pumpFunLogo;
         
         // Always use an img tag to ensure proper styling and fallback behavior
-        iconEl.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(record.name || 'Token')}" class="w-full h-full object-cover rounded-full" loading="lazy" onerror="this.onerror=null; this.src='${pumpFunLogo}'; this.onerror=function(){this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>🪙</span>';};" />`;
+        iconEl.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(displayRecord.name || 'Token')}" class="w-full h-full object-cover rounded-full" loading="lazy" onerror="this.onerror=null; this.src='${pumpFunLogo}'; this.onerror=function(){this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>🪙</span>';};" />`;
     }
 
     if (statusEl) {
-        const statusLabel = (record.status || (isDraft ? 'PRE-LAUNCH' : record.type?.toUpperCase() || 'ACTIVE')).toString();
+        const statusLabel = (displayRecord.status || (isDraft ? 'PRE-LAUNCH' : displayRecord.type?.toUpperCase() || 'ACTIVE')).toString();
         statusEl.textContent = statusLabel;
         statusEl.className = 'inline-flex items-center px-2 py-1 text-xs rounded-full';
         const normalized = statusLabel.toLowerCase();
@@ -9682,21 +9798,21 @@ function populateTokenDetailView(record) {
     }
 
     if (platformEl) {
-        const sourceLabel = typeof record.source === 'string' ? record.source : '';
+        const sourceLabel = typeof displayRecord.source === 'string' ? displayRecord.source : '';
         const fallbackPlatform =
-            record.type === 'draft'
+            displayRecord.type === 'draft'
                 ? ''
-                : record.provider ||
+                : displayRecord.provider ||
                   (sourceLabel && sourceLabel.toLowerCase() === 'pumpfun' ? 'Pump.fun' : '') ||
-                  (record.launchSource && typeof record.launchSource === 'string'
-                      ? record.launchSource
+                  (displayRecord.launchSource && typeof displayRecord.launchSource === 'string'
+                      ? displayRecord.launchSource
                       : '');
         const platform =
-            record.launchPlatform ||
-            record.platform ||
+            displayRecord.launchPlatform ||
+            displayRecord.platform ||
             sourceLabel ||
-            (typeof record.launchSource === 'string' ? record.launchSource : '') ||
-            record.market ||
+            (typeof displayRecord.launchSource === 'string' ? displayRecord.launchSource : '') ||
+            displayRecord.market ||
             fallbackPlatform;
         if (platform) {
             platformEl.textContent = platform;
@@ -9709,7 +9825,7 @@ function populateTokenDetailView(record) {
 
     const editButton = getElement('token-edit-btn');
     if (editButton) {
-        const isEditableDraft = record.type === 'draft';
+        const isEditableDraft = displayRecord.type === 'draft';
         const editLabel = editButton.querySelector('span');
         editButton.disabled = !isEditableDraft;
         editButton.classList.toggle('opacity-60', !isEditableDraft);
@@ -9724,7 +9840,7 @@ function populateTokenDetailView(record) {
     const archiveButton = getElement('token-archive-btn');
     if (archiveButton) {
         const archiveLabel = archiveButton.querySelector('span');
-        const isArchived = Boolean(record.archived);
+        const isArchived = Boolean(displayRecord.archived);
         if (archiveLabel) {
             archiveLabel.textContent = isArchived ? 'Unarchive' : 'Archive';
         }
@@ -9745,7 +9861,7 @@ function populateTokenDetailView(record) {
     const collectCreatorFeesButton = getElement('token-collect-creator-fees-btn');
     if (collectCreatorFeesButton) {
         // Only show for launched tokens (not drafts, not imported)
-        const isLaunched = !isDraft && record.mint && (record.type === 'launch' || record.status === 'Launched' || (record.type !== 'imported' && record.type !== 'copy'));
+        const isLaunched = !isDraft && displayRecord.mint && (displayRecord.type === 'launch' || displayRecord.status === 'Launched' || (displayRecord.type !== 'imported' && displayRecord.type !== 'copy'));
         if (isLaunched) {
             collectCreatorFeesButton.classList.remove('hidden');
         } else {
@@ -9769,7 +9885,7 @@ function populateTokenDetailView(record) {
             copyIcon.removeAttribute('disabled');
         copyIcon.onclick = async () => {
             try {
-                await navigator.clipboard.writeText(record.mint);
+                await navigator.clipboard.writeText(displayRecord.mint);
                 notify('Token mint copied to clipboard.', 'success');
             } catch (error) {
                 notify('Unable to copy mint address.', 'error');
@@ -9790,7 +9906,7 @@ function populateTokenDetailView(record) {
         lucide.createIcons();
     }
 
-    updateTokenDetailLinks(record);
+    updateTokenDetailLinks(displayRecord);
 
     resetTokenMetrics();
     resetHoldingsTable({
@@ -9803,18 +9919,18 @@ function populateTokenDetailView(record) {
     renderTokenActivity([], { isLive: !isDraft, loading: !isDraft, solPrice });
 
     if (isDraft) {
-        renderTokenTaskList(record, { runtimeTasks: [] });
+        renderTokenTaskList(displayRecord, { runtimeTasks: [] });
         return;
     }
 
-    renderTokenTaskList(record, { loading: true });
+    renderTokenTaskList(displayRecord, { loading: true });
 
-    if (!record.mint) {
+    if (!displayRecord.mint) {
         notify('Token mint unavailable; live dashboards require a mint address.', 'warning');
         return;
     }
 
-    loadLiveTokenDetail(record).catch((error) => {
+    loadLiveTokenDetail(displayRecord).catch((error) => {
         console.error('Failed to load live token detail:', error);
         notify(`Unable to load live token metrics: ${error.message}`, 'error');
     });

@@ -8307,10 +8307,100 @@ async function loadLiveTokenDetail(record) {
             hasPrice: priceSol !== null
         });
 
-        // Calculate amount invested from multiple sources
+        // Calculate amount invested from ALL wallets in the system
+        // Priority: 1) On-chain wallet transaction history, 2) Activity feed, 3) Record initialBuyAmount
         let amountInvestedSol = safeNumber(record.initialBuyAmount);
         
-        // Fallback 1: Calculate from activity feed (sum of buy transactions from YOUR wallets only)
+        // PRIMARY: Calculate from on-chain transaction history for ALL wallets
+        try {
+            const allWallets = getKnownWallets();
+            if (allWallets && allWallets.length > 0) {
+                console.log(`🔍 Calculating total invested from ${allWallets.length} wallet(s) on-chain transaction history...`);
+                
+                let totalInvestedFromWallets = 0;
+                let walletCountWithBuys = 0;
+                
+                // Get Helius API key for transaction queries
+                let heliusApiKey = null;
+                try {
+                    if (window.settingsManager?.getSettings) {
+                        const settings = window.settingsManager.getSettings();
+                        heliusApiKey = settings?.helius?.apiKey || 
+                            (settings?.solana?.monitoringRpc?.includes('helius') ? 
+                                settings.solana.monitoringRpc.match(/api-key=([^&]+)/)?.[1] : null);
+                    }
+                } catch (e) {
+                    console.debug('Could not get Helius API key:', e);
+                }
+                
+                // Query each wallet's transaction history for this token
+                for (const wallet of allWallets) {
+                    const walletAddress = (wallet.address || wallet.publicKey || wallet.id || '').trim();
+                    if (!walletAddress) continue;
+                    
+                    try {
+                        let walletInvested = 0;
+                        
+                        // Method 1: Use Helius Enhanced API if available
+                        if (heliusApiKey) {
+                            try {
+                                const heliusUrl = `https://api.helius.xyz/v0/addresses/${walletAddress}/transactions?api-key=${heliusApiKey}&limit=1000`;
+                                const response = await fetch(heliusUrl, { 
+                                    signal: AbortSignal.timeout(5000),
+                                    headers: { 'Accept': 'application/json' }
+                                });
+                                
+                                if (response.ok) {
+                                    const transactions = await response.json();
+                                    if (Array.isArray(transactions)) {
+                                        for (const tx of transactions) {
+                                            const tradeData = window.enhancedTokenFetchers?.parseHeliusTransaction?.(tx, record.mint);
+                                            if (tradeData && tradeData.type === 'buy' && tradeData.amountSol > 0) {
+                                                walletInvested += tradeData.amountSol;
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (heliusError) {
+                                console.debug(`Helius query failed for ${walletAddress.substring(0, 8)}...:`, heliusError.message);
+                            }
+                        }
+                        
+                        // Method 2: Fallback to activity feed if Helius fails
+                        if (walletInvested === 0 && Array.isArray(activity) && activity.length > 0) {
+                            const walletLower = walletAddress.toLowerCase();
+                            const walletBuys = activity.filter(t => {
+                                if (t.type !== 'buy' || !t.amountSol || t.amountSol <= 0) return false;
+                                const tradeWallet = (t.wallet || t.address || '').toLowerCase();
+                                return tradeWallet === walletLower || 
+                                       tradeWallet.includes(walletLower) || 
+                                       walletLower.includes(tradeWallet);
+                            });
+                            walletInvested = walletBuys.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                        }
+                        
+                        if (walletInvested > 0) {
+                            totalInvestedFromWallets += walletInvested;
+                            walletCountWithBuys++;
+                            console.log(`  💰 Wallet ${walletAddress.substring(0, 8)}...: ${walletInvested.toFixed(6)} SOL invested`);
+                        }
+                    } catch (walletError) {
+                        console.debug(`Failed to calculate investment for wallet ${walletAddress.substring(0, 8)}...:`, walletError.message);
+                    }
+                }
+                
+                if (totalInvestedFromWallets > 0) {
+                    amountInvestedSol = totalInvestedFromWallets;
+                    console.log(`✅ Total invested from ALL wallets: ${amountInvestedSol.toFixed(6)} SOL (${walletCountWithBuys} wallet(s) with buys)`);
+                } else {
+                    console.log('ℹ️ No buy transactions found from any wallet in on-chain history');
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to calculate total invested from wallets:', error.message);
+        }
+        
+        // Fallback: Calculate from activity feed if on-chain calculation failed
         if (amountInvestedSol === null && Array.isArray(activity) && activity.length > 0) {
             // Get list of your wallet addresses
             const yourWallets = getKnownWallets();
@@ -8329,9 +8419,7 @@ async function loadLiveTokenDetail(record) {
             
             if (yourBuyTransactions.length > 0) {
                 amountInvestedSol = yourBuyTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
-                console.log('✅ Calculated amount invested from YOUR wallet trades:', amountInvestedSol, 'SOL', `(${yourBuyTransactions.length} buy transactions)`);
-            } else {
-                console.log('ℹ️ No buy transactions found from your wallets in activity feed');
+                console.log('✅ Calculated amount invested from activity feed:', amountInvestedSol, 'SOL', `(${yourBuyTransactions.length} buy transactions)`);
             }
         }
         
@@ -8343,15 +8431,108 @@ async function loadLiveTokenDetail(record) {
             console.log('⚠️ Estimated amount invested from holdings (rough estimate):', amountInvestedSol, 'SOL');
         }
 
-        // Calculate amount sold from multiple sources
+        // Calculate amount sold from ALL wallets in the system
+        // Priority: 1) Runtime automations stats, 2) On-chain wallet transaction history, 3) Activity feed
         let amountSoldSol = null;
         
-        // Source 1: Runtime automations stats
+        // Source 1: Runtime automations stats (most accurate if available)
         if (runtimeAutomations.stats.totalVolume > 0) {
             amountSoldSol = runtimeAutomations.stats.totalVolume;
+            console.log('✅ Using amount sold from runtime automations:', amountSoldSol, 'SOL');
         }
         
-        // Fallback: Calculate from activity feed (sum of sell transactions from YOUR wallets only)
+        // PRIMARY: Calculate from on-chain transaction history for ALL wallets if not from automations
+        if (amountSoldSol === null) {
+            try {
+                const allWallets = getKnownWallets();
+                if (allWallets && allWallets.length > 0) {
+                    console.log(`🔍 Calculating total sold from ${allWallets.length} wallet(s) on-chain transaction history...`);
+                    
+                    let totalSoldFromWallets = 0;
+                    let walletCountWithSells = 0;
+                    
+                    // Get Helius API key for transaction queries
+                    let heliusApiKey = null;
+                    try {
+                        if (window.settingsManager?.getSettings) {
+                            const settings = window.settingsManager.getSettings();
+                            heliusApiKey = settings?.helius?.apiKey || 
+                                (settings?.solana?.monitoringRpc?.includes('helius') ? 
+                                    settings.solana.monitoringRpc.match(/api-key=([^&]+)/)?.[1] : null);
+                        }
+                    } catch (e) {
+                        console.debug('Could not get Helius API key:', e);
+                    }
+                    
+                    // Query each wallet's transaction history for this token
+                    for (const wallet of allWallets) {
+                        const walletAddress = (wallet.address || wallet.publicKey || wallet.id || '').trim();
+                        if (!walletAddress) continue;
+                        
+                        try {
+                            let walletSold = 0;
+                            
+                            // Method 1: Use Helius Enhanced API if available
+                            if (heliusApiKey) {
+                                try {
+                                    const heliusUrl = `https://api.helius.xyz/v0/addresses/${walletAddress}/transactions?api-key=${heliusApiKey}&limit=1000`;
+                                    const response = await fetch(heliusUrl, { 
+                                        signal: AbortSignal.timeout(5000),
+                                        headers: { 'Accept': 'application/json' }
+                                    });
+                                    
+                                    if (response.ok) {
+                                        const transactions = await response.json();
+                                        if (Array.isArray(transactions)) {
+                                            for (const tx of transactions) {
+                                                const tradeData = window.enhancedTokenFetchers?.parseHeliusTransaction?.(tx, record.mint);
+                                                if (tradeData && tradeData.type === 'sell' && tradeData.amountSol > 0) {
+                                                    walletSold += tradeData.amountSol;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (heliusError) {
+                                    console.debug(`Helius query failed for ${walletAddress.substring(0, 8)}...:`, heliusError.message);
+                                }
+                            }
+                            
+                            // Method 2: Fallback to activity feed if Helius fails
+                            if (walletSold === 0 && Array.isArray(activity) && activity.length > 0) {
+                                const walletLower = walletAddress.toLowerCase();
+                                const walletSells = activity.filter(t => {
+                                    if (t.type !== 'sell' || !t.amountSol || t.amountSol <= 0) return false;
+                                    const tradeWallet = (t.wallet || t.address || '').toLowerCase();
+                                    return tradeWallet === walletLower || 
+                                           tradeWallet.includes(walletLower) || 
+                                           walletLower.includes(tradeWallet);
+                                });
+                                walletSold = walletSells.reduce((sum, t) => sum + (t.amountSol || 0), 0);
+                            }
+                            
+                            if (walletSold > 0) {
+                                totalSoldFromWallets += walletSold;
+                                walletCountWithSells++;
+                                console.log(`  💰 Wallet ${walletAddress.substring(0, 8)}...: ${walletSold.toFixed(6)} SOL sold`);
+                            }
+                        } catch (walletError) {
+                            console.debug(`Failed to calculate sales for wallet ${walletAddress.substring(0, 8)}...:`, walletError.message);
+                        }
+                    }
+                    
+                    if (totalSoldFromWallets > 0) {
+                        amountSoldSol = totalSoldFromWallets;
+                        console.log(`✅ Total sold from ALL wallets: ${amountSoldSol.toFixed(6)} SOL (${walletCountWithSells} wallet(s) with sells)`);
+                    } else {
+                        console.log('ℹ️ No sell transactions found from any wallet in on-chain history');
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to calculate total sold from wallets:', error.message);
+            }
+        }
+        
+        // Fallback: Calculate from activity feed if on-chain calculation failed
         if (amountSoldSol === null && Array.isArray(activity) && activity.length > 0) {
             // Get list of your wallet addresses
             const yourWallets = getKnownWallets();
@@ -8370,9 +8551,7 @@ async function loadLiveTokenDetail(record) {
             
             if (yourSellTransactions.length > 0) {
                 amountSoldSol = yourSellTransactions.reduce((sum, t) => sum + (t.amountSol || 0), 0);
-                console.log('✅ Calculated amount sold from YOUR wallet trades:', amountSoldSol, 'SOL', `(${yourSellTransactions.length} sell transactions)`);
-            } else {
-                console.log('ℹ️ No sell transactions found from your wallets in activity feed');
+                console.log('✅ Calculated amount sold from activity feed:', amountSoldSol, 'SOL', `(${yourSellTransactions.length} sell transactions)`);
             }
         }
 

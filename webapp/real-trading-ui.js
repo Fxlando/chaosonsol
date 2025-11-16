@@ -8581,13 +8581,8 @@ async function loadLiveTokenDetail(record) {
             }
         }
         
-        // Fallback 2: Estimate from current holdings if we have price (rough estimate)
-        if (amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0 && priceSol !== null) {
-            // Rough estimate: assume average entry price is 50% of current price (conservative)
-            // This is just a placeholder until we have real transaction data
-            amountInvestedSol = holdingsSummary.totalTokenBalance * priceSol * 0.5;
-            console.log('⚠️ Estimated amount invested from holdings (rough estimate):', amountInvestedSol, 'SOL');
-        }
+        // REMOVED: Don't estimate amountInvestedSol from holdings - this causes incorrect profit/loss
+        // If we don't have real investment data, we can't calculate accurate profit/loss from holdings
 
         // Calculate amount sold from multiple sources
         let amountSoldSol = null;
@@ -8622,27 +8617,40 @@ async function loadLiveTokenDetail(record) {
             }
         }
 
-        // Calculate profit/loss
+        // Calculate profit/loss - prioritize REALIZED profit from sells
         let profitLossSol = null;
         let isUnrealizedProfit = false;
+        
         if (holdingsValueSol !== null && amountInvestedSol !== null) {
+            // We have investment data - calculate full profit/loss (realized + unrealized)
             const soldComponent = amountSoldSol || 0;
             profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
             isUnrealizedProfit = false;
-            console.log('💰 Calculated profit/loss:', {
+            console.log('💰 Calculated profit/loss (with investment data):', {
                 holdingsValueSol,
                 amountSoldSol: soldComponent,
                 amountInvestedSol,
                 profitLossSol
             });
-        } else if (amountInvestedSol === null) {
-            // If we don't have investment data, DON'T use holdingsValueSol as profit/loss
-            // This prevents showing holdings value (like 4.955 SOL) as profit
-            // Only show profit/loss if we have actual trading data (realized P&L)
-            // Otherwise, profitLossSol should remain null and the UI will show "—"
+        } else if (amountSoldSol !== null && amountSoldSol > 0) {
+            // We have realized profit from sells but no investment data
+            // NOTE: amountSoldSol is revenue, not profit - we need cost basis to calculate actual profit
+            // For now, only show it if it's a small amount (likely actual profit, not holdings value)
+            // If amountSoldSol is suspiciously large (>1 SOL), it's likely holdings value, not profit
+            if (amountSoldSol < 1.0) {
+                profitLossSol = amountSoldSol;
+                isUnrealizedProfit = false;
+                console.log('💰 Showing realized amount from sells (small amount, likely profit):', profitLossSol, 'SOL');
+            } else {
+                // Amount sold is too large - likely not actual profit, skip it
+                profitLossSol = null;
+                console.log('⚠️ Amount sold is large (', amountSoldSol, 'SOL) - likely not profit, skipping');
+            }
+        } else {
+            // No investment data and no realized sells - can't calculate profit/loss
             profitLossSol = null;
             isUnrealizedProfit = false;
-            console.log('⚠️ No investment amount recorded - cannot calculate accurate profit/loss. Holdings value is NOT profit.');
+            console.log('⚠️ No investment amount or realized sells - cannot calculate profit/loss. Holdings value is NOT profit.');
         }
 
         // Log data for debugging

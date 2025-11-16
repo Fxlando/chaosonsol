@@ -5772,12 +5772,10 @@ function updateTokenMetricsInternal({
         } else {
             profitDetail = `${solDisplay} (Realized + Unrealized)`;
         }
-    } else if (holdingsValueSol !== null && holdingsValueSol > 0 && totalTokenHoldings !== null && totalTokenHoldings > 0) {
-        // If we have holdings but no profit calculation, show holdings value as unrealized
-        const holdingsUsd = holdingsValueUsd || (holdingsValueSol * (solPrice || 0));
-        profitDisplay = formatUSD(holdingsUsd);
-        profitDetail = 'Current holdings value (Unrealized)';
     }
+    // REMOVED: Don't show holdingsValueSol as profit/loss - this was causing the flicker
+    // Holdings value is NOT the same as profit/loss. If we don't have actual profit/loss data,
+    // show "—" instead of misleading holdings value. This prevents showing 4.955 SOL as profit.
 
     // Amount Invested display - show USD value if available, otherwise show SOL or $0
     const amountInvestedDisplay = amountInvestedSol !== null && amountInvestedSol > 0
@@ -8616,18 +8614,21 @@ async function loadLiveTokenDetail(record) {
         if (holdingsValueSol !== null && amountInvestedSol !== null) {
             const soldComponent = amountSoldSol || 0;
             profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
+            isUnrealizedProfit = false;
             console.log('💰 Calculated profit/loss:', {
                 holdingsValueSol,
                 amountSoldSol: soldComponent,
                 amountInvestedSol,
                 profitLossSol
             });
-        } else if (holdingsValueSol !== null && amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0) {
-            // If we have holdings but no investment amount, calculate unrealized profit
-            // This is the current value of holdings + any sales, representing unrealized gains
-            profitLossSol = holdingsValueSol + (amountSoldSol || 0);
-            isUnrealizedProfit = true;
-            console.log('ℹ️ Showing unrealized profit (no investment amount recorded):', profitLossSol, 'SOL');
+        } else if (amountInvestedSol === null) {
+            // If we don't have investment data, DON'T use holdingsValueSol as profit/loss
+            // This prevents showing holdings value (like 4.955 SOL) as profit
+            // Only show profit/loss if we have actual trading data (realized P&L)
+            // Otherwise, profitLossSol should remain null and the UI will show "—"
+            profitLossSol = null;
+            isUnrealizedProfit = false;
+            console.log('⚠️ No investment amount recorded - cannot calculate accurate profit/loss. Holdings value is NOT profit.');
         }
 
         // Log data for debugging

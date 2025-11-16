@@ -1477,8 +1477,58 @@ async function fetchBirdeyeMetadata(mintAddress) {
  * Uses intelligent rotation: Fastest APIs first → Free APIs prioritized
  * Supports parallel requests for fastest response
  */
+/**
+ * Validate Solana mint address format
+ * @param {string} mintAddress - Address to validate
+ * @returns {boolean} - True if valid format
+ */
+function isValidSolanaMintAddress(mintAddress) {
+    if (!mintAddress || typeof mintAddress !== 'string') {
+        return false;
+    }
+    const trimmed = mintAddress.trim();
+    // Solana addresses are base58 encoded, typically 32-44 characters
+    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    return base58Regex.test(trimmed);
+}
+
 async function fetchPumpFunTokenDetails(mintAddress) {
+    // Validate mint address before attempting to fetch
+    if (!mintAddress) {
+        console.warn('⚠️ No mint address provided to fetchPumpFunTokenDetails');
+        return { 
+            success: false,
+            mint: null,
+            name: null,
+            symbol: null,
+            image: null,
+            marketCap: null,
+            bondingCurve: null,
+            bondingCurvePercentage: null,
+            error: 'No mint address provided'
+        };
+    }
+    
+    if (!isValidSolanaMintAddress(mintAddress)) {
+        console.warn(`⚠️ Invalid Solana mint address format: ${mintAddress}`);
+        return { 
+            success: false,
+            mint: mintAddress,
+            name: null,
+            symbol: null,
+            image: null,
+            marketCap: null,
+            bondingCurve: null,
+            bondingCurvePercentage: null,
+            error: 'Invalid mint address format. Solana addresses should be 32-44 base58 characters.'
+        };
+    }
+    
     console.log('🔍 Fetching token details for:', mintAddress);
+    
+    // Track which sources were attempted and failed for better error reporting
+    const attemptedSources = [];
+    const failedSources = [];
     
     // Use API Pool Manager if available (intelligent rotation & parallel requests)
     if (window.apiPoolManager) {
@@ -1567,6 +1617,7 @@ async function fetchPumpFunTokenDetails(mintAddress) {
     
     // Legacy fallback (if API Pool Manager not available)
     // Source 1: Pump.fun API (with retry)
+    attemptedSources.push('Pump.fun API');
     try {
         const pumpFunData = await retryWithBackoff(async () => {
             const controller = new AbortController();
@@ -1627,6 +1678,7 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             return pumpFunData;
         }
     } catch (error) {
+        failedSources.push({ source: 'Pump.fun API', error: error.message || 'Unknown error' });
         if (error.name !== 'AbortError') {
             if (error.message && error.message.includes('530')) {
                 console.debug('⚠️ Pump.fun API temporarily unavailable (530) - using fallbacks');
@@ -1637,6 +1689,7 @@ async function fetchPumpFunTokenDetails(mintAddress) {
     }
     
     // Source 2: DexScreener API (with retry)
+    attemptedSources.push('DexScreener API');
     try {
         const dexData = await retryWithBackoff(async () => {
             return await fetchDexScreenerMetadata(mintAddress);
@@ -1647,10 +1700,12 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             return { ...dexData, success: true };
         }
     } catch (error) {
+        failedSources.push({ source: 'DexScreener API', error: error.message || 'Unknown error' });
         console.debug('⚠️ DexScreener metadata unavailable:', error.message);
     }
     
     // Source 3: Birdeye API (with retry)
+    attemptedSources.push('Birdeye API');
     try {
         const birdeyeData = await retryWithBackoff(async () => {
             return await fetchBirdeyeMetadata(mintAddress);
@@ -1665,11 +1720,13 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         if (!errorMsg.includes('ERR_NAME_NOT_RESOLVED') && 
             !errorMsg.includes('ERR_INTERNET_DISCONNECTED') &&
             !errorMsg.includes('Failed to fetch')) {
+            failedSources.push({ source: 'Birdeye API', error: error.message || 'Unknown error' });
             console.debug('⚠️ Birdeye metadata unavailable:', error.message);
         }
     }
     
     // Source 4: On-chain Metaplex metadata
+    attemptedSources.push('On-chain Metaplex metadata');
     try {
         const connection = getSolanaConnection();
         if (connection) {
@@ -1680,10 +1737,12 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             }
         }
     } catch (error) {
+        failedSources.push({ source: 'On-chain Metaplex metadata', error: error.message || 'Unknown error' });
         console.debug('⚠️ On-chain Metaplex metadata fetch failed:', error.message);
     }
     
     // Source 5: On-chain basic info
+    attemptedSources.push('On-chain basic info');
     try {
         const connection = getSolanaConnection();
         if (connection) {
@@ -1692,11 +1751,20 @@ async function fetchPumpFunTokenDetails(mintAddress) {
             return { ...basicInfo, success: true, source: 'on-chain-basic' };
         }
     } catch (error) {
+        failedSources.push({ source: 'On-chain basic info', error: error.message || 'Unknown error' });
         console.debug('⚠️ On-chain basic info fetch failed:', error.message);
     }
     
     // Return minimal data structure if all sources fail
-    console.warn('⚠️ No token details available from any source');
+    const errorMessage = failedSources.length > 0 
+        ? `Failed to fetch token details from ${attemptedSources.length} source(s). Attempted: ${attemptedSources.join(', ')}. Errors: ${failedSources.map(f => `${f.source}: ${f.error}`).join('; ')}`
+        : `No token details available from any source. The token may not exist, may have been delisted, or all APIs are unavailable.`;
+    
+    console.warn(`⚠️ No token details available from any source for mint: ${mintAddress}`);
+    if (failedSources.length > 0) {
+        console.warn('📋 Failed sources:', failedSources);
+    }
+    
     return { 
         success: false,
         mint: mintAddress,
@@ -1705,7 +1773,10 @@ async function fetchPumpFunTokenDetails(mintAddress) {
         image: null,
         marketCap: null,
         bondingCurve: null,
-        bondingCurvePercentage: null
+        bondingCurvePercentage: null,
+        error: errorMessage,
+        attemptedSources: attemptedSources,
+        failedSources: failedSources
     };
 }
 

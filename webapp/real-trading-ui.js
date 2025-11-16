@@ -8154,6 +8154,22 @@ async function loadLiveTokenDetail(record) {
         const pumpFunInfo = pumpFunInfoResult.status === 'fulfilled' ? pumpFunInfoResult.value : null;
         if (pumpFunInfoResult.status === 'rejected') {
             console.debug('⚠️ Pump.fun token details fetch failed:', pumpFunInfoResult.reason?.message || pumpFunInfoResult.reason);
+        } else if (pumpFunInfo && !pumpFunInfo.success && pumpFunInfo.error) {
+            // Show user-friendly error message if token details fetch failed
+            const errorMsg = pumpFunInfo.error;
+            if (errorMsg.includes('Invalid mint address')) {
+                notify(`Invalid token address: ${record.mint}. Please check the address and try again.`, 'error');
+            } else if (errorMsg.includes('No mint address')) {
+                notify('No token address provided. Please select a valid token.', 'error');
+            } else {
+                // Show a helpful message but don't spam the user with technical details
+                console.warn('Token details unavailable:', errorMsg);
+                // Only notify if it's a critical error (invalid address), not for API failures
+                if (pumpFunInfo.failedSources && pumpFunInfo.failedSources.length === pumpFunInfo.attemptedSources?.length) {
+                    // All sources failed - might be invalid token
+                    notify(`Unable to load token details for ${record.mint.substring(0, 8)}... The token may not exist or may have been delisted.`, 'warning');
+                }
+            }
         }
         
         const priceDetails = priceDetailsResult.status === 'fulfilled' ? priceDetailsResult.value : { priceSol: null, priceUsd: null, source: '' };

@@ -5209,6 +5209,166 @@ const tokenDetailViewState = {
     bondingCurveCache: { percent: null, timestamp: 0 } // Cache bonding curve to avoid recalculating every 3 seconds
 };
 
+// Metrics Manager - Single Source of Truth to prevent race conditions
+class MetricsManager {
+    constructor() {
+        this.currentMetrics = null;
+        this.isUpdating = false;
+        this.updateQueue = [];
+        this.lastUpdateTimestamp = 0;
+        this.currentFetchController = null;
+        this.updateTimeout = null;
+        this.lastKnownPnL = null;
+        this.minUpdateInterval = 1000; // Minimum 1 second between updates
+        this.debounceDelay = 150; // 150ms debounce for DOM updates
+    }
+
+    // Prevent concurrent updates - queue requests if one is in progress
+    async updateMetrics(metricsData, source = 'unknown') {
+        // Log the update source for debugging
+        const pnlValue = metricsData.profitLossSol;
+        if (pnlValue !== null) {
+            console.debug(`📊 Metrics update from ${source}: PnL = ${pnlValue.toFixed(6)} SOL`);
+        }
+        
+        // Store the latest data
+        this.updateQueue.push({ data: metricsData, source, timestamp: Date.now() });
+
+        // If already updating, just queue it
+        if (this.isUpdating) {
+            console.debug(`⏳ Metrics update in progress, queued update from ${source}`);
+            return;
+        }
+
+        // Cancel any pending debounced update
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+            this.updateTimeout = null;
+        }
+
+        // Process the update
+        this.processUpdateQueue();
+    }
+
+    async processUpdateQueue() {
+        if (this.updateQueue.length === 0 || this.isUpdating) {
+            return;
+        }
+
+        this.isUpdating = true;
+
+        try {
+            // Get the most recent update from queue
+            const updates = this.updateQueue.splice(0);
+            const latestUpdate = updates[updates.length - 1]; // Use most recent
+
+            // Check if enough time has passed since last update
+            const timeSinceLastUpdate = Date.now() - this.lastUpdateTimestamp;
+            if (timeSinceLastUpdate < this.minUpdateInterval && this.currentMetrics) {
+                console.debug(`⏱️ Skipping update (${timeSinceLastUpdate}ms < ${this.minUpdateInterval}ms)`);
+                this.isUpdating = false;
+                return;
+            }
+
+            // Only update if data is significantly different or newer
+            const shouldUpdate = !this.currentMetrics || 
+                this.isDataSignificantlyDifferent(latestUpdate.data, this.currentMetrics) ||
+                latestUpdate.timestamp > this.currentMetrics.timestamp;
+
+            if (shouldUpdate) {
+                this.currentMetrics = {
+                    ...latestUpdate.data,
+                    timestamp: latestUpdate.timestamp,
+                    source: latestUpdate.source
+                };
+                this.lastUpdateTimestamp = Date.now();
+
+                // Debounce DOM update
+                this.debouncedRender();
+            } else {
+                console.debug('📊 Metrics unchanged, skipping DOM update');
+            }
+        } catch (error) {
+            console.error('❌ Metrics update failed:', error);
+        } finally {
+            this.isUpdating = false;
+
+            // Process any queued updates
+            if (this.updateQueue.length > 0) {
+                setTimeout(() => this.processUpdateQueue(), 100);
+            }
+        }
+    }
+
+    isDataSignificantlyDifferent(newData, oldData) {
+        if (!oldData) return true;
+
+        // Check if profit/loss changed significantly (more than $0.01)
+        const newPnL = newData.profitLossSol ?? null;
+        const oldPnL = oldData.profitLossSol ?? null;
+
+        if (newPnL !== null && oldPnL !== null) {
+            const diff = Math.abs(newPnL - oldPnL);
+            const solPrice = newData.solPrice || oldData.solPrice || 143; // Default SOL price
+            const usdDiff = diff * solPrice;
+            
+            // Only update if difference is more than $0.01 to avoid flicker from rounding
+            if (usdDiff > 0.01) {
+                return true;
+            }
+        } else if (newPnL !== oldPnL) {
+            // One is null, other isn't - significant change
+            return true;
+        }
+
+        // Check other key metrics
+        const significantFields = ['priceSol', 'priceUsd', 'marketCapUsd', 'totalTokenHoldings'];
+        for (const field of significantFields) {
+            if (newData[field] !== oldData[field]) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    debouncedRender() {
+        // Clear any pending render
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        // Debounce the actual DOM update
+        this.updateTimeout = setTimeout(() => {
+            if (this.currentMetrics) {
+                this.renderMetrics(this.currentMetrics);
+            }
+            this.updateTimeout = null;
+        }, this.debounceDelay);
+    }
+
+    renderMetrics(metrics) {
+        // Call the existing updateTokenMetrics function with the consolidated data
+        updateTokenMetricsDirect(metrics);
+    }
+
+    // Cancel any pending fetch requests
+    cancelPendingFetches() {
+        if (this.currentFetchController) {
+            this.currentFetchController.abort();
+            this.currentFetchController = null;
+        }
+    }
+
+    // Get current metrics (for debugging)
+    getCurrentMetrics() {
+        return this.currentMetrics;
+    }
+}
+
+// Global metrics manager instance
+const metricsManager = new MetricsManager();
+
 let archivedImportedTokens = new Set();
 
 function loadArchivedImportedTokens() {
@@ -5482,7 +5642,49 @@ function resetTokenMetrics() {
 // Track if this is the first update for smooth initial render
 let isFirstMetricsUpdate = true;
 
+// Direct update function (called by MetricsManager after debouncing)
+function updateTokenMetricsDirect(metricsData) {
+    updateTokenMetricsInternal(metricsData);
+}
+
+// Main update function - routes through MetricsManager to prevent race conditions
 function updateTokenMetrics({
+    priceSol = null,
+    priceUsd = null,
+    marketCapUsd = null,
+    bondingPercent = null,
+    isBondingComplete = false,
+    totalTokenHoldings = null,
+    holdingsValueSol = null,
+    holdingsValueUsd = null,
+    amountInvestedSol = null,
+    amountSoldSol = null,
+    profitLossSol = null,
+    isUnrealizedProfit = false,
+    solPrice = null,
+    source = ''
+} = {}) {
+    // Route through MetricsManager to prevent race conditions and debounce updates
+    metricsManager.updateMetrics({
+        priceSol,
+        priceUsd,
+        marketCapUsd,
+        bondingPercent,
+        isBondingComplete,
+        totalTokenHoldings,
+        holdingsValueSol,
+        holdingsValueUsd,
+        amountInvestedSol,
+        amountSoldSol,
+        profitLossSol,
+        isUnrealizedProfit,
+        solPrice,
+        source
+    }, source || 'updateTokenMetrics');
+}
+
+// Internal update function (does the actual DOM update - called by MetricsManager)
+function updateTokenMetricsInternal({
     priceSol = null,
     priceUsd = null,
     marketCapUsd = null,
@@ -6620,6 +6822,12 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
         return;
     }
     
+    // Prevent concurrent updates - if MetricsManager is already updating, skip this one
+    if (metricsManager.isUpdating) {
+        console.debug(`⏳ Metrics refresh already in progress, skipping ${reason} update`);
+        return;
+    }
+    
     // Debounce rapid events
     const now = Date.now();
     if (now - lastMetricsRefresh < MIN_METRICS_REFRESH_INTERVAL) {
@@ -6762,9 +6970,14 @@ function startMetricsRefresh(mint, solPrice = null) {
     // Do an immediate update on start (but preserve existing holdings)
     (async () => {
         try {
+            // Cancel any pending fetch
+            metricsManager.cancelPendingFetches();
+            metricsManager.currentFetchController = new AbortController();
+            
             const priceDetails = await fetchTokenPriceDetails(mint, { 
                 solPrice: solPrice || solPriceCache.value,
-                preferOnChain: false
+                preferOnChain: false,
+                signal: metricsManager.currentFetchController.signal
             });
             if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null)) {
                 // Preserve existing holdings from state if available

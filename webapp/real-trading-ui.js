@@ -5209,192 +5209,6 @@ const tokenDetailViewState = {
     bondingCurveCache: { percent: null, timestamp: 0 } // Cache bonding curve to avoid recalculating every 3 seconds
 };
 
-// Metrics Manager - Single Source of Truth to prevent race conditions
-class MetricsManager {
-    constructor() {
-        this.currentMetrics = null;
-        this.isUpdating = false;
-        this.updateQueue = [];
-        this.lastUpdateTimestamp = 0;
-        this.currentFetchController = null;
-        this.updateTimeout = null;
-        this.lastKnownPnL = null;
-        this.minUpdateInterval = 1000; // Minimum 1 second between updates
-        this.debounceDelay = 150; // 150ms debounce for DOM updates
-    }
-
-    // Prevent concurrent updates - queue requests if one is in progress
-    async updateMetrics(metricsData, source = 'unknown') {
-        // Log the update source for debugging
-        const pnlValue = metricsData.profitLossSol;
-        if (pnlValue !== null) {
-            console.debug(`📊 Metrics update from ${source}: PnL = ${pnlValue.toFixed(6)} SOL`);
-        }
-        
-        // Store the latest data
-        this.updateQueue.push({ data: metricsData, source, timestamp: Date.now() });
-
-        // If already updating, just queue it
-        if (this.isUpdating) {
-            console.debug(`⏳ Metrics update in progress, queued update from ${source}`);
-            return;
-        }
-
-        // Cancel any pending debounced update
-        if (this.updateTimeout) {
-            clearTimeout(this.updateTimeout);
-            this.updateTimeout = null;
-        }
-
-        // Process the update
-        this.processUpdateQueue();
-    }
-
-    async processUpdateQueue() {
-        if (this.updateQueue.length === 0 || this.isUpdating) {
-            return;
-        }
-
-        this.isUpdating = true;
-
-        try {
-            // Get the most recent update from queue
-            const updates = this.updateQueue.splice(0);
-            const latestUpdate = updates[updates.length - 1]; // Use most recent
-
-            // Check if enough time has passed since last update
-            const timeSinceLastUpdate = Date.now() - this.lastUpdateTimestamp;
-            if (timeSinceLastUpdate < this.minUpdateInterval && this.currentMetrics) {
-                console.debug(`⏱️ Skipping update (${timeSinceLastUpdate}ms < ${this.minUpdateInterval}ms)`);
-                this.isUpdating = false;
-                return;
-            }
-
-            // Only update if data is significantly different or newer
-            const shouldUpdate = !this.currentMetrics || 
-                this.isDataSignificantlyDifferent(latestUpdate.data, this.currentMetrics) ||
-                latestUpdate.timestamp > this.currentMetrics.timestamp;
-
-            if (shouldUpdate) {
-                this.currentMetrics = {
-                    ...latestUpdate.data,
-                    timestamp: latestUpdate.timestamp,
-                    source: latestUpdate.source
-                };
-                this.lastUpdateTimestamp = Date.now();
-
-                // Debounce DOM update
-                this.debouncedRender();
-            } else {
-                console.debug('📊 Metrics unchanged, skipping DOM update');
-            }
-        } catch (error) {
-            console.error('❌ Metrics update failed:', error);
-        } finally {
-            this.isUpdating = false;
-
-            // Process any queued updates
-            if (this.updateQueue.length > 0) {
-                setTimeout(() => this.processUpdateQueue(), 100);
-            }
-        }
-    }
-
-    isDataSignificantlyDifferent(newData, oldData) {
-        if (!oldData) return true;
-
-        // Check if profit/loss changed significantly (more than $0.01)
-        const newPnL = newData.profitLossSol ?? null;
-        const oldPnL = oldData.profitLossSol ?? null;
-        const holdingsValueSol = newData.holdingsValueSol ?? null;
-
-        // CRITICAL: Reject profit/loss values that are suspiciously close to holdingsValueSol
-        // This prevents holdings value (like 4.955 SOL) from being shown as profit/loss
-        if (newPnL !== null && holdingsValueSol !== null) {
-            const diff = Math.abs(newPnL - holdingsValueSol);
-            // If profit/loss is within 0.5 SOL of holdings value, it's likely incorrect
-            if (diff < 0.5) {
-                console.warn(`🚫 Rejecting suspicious profit/loss value: ${newPnL} SOL (too close to holdings value: ${holdingsValueSol} SOL, diff: ${diff.toFixed(4)} SOL)`);
-                // Use old value instead
-                newData.profitLossSol = oldPnL;
-                return false;
-            }
-        }
-        
-        // CRITICAL: Reject large profit/loss values when we don't have investment data
-        // Large profits (>1 SOL) without investment data are likely holdings value, not actual profit
-        if (newPnL !== null && newPnL > 1.0) {
-            const hasInvestmentData = newData.amountInvestedSol !== null && newData.amountInvestedSol > 0;
-            if (!hasInvestmentData) {
-                console.warn(`🚫 Rejecting large profit/loss value without investment data: ${newPnL} SOL (likely holdings value, not profit)`);
-                // Use old value instead
-                newData.profitLossSol = oldPnL;
-                return false;
-            }
-        }
-
-        if (newPnL !== null && oldPnL !== null) {
-            const diff = Math.abs(newPnL - oldPnL);
-            const solPrice = newData.solPrice || oldData.solPrice || 143; // Default SOL price
-            const usdDiff = diff * solPrice;
-            
-            // Only update if difference is more than $0.01 to avoid flicker from rounding
-            if (usdDiff > 0.01) {
-                return true;
-            }
-        } else if (newPnL !== oldPnL) {
-            // One is null, other isn't - significant change
-            return true;
-        }
-
-        // Check other key metrics
-        const significantFields = ['priceSol', 'priceUsd', 'marketCapUsd', 'totalTokenHoldings'];
-        for (const field of significantFields) {
-            if (newData[field] !== oldData[field]) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    debouncedRender() {
-        // Clear any pending render
-        if (this.updateTimeout) {
-            clearTimeout(this.updateTimeout);
-        }
-
-        // Debounce the actual DOM update
-        this.updateTimeout = setTimeout(() => {
-            if (this.currentMetrics) {
-                this.renderMetrics(this.currentMetrics);
-            }
-            this.updateTimeout = null;
-        }, this.debounceDelay);
-    }
-
-    renderMetrics(metrics) {
-        // Call the existing updateTokenMetrics function with the consolidated data
-        updateTokenMetricsDirect(metrics);
-    }
-
-    // Cancel any pending fetch requests
-    cancelPendingFetches() {
-        if (this.currentFetchController) {
-            this.currentFetchController.abort();
-            this.currentFetchController = null;
-        }
-    }
-
-    // Get current metrics (for debugging)
-    getCurrentMetrics() {
-        return this.currentMetrics;
-    }
-}
-
-// Global metrics manager instance
-const metricsManager = new MetricsManager();
-
 let archivedImportedTokens = new Set();
 
 function loadArchivedImportedTokens() {
@@ -5668,49 +5482,7 @@ function resetTokenMetrics() {
 // Track if this is the first update for smooth initial render
 let isFirstMetricsUpdate = true;
 
-// Direct update function (called by MetricsManager after debouncing)
-function updateTokenMetricsDirect(metricsData) {
-    updateTokenMetricsInternal(metricsData);
-}
-
-// Main update function - routes through MetricsManager to prevent race conditions
 function updateTokenMetrics({
-    priceSol = null,
-    priceUsd = null,
-    marketCapUsd = null,
-    bondingPercent = null,
-    isBondingComplete = false,
-    totalTokenHoldings = null,
-    holdingsValueSol = null,
-    holdingsValueUsd = null,
-    amountInvestedSol = null,
-    amountSoldSol = null,
-    profitLossSol = null,
-    isUnrealizedProfit = false,
-    solPrice = null,
-    source = ''
-} = {}) {
-    // Route through MetricsManager to prevent race conditions and debounce updates
-    metricsManager.updateMetrics({
-        priceSol,
-        priceUsd,
-        marketCapUsd,
-        bondingPercent,
-        isBondingComplete,
-        totalTokenHoldings,
-        holdingsValueSol,
-        holdingsValueUsd,
-        amountInvestedSol,
-        amountSoldSol,
-        profitLossSol,
-        isUnrealizedProfit,
-        solPrice,
-        source
-    }, source || 'updateTokenMetrics');
-}
-
-// Internal update function (does the actual DOM update - called by MetricsManager)
-function updateTokenMetricsInternal({
     priceSol = null,
     priceUsd = null,
     marketCapUsd = null,
@@ -5739,39 +5511,6 @@ function updateTokenMetricsInternal({
     if (profitLossSol === null && profitLossState.profitLossSol !== undefined) {
         profitLossSol = profitLossState.profitLossSol;
         isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
-    }
-    
-    // CRITICAL SAFEGUARD: Reject profit/loss values that are suspiciously large or close to holdings
-    // This prevents holdings value (like 4.955 SOL) from being displayed as profit
-    if (profitLossSol !== null) {
-        let shouldBlock = false;
-        let blockReason = '';
-        
-        // Check if it's suspiciously close to holdings value
-        if (holdingsValueSol !== null) {
-            const diff = Math.abs(profitLossSol - holdingsValueSol);
-            if (diff < 0.5) {
-                shouldBlock = true;
-                blockReason = `too close to holdingsValueSol (${holdingsValueSol} SOL, diff: ${diff.toFixed(6)} SOL)`;
-            }
-        }
-        
-        // Check if it's a large value without investment data
-        if (!shouldBlock && profitLossSol > 1.0 && (amountInvestedSol === null || amountInvestedSol === 0)) {
-            shouldBlock = true;
-            blockReason = `large value (${profitLossSol} SOL) without investment data`;
-        }
-        
-        if (shouldBlock) {
-            console.warn(`🚫 BLOCKED: profitLossSol (${profitLossSol} SOL) ${blockReason} - setting to null`);
-            profitLossSol = null; // Block it
-            
-            // Also clear it from state so it doesn't get restored next time
-            if (tokenDetailViewState.currentProfitLoss) {
-                tokenDetailViewState.currentProfitLoss.profitLossSol = null;
-                console.log('🧹 Cleared suspicious profitLossSol from state');
-            }
-        }
     }
     
     // Preserve existing holdings values when not explicitly provided
@@ -5832,9 +5571,9 @@ function updateTokenMetricsInternal({
             profitDetail = `${solDisplay} (Realized + Unrealized)`;
         }
     }
-    // REMOVED: Don't show holdingsValueSol as profit/loss - this was causing the flicker
+    // REMOVED: Do NOT show holdingsValueSol as profit/loss
     // Holdings value is NOT the same as profit/loss. If we don't have actual profit/loss data,
-    // show "—" instead of misleading holdings value. This prevents showing 4.955 SOL as profit.
+    // show "—" instead of misleading holdings value. This prevents showing 12.38 SOL as profit.
 
     // Amount Invested display - show USD value if available, otherwise show SOL or $0
     const amountInvestedDisplay = amountInvestedSol !== null && amountInvestedSol > 0
@@ -6362,54 +6101,14 @@ function renderTokenHoldingsTable(holdings = [], { priceSol = null, priceUsd = n
                               .join('')
                         : '';
 
-                // Get selected buy amount for custom input
-                const buyKey = `${holding.walletId}_${holding.tokenMint || ''}`;
-                const selectedBuy = selectedBuyAmounts.get(buyKey);
-                const customBuyAmount = selectedBuy && !quickBuyOptions.includes(selectedBuy.solAmount) ? selectedBuy.solAmount : '';
-                
-                // Get selected sell percentage for custom input
-                const selectedSell = selectedSellPercentages.get(buyKey);
-                const customSellPercentage = selectedSell && ![25, 50, 100].includes(selectedSell.percentage) ? selectedSell.percentage : '';
-                
                 actionMarkup = `
                     <div class="flex flex-wrap items-center justify-end gap-2">
-                        <div class="flex items-center gap-1">
-                            ${quickBuyButtons}
-                            <input 
-                                type="number" 
-                                class="w-16 px-2 py-1 rounded-md text-[11px] bg-black border border-neutral-700 text-gray-300 focus:outline-none focus:border-emerald-600" 
-                                placeholder="Custom"
-                                step="0.01"
-                                min="0"
-                                value="${customBuyAmount || ''}"
-                                data-wallet-id="${holding.walletId}"
-                                data-token-mint="${holding.tokenMint || ''}"
-                                data-buy-custom-input
-                                onchange="handleBuyAmountSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', this.value || 0)"
-                                onkeypress="if(event.key==='Enter'){handleBuyAmountSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', this.value || 0)}"
-                            >
-                        </div>
+                        <div class="flex items-center gap-1">${quickBuyButtons}</div>
                         <button class="px-3 py-1 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition border border-emerald-500/40"
                             onclick="handleWalletTradeAction('buy', '${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}')">
                             Buy
                         </button>
-                        <div class="flex items-center gap-1">
-                            ${sellButtons}
-                            <input 
-                                type="number" 
-                                class="w-14 px-2 py-1 rounded-md text-[11px] bg-black border border-neutral-700 text-gray-400 focus:outline-none focus:border-rose-600" 
-                                placeholder="%"
-                                step="1"
-                                min="1"
-                                max="100"
-                                value="${customSellPercentage || ''}"
-                                data-wallet-id="${holding.walletId}"
-                                data-token-mint="${holding.tokenMint || ''}"
-                                data-sell-custom-input
-                                onchange="handleSellPercentageSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', this.value || 0, ${holding.tokenBalance})"
-                                onkeypress="if(event.key==='Enter'){handleSellPercentageSelection('${holding.walletId}', '${holding.address}', '${holding.tokenMint || ''}', this.value || 0, ${holding.tokenBalance})}"
-                            >
-                        </div>
+                        ${sellButtons}
                         ${
                             holding.tokenBalance && holding.tokenBalance > 0
                                 ? `<button class="px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/70 text-rose-200 border border-rose-900 hover:bg-rose-800/80 transition"
@@ -6879,12 +6578,6 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
         return;
     }
     
-    // Prevent concurrent updates - if MetricsManager is already updating, skip this one
-    if (metricsManager.isUpdating) {
-        console.debug(`⏳ Metrics refresh already in progress, skipping ${reason} update`);
-        return;
-    }
-    
     // Debounce rapid events
     const now = Date.now();
     if (now - lastMetricsRefresh < MIN_METRICS_REFRESH_INTERVAL) {
@@ -6967,23 +6660,25 @@ async function refreshMetricsOnEvent(mint, reason = 'event') {
                 // Preserve profit/loss calculation from initial load
                 const profitLossState = tokenDetailViewState.currentProfitLoss || {};
                 
-                // Recalculate profit/loss if holdings changed
+                // Preserve profit/loss from state - only recalculate if we have investment data AND holdings changed
                 let profitLossSol = profitLossState.profitLossSol ?? null;
                 let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
                 
+                // Only recalculate profit/loss if:
+                // 1. Holdings were actually refreshed (holdingsData exists)
+                // 2. We have investment data (amountInvestedSol) to calculate real profit/loss
+                // DO NOT recalculate if we don't have investment data - holdingsValueSol is NOT profit
                 if (holdingsData && holdingsData.totalTokenBalance > 0 && priceDetails.priceSol) {
-                    // Holdings were refreshed, recalculate profit/loss ONLY if we have investment data
-                    // If we don't have investment data, preserve existing profit/loss (it may be from realized trades)
                     const amountInvestedSol = profitLossState.amountInvestedSol ?? null;
                     const amountSoldSol = profitLossState.amountSoldSol ?? null;
                     
-                    if (holdingsValueSol !== null && amountInvestedSol !== null) {
-                        // Only recalculate if we have investment data - this gives us accurate profit/loss
+                    // Only recalculate if we have investment data - this gives us accurate profit/loss
+                    if (holdingsValueSol !== null && amountInvestedSol !== null && amountInvestedSol > 0) {
                         profitLossSol = holdingsValueSol + (amountSoldSol || 0) - amountInvestedSol;
                         isUnrealizedProfit = false;
                     }
-                    // If amountInvestedSol is null, preserve existing profitLossSol from state
-                    // Don't set it to holdingsValueSol as that's not accurate profit/loss
+                    // If no investment data, preserve existing profitLossSol from state
+                    // Don't set it to holdingsValueSol - that's not profit, that's just holdings value
                 }
                 
                 // Update metrics with fresh data (preserve holdings and profit/loss if not refreshing them)
@@ -7027,14 +6722,9 @@ function startMetricsRefresh(mint, solPrice = null) {
     // Do an immediate update on start (but preserve existing holdings)
     (async () => {
         try {
-            // Cancel any pending fetch
-            metricsManager.cancelPendingFetches();
-            metricsManager.currentFetchController = new AbortController();
-            
             const priceDetails = await fetchTokenPriceDetails(mint, { 
                 solPrice: solPrice || solPriceCache.value,
-                preferOnChain: false,
-                signal: metricsManager.currentFetchController.signal
+                preferOnChain: false
             });
             if (priceDetails && (priceDetails.priceUsd !== null || priceDetails.marketCapUsd !== null || priceDetails.priceSol !== null)) {
                 // Preserve existing holdings from state if available
@@ -7057,16 +6747,19 @@ function startMetricsRefresh(mint, solPrice = null) {
                     }
                 }
                 
-                // Preserve profit/loss calculation from state - DON'T recalculate during price-only updates
-                // Only recalculate when holdings actually change (not during price refreshes)
+                // Preserve profit/loss calculation from state
                 const profitLossState = tokenDetailViewState.currentProfitLoss || {};
                 let profitLossSol = profitLossState.profitLossSol ?? null;
                 let isUnrealizedProfit = profitLossState.isUnrealizedProfit ?? false;
                 
-                // Only recalculate profit/loss if we have investment data AND holdings changed
-                // For price-only updates, preserve the existing profit/loss value
-                // This prevents showing holdingsValueSol as profit when it's just a price update
-                // (Holdings changes are handled in refreshMetricsOnEvent when reason === 'user-action' or 'fallback-polling')
+                // Only recalculate profit/loss if we have investment data
+                // DO NOT set profitLossSol to holdingsValueSol - that's not profit, that's just holdings value
+                if (holdingsValueSol !== null && profitLossState.amountInvestedSol !== null && profitLossState.amountInvestedSol > 0) {
+                    profitLossSol = holdingsValueSol + (profitLossState.amountSoldSol || 0) - profitLossState.amountInvestedSol;
+                    isUnrealizedProfit = false;
+                }
+                // If no investment data, preserve existing profitLossSol from state
+                // Don't recalculate - holdingsValueSol is NOT profit
                 
                 updateTokenMetrics({
                     priceSol: priceDetails.priceSol,
@@ -8626,8 +8319,13 @@ async function loadLiveTokenDetail(record) {
             }
         }
         
-        // REMOVED: Don't estimate amountInvestedSol from holdings - this causes incorrect profit/loss
-        // If we don't have real investment data, we can't calculate accurate profit/loss from holdings
+        // Fallback 2: Estimate from current holdings if we have price (rough estimate)
+        if (amountInvestedSol === null && holdingsSummary.totalTokenBalance > 0 && priceSol !== null) {
+            // Rough estimate: assume average entry price is 50% of current price (conservative)
+            // This is just a placeholder until we have real transaction data
+            amountInvestedSol = holdingsSummary.totalTokenBalance * priceSol * 0.5;
+            console.log('⚠️ Estimated amount invested from holdings (rough estimate):', amountInvestedSol, 'SOL');
+        }
 
         // Calculate amount sold from multiple sources
         let amountSoldSol = null;
@@ -8662,57 +8360,29 @@ async function loadLiveTokenDetail(record) {
             }
         }
 
-        // Calculate profit/loss - prioritize REALIZED profit from sells
+        // Calculate profit/loss - ONLY if we have investment data
+        // DO NOT calculate profit from holdingsValueSol alone - that's not profit, that's just holdings value
         let profitLossSol = null;
         let isUnrealizedProfit = false;
-        
         if (holdingsValueSol !== null && amountInvestedSol !== null && amountInvestedSol > 0) {
-            // We have investment data - but check if the investment is significant enough
-            // If investment is very small (< 0.01 SOL), the calculation will be mostly holdings value
-            // In that case, only show profit if we have realized sells
-            if (amountInvestedSol < 0.01) {
-                // Investment is too small - only show realized profit from sells
-                if (amountSoldSol !== null && amountSoldSol > 0) {
-                    profitLossSol = amountSoldSol;
-                    isUnrealizedProfit = false;
-                    console.log('💰 Showing only realized profit from sells (investment too small):', profitLossSol, 'SOL');
-                } else {
-                    // No realized sells and investment is tiny - can't calculate meaningful profit
-                    profitLossSol = null;
-                    console.log('⚠️ Investment too small (', amountInvestedSol, 'SOL) and no sells - cannot calculate meaningful profit/loss');
-                }
-            } else {
-                // Investment is significant - calculate full profit/loss (realized + unrealized)
-                const soldComponent = amountSoldSol || 0;
-                profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
-                isUnrealizedProfit = false;
-                console.log('💰 Calculated profit/loss (with investment data):', {
-                    holdingsValueSol,
-                    amountSoldSol: soldComponent,
-                    amountInvestedSol,
-                    profitLossSol
-                });
-            }
-        } else if (amountSoldSol !== null && amountSoldSol > 0) {
-            // We have realized profit from sells but no investment data
-            // NOTE: amountSoldSol is revenue, not profit - we need cost basis to calculate actual profit
-            // For now, only show it if it's a small amount (likely actual profit, not holdings value)
-            // If amountSoldSol is suspiciously large (>1 SOL), it's likely holdings value, not profit
-            if (amountSoldSol < 1.0) {
-                profitLossSol = amountSoldSol;
-                isUnrealizedProfit = false;
-                console.log('💰 Showing realized amount from sells (small amount, likely profit):', profitLossSol, 'SOL');
-            } else {
-                // Amount sold is too large - likely not actual profit, skip it
-                profitLossSol = null;
-                console.log('⚠️ Amount sold is large (', amountSoldSol, 'SOL) - likely not profit, skipping');
-            }
-        } else {
-            // No investment data and no realized sells - can't calculate profit/loss
-            profitLossSol = null;
+            const soldComponent = amountSoldSol || 0;
+            profitLossSol = holdingsValueSol + soldComponent - amountInvestedSol;
             isUnrealizedProfit = false;
-            console.log('⚠️ No investment amount or realized sells - cannot calculate profit/loss. Holdings value is NOT profit.');
+            console.log('💰 Calculated profit/loss (with investment data):', {
+                holdingsValueSol,
+                amountSoldSol: soldComponent,
+                amountInvestedSol,
+                profitLossSol
+            });
+        } else if (amountSoldSol !== null && amountSoldSol > 0) {
+            // If we have realized sales but no investment data, show only realized profit
+            // This is actual profit from sales, not holdings value
+            profitLossSol = amountSoldSol;
+            isUnrealizedProfit = false;
+            console.log('💰 Showing realized profit from sales:', profitLossSol, 'SOL');
         }
+        // If no investment data and no sales, profitLossSol remains null
+        // Holdings value is NOT profit - don't show it as profit
 
         // Log data for debugging
         const metricsData = {
@@ -8792,20 +8462,21 @@ async function loadLiveTokenDetail(record) {
             holdingsValueSol,
             holdingsValueUsd
         };
-        
         // CRITICAL: Don't store suspicious profit/loss values in state
         // If profitLossSol is suspiciously close to holdingsValueSol or too large without investment data, don't store it
         let safeProfitLossSol = profitLossSol;
         if (profitLossSol !== null) {
+            // Check if it's suspiciously close to holdings value (within 0.5 SOL)
             if (holdingsValueSol !== null) {
                 const diff = Math.abs(profitLossSol - holdingsValueSol);
                 if (diff < 0.5) {
-                    console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL) in state`);
+                    console.warn(`🚫 NOT STORING: profitLossSol (${profitLossSol} SOL) too close to holdingsValueSol (${holdingsValueSol} SOL, diff: ${diff.toFixed(6)} SOL)`);
                     safeProfitLossSol = null;
                 }
             }
-            if (profitLossSol > 1.0 && (finalAmountInvested === null || finalAmountInvested === 0)) {
-                console.warn(`🚫 NOT STORING: Large profitLossSol (${profitLossSol} SOL) without investment data in state`);
+            // Check if it's a large value (>1 SOL) without investment data
+            if (safeProfitLossSol !== null && profitLossSol > 1.0 && (finalAmountInvested === null || finalAmountInvested === 0)) {
+                console.warn(`🚫 NOT STORING: Large profitLossSol (${profitLossSol} SOL) without investment data - likely holdings value, not profit`);
                 safeProfitLossSol = null;
             }
         }
@@ -8948,7 +8619,6 @@ function handleSellPercentageSelection(walletId, walletAddress, tokenMint, perce
 function updateBuyAmountButtons(walletId, tokenMint) {
     const key = `${walletId}_${tokenMint}`;
     const selected = selectedBuyAmounts.get(key);
-    const quickBuyOptions = [0.1, 0.5, 1];
     
     // Find all buy amount buttons for this wallet/token
     const buttons = document.querySelectorAll(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-buy-amount]`);
@@ -8966,19 +8636,6 @@ function updateBuyAmountButtons(walletId, tokenMint) {
             button.className = button.className.replace(/border-emerald-800/g, 'border-neutral-800');
         }
     });
-    
-    // Update custom input field border color if custom amount is selected
-    const customInput = document.querySelector(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-buy-custom-input]`);
-    if (customInput) {
-        const isCustomAmount = selected && !quickBuyOptions.includes(selected.solAmount);
-        if (isCustomAmount && selected.solAmount > 0) {
-            customInput.classList.remove('border-neutral-700');
-            customInput.classList.add('border-emerald-600');
-        } else {
-            customInput.classList.remove('border-emerald-600');
-            customInput.classList.add('border-neutral-700');
-        }
-    }
 }
 
 // Update sell percentage button styles to show selected state
@@ -9002,19 +8659,6 @@ function updateSellPercentageButtons(walletId, tokenMint) {
             button.className = button.className.replace(/border-rose-800/g, 'border-neutral-800');
         }
     });
-    
-    // Update custom input field border color if custom percentage is selected
-    const customInput = document.querySelector(`[data-wallet-id="${walletId}"][data-token-mint="${tokenMint}"][data-sell-custom-input]`);
-    if (customInput) {
-        const isCustomPercentage = selected && ![25, 50, 100].includes(selected.percentage);
-        if (isCustomPercentage && selected.percentage > 0 && selected.percentage <= 100) {
-            customInput.classList.remove('border-neutral-700');
-            customInput.classList.add('border-rose-600');
-        } else {
-            customInput.classList.remove('border-rose-600');
-            customInput.classList.add('border-neutral-700');
-        }
-    }
 }
 
 async function handleWalletTradeAction(action, walletId, walletAddress, tokenMint, percentage = null, tokenBalance = null) {

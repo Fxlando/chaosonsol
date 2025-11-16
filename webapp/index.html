@@ -5275,8 +5275,8 @@
             }, 2500);
         }
 
-        function executeImportToken() {
-            const mintAddress = document.getElementById('import-mint-address')?.value || '';
+        async function executeImportToken() {
+            const mintAddress = document.getElementById('import-mint-address')?.value?.trim() || '';
             
             if (!mintAddress) {
                 if (typeof showToast === 'function') {
@@ -5292,12 +5292,55 @@
                 addConsoleLog(`Importing token: ${mintAddress}`, 'info');
             }
             
-            setTimeout(() => {
+            try {
+                // Get API base URL
+                const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? 'http://localhost:3000/api'
+                    : '/api');
+                
+                const endpoint = API_BASE.startsWith('http') ? `${API_BASE}/tokens/import` : `${API_BASE}/tokens/import`;
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tokenMint: mintAddress })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to import token');
+                }
+                
                 if (typeof showToast === 'function') {
                     showToast('Token imported successfully!', 'success');
                 }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog(`Token imported: ${data.token?.name || mintAddress}`, 'success');
+                }
+                
+                // Clear the input
+                const input = document.getElementById('import-mint-address');
+                if (input) {
+                    input.value = '';
+                }
+                
+                // Navigate to tokens page and reload
                 navigateToPage('tokens');
-            }, 2000);
+                if (typeof loadTokens === 'function') {
+                    setTimeout(() => loadTokens(), 500);
+                }
+            } catch (error) {
+                console.error('Error importing token:', error);
+                if (typeof showToast === 'function') {
+                    showToast(`Import failed: ${error.message}`, 'error');
+                }
+                if (typeof addConsoleLog === 'function') {
+                    addConsoleLog(`Import error: ${error.message}`, 'error');
+                }
+            }
         }
 
         // Fee Collection Functions

@@ -95,6 +95,38 @@ const metadataStore = new MetadataStore({
   baseUrl: METADATA_BASE_URL
 });
 
+// Imported tokens storage
+const IMPORTED_TOKENS_FILE = resolveProjectPath('.data', 'imported-tokens.json');
+
+function getImportedTokens() {
+  try {
+    if (fs.existsSync(IMPORTED_TOKENS_FILE)) {
+      const data = fs.readFileSync(IMPORTED_TOKENS_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error reading imported tokens:', error);
+  }
+  return {};
+}
+
+function saveImportedToken(mint, tokenData) {
+  try {
+    const imported = getImportedTokens();
+    imported[mint] = {
+      ...tokenData,
+      importedAt: new Date().toISOString(),
+      status: 'IMPORTED'
+    };
+    fs.mkdirSync(path.dirname(IMPORTED_TOKENS_FILE), { recursive: true });
+    fs.writeFileSync(IMPORTED_TOKENS_FILE, JSON.stringify(imported, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving imported token:', error);
+    return false;
+  }
+}
+
 function buildPumpPortalConfig() {
   const cfg = {};
   const apiKey = process.env.PUMPPORTAL_API_KEY || process.env.PUMP_PORTAL_API_KEY;
@@ -801,8 +833,43 @@ register('get', '/tokens', async () => {
       name: token.name,
       symbol: token.symbol,
       balance: token.totalBalance,
-      holders: token.holders.length
+      holders: token.holders.length,
+      status: 'ACTIVE'
     }));
+
+    // Add imported tokens that aren't already in the list
+    const importedTokens = getImportedTokens();
+    for (const [mint, importedData] of Object.entries(importedTokens)) {
+      // Only add if not already in tokens list (from wallet balances)
+      if (!tokenMap.has(mint)) {
+        tokens.push({
+          mint: importedData.mint || mint,
+          name: importedData.name || mint.slice(0, 8),
+          symbol: importedData.symbol || mint.slice(0, 4),
+          balance: 0, // Imported tokens may not have balance in wallets
+          holders: 0,
+          status: importedData.status || 'IMPORTED',
+          description: importedData.description,
+          image: importedData.image,
+          decimals: importedData.decimals,
+          price: importedData.price,
+          marketCap: importedData.marketCap,
+          totalSupply: importedData.totalSupply,
+          metadataUri: importedData.metadataUri,
+          platform: importedData.platform || 'pumpfun'
+        });
+      } else {
+        // Update existing token with imported data if available
+        const existingToken = tokens.find(t => t.mint === mint);
+        if (existingToken && importedData.status === 'IMPORTED') {
+          existingToken.status = 'IMPORTED';
+          if (importedData.name) existingToken.name = importedData.name;
+          if (importedData.symbol) existingToken.symbol = importedData.symbol;
+          if (importedData.description) existingToken.description = importedData.description;
+          if (importedData.image) existingToken.image = importedData.image;
+        }
+      }
+    }
 
     const response = {
       success: true,
@@ -1009,7 +1076,26 @@ register('post', '/tokens/import', async (req, res) => {
     };
   }
 
-  return backend.importToken(tokenMint, options || {});
+  const result = await backend.importToken(tokenMint, options || {});
+  
+  // Save imported token if import was successful
+  if (result.success && result.token) {
+    saveImportedToken(tokenMint, {
+      mint: result.token.mint,
+      name: result.token.name,
+      symbol: result.token.symbol,
+      description: result.token.description,
+      image: result.token.image,
+      decimals: result.token.decimals,
+      price: result.token.price,
+      marketCap: result.token.marketCap,
+      totalSupply: result.token.totalSupply,
+      metadataUri: result.token.metadataUri,
+      platform: result.platform || 'pumpfun'
+    });
+  }
+
+  return result;
 });
 
 register('get', '/blueprints', async () => ({
@@ -1364,17 +1450,17 @@ register('get', '/config', async () => {
         pool: pumpPortalConfig.pool || 'pump'
       },
       shyft: {
-        apiKey: '6AC3vTBB5lObDYTm', // Hard-coded default
-        enabled: false
+        apiKey: process.env.SHYFT_API_KEY || '',
+        enabled: Boolean(process.env.SHYFT_API_KEY)
       },
       helius: {
         apiKey: heliusApiKey
       },
       birdeye: {
-        apiKey: process.env.BIRDEYE_API_KEY || '9ddbf4282f714067a229ad9caedd1b41'
+        apiKey: process.env.BIRDEYE_API_KEY || ''
       },
       moralis: {
-        apiKey: process.env.MORALIS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjY3MWQyMmQ5LTllZTQtNDJmNi1iMzE1LTRkN2M5MTQxMjE1MSIsIm9yZ0lkIjoiNDgxNDM3IiwidXNlcklkIjoiNDk1MzA0IiwidHlwZUlkIjoiODdkMjNkYjctZTBkMC00NjY4LTkzYzYtMTUzYzRkMjQxZWEzIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3NjMxNjU5NDEsImV4cCI6NDkxODkyNTk0MX0.9ZJGROi8myhSMDhZi1icj5YBava7ecojyZG6Ruf5PU4'
+        apiKey: process.env.MORALIS_API_KEY || ''
       }
     }
   };
